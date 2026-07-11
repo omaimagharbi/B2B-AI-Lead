@@ -20,32 +20,42 @@ function AuthForm() {
     setErreur(null)
     setChargement(true)
 
-    if (mode === 'inscription') {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password: motDePasse,
-        options: {
-          data: { nom_entreprise: nomEntreprise },
-        },
-      })
-      if (error) {
-        setErreur(error.message)
-        setChargement(false)
-        return
+    try {
+      if (mode === 'inscription') {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password: motDePasse,
+          options: {
+            data: { nom_entreprise: nomEntreprise },
+          },
+        })
+        if (error) {
+          setErreur(error.message)
+          setChargement(false)
+          return
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password: motDePasse,
+        })
+        if (error) {
+          setErreur(error.message)
+          setChargement(false)
+          return
+        }
       }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password: motDePasse,
-      })
-      if (error) {
-        setErreur(error.message)
-        setChargement(false)
-        return
-      }
-    }
 
-    router.push('/dashboard')
+      router.push('/dashboard')
+    } catch (err) {
+      console.error('Erreur auth:', err)
+      setErreur(
+        err instanceof Error
+          ? `Erreur technique : ${err.message}`
+          : 'Erreur technique inconnue'
+      )
+      setChargement(false)
+    }
   }
 
   return (
