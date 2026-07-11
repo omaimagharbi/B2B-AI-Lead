@@ -7,11 +7,10 @@ type ClientAdmin = {
   id: string
   nom_entreprise: string
   email: string
-  zone_geographique: string | null
   statut_abonnement: string
   plan_tarifaire: string | null
   created_at: string
-  leads: { count: number }[]
+  packs_vendus: number
 }
 
 export default function AdminPage() {
@@ -97,22 +96,16 @@ export default function AdminPage() {
 
         <div className="space-y-3">
           {clients.map((client) => {
-            const nombreLeads = client.leads?.[0]?.count ?? 0
             return (
               <div
                 key={client.id}
                 className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-center justify-between flex-wrap gap-3"
               >
                 <div>
-                  <p className="font-semibold">
-                    {client.nom_entreprise}{' '}
-                    <span className="text-slate-500 text-sm font-normal">
-                      ({client.zone_geographique ?? 'zone non definie'})
-                    </span>
-                  </p>
+                  <p className="font-semibold">{client.nom_entreprise}</p>
                   <p className="text-slate-400 text-sm">{client.email}</p>
                   <p className="text-slate-400 text-sm">
-                    {nombreLeads} leads livrés · Statut :{' '}
+                    {client.packs_vendus} packs vendus · Statut :{' '}
                     <span
                       className={
                         client.statut_abonnement === 'payant' ? 'text-accent' : 'text-amber-400'

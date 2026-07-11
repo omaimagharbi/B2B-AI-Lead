@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { envoyerWhatsapp, envoyerEmail } from '@/lib/notifications'
+import { canalParPays } from '@/lib/pays'
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-const LIMITE_LEADS_ESSAI_GRATUIT = 3
-const LIMITE_ENVOIS_PAR_EXECUTION = 30 // securite anti-timeout Vercel
+const LIMITE_PACKS_ESSAI_GRATUIT = 3
+const LIMITE_ENVOIS_PAR_EXECUTION = 30
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -16,14 +17,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
   }
 
-  const resultats = { envoyes: 0, echoues: 0, bloques_essai_gratuit: 0, details: [] as unknown[] }
+  const resultats = { envoyes: 0, echoues: 0, bloques_essai_gratuit: 0 }
 
   try {
-    // 1. On recupere toutes les cibles "nouveau", avec leur client associe
     const { data: targets, error: targetsError } = await supabaseAdmin
       .from('targets')
       .select(
-        'id, nom, telephone, email, client_id, clients(id, vertical_id, zone_geographique, nom_entreprise, statut_abonnement)'
+        'id, nom, telephone, email, country, client_id, clients(id, vertical_id, nom_entreprise, statut_abonnement)'
       )
       .eq('statut', 'nouveau')
       .limit(LIMITE_ENVOIS_PAR_EXECUTION)
@@ -32,43 +32,40 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Erreur chargement cibles' }, { status: 500 })
     }
 
-    // Cache pour eviter de recompter les leads du meme client plusieurs fois dans la boucle
-    const compteurLeadsParClient = new Map<string, number>()
+    const compteurPacksParClient = new Map<string, number>()
 
     for (const target of targets ?? []) {
       // @ts-expect-error - jointure Supabase typee dynamiquement
       const client = target.clients as {
         id: string
         vertical_id: string
-        zone_geographique: string | null
         nom_entreprise: string
         statut_abonnement: string
       } | null
 
-      if (!client || !client.zone_geographique) {
+      if (!client) {
         resultats.echoues++
         continue
       }
 
-      // Etape 14 - limite d'essai gratuit
       if (client.statut_abonnement === 'trial') {
-        let nombreLeads = compteurLeadsParClient.get(client.id)
-        if (nombreLeads === undefined) {
+        let nombrePacks = compteurPacksParClient.get(client.id)
+        if (nombrePacks === undefined) {
           const { count } = await supabaseAdmin
-            .from('leads')
-            .select('*', { count: 'exact', head: true })
-            .eq('client_id', client.id)
-          nombreLeads = count ?? 0
-          compteurLeadsParClient.set(client.id, nombreLeads)
+            .from('leads_packs')
+            .select('*, diagnostics!inner(client_id)', { count: 'exact', head: true })
+            .eq('diagnostics.client_id', client.id)
+          nombrePacks = count ?? 0
+          compteurPacksParClient.set(client.id, nombrePacks)
         }
 
-        if (nombreLeads >= LIMITE_LEADS_ESSAI_GRATUIT) {
+        if (nombrePacks >= LIMITE_PACKS_ESSAI_GRATUIT) {
           resultats.bloques_essai_gratuit++
           continue
         }
       }
 
-      const canal = client.zone_geographique === 'tunisie' ? 'whatsapp' : 'email'
+      const canal = canalParPays(target.country ?? 'FR')
 
       if (canal === 'whatsapp' && !target.telephone) {
         resultats.echoues++
@@ -82,19 +79,14 @@ export async function GET(req: NextRequest) {
       try {
         const { data: diagnostic, error: diagError } = await supabaseAdmin
           .from('diagnostics')
-          .insert({
-            target_id: target.id,
-            client_id: client.id,
-            vertical_id: client.vertical_id,
-            statut: 'en_attente',
-          })
+          .insert({ target_id: target.id, client_id: client.id, vertical_id: client.vertical_id })
           .select('token_acces')
           .single()
 
         if (diagError || !diagnostic) throw new Error('Erreur creation diagnostic')
 
         const lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
-        const message = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a realiser un diagnostic gratuit et personnalise (15 secondes) :\n${lien}`
+        const message = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}`
 
         if (canal === 'whatsapp') {
           await envoyerWhatsapp(target.telephone!, message)

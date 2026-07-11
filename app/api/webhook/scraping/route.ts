@@ -20,11 +20,12 @@ export async function POST(req: NextRequest) {
       client_id: string
       contacts: Array<{
         nom: string
-        entreprise?: string
-        poste?: string
+        entreprise_ou_objectif?: string
+        poste_ou_budget?: string
         telephone?: string
         email?: string
         linkedin_url?: string
+        country?: string
       }>
     }
 
@@ -35,11 +36,12 @@ export async function POST(req: NextRequest) {
     const lignes = contacts.map((c) => ({
       client_id,
       nom: c.nom,
-      entreprise: c.entreprise ?? null,
-      poste: c.poste ?? null,
+      entreprise_ou_objectif: c.entreprise_ou_objectif ?? null,
+      poste_ou_budget: c.poste_ou_budget ?? null,
       telephone: c.telephone ?? null,
       email: c.email ?? null,
       linkedin_url: c.linkedin_url ?? null,
+      country: c.country ?? null,
       source_scraping: 'apify_phantombuster',
       statut: 'nouveau',
     }))

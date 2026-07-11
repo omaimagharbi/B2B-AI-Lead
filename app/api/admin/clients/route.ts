@@ -27,16 +27,32 @@ export async function GET(req: NextRequest) {
 
   const { data: clients, error } = await supabaseAdmin
     .from('clients')
-    .select(
-      'id, nom_entreprise, email, zone_geographique, statut_abonnement, plan_tarifaire, created_at, leads(count)'
-    )
+    .select('id, nom_entreprise, email, statut_abonnement, plan_tarifaire, created_at')
     .order('created_at', { ascending: false })
 
   if (error) {
     return NextResponse.json({ error: 'Erreur de chargement' }, { status: 500 })
   }
 
-  return NextResponse.json({ clients })
+  // On compte separement les packs vendus par client (jointure via diagnostics)
+  const { data: packsVendus } = await supabaseAdmin
+    .from('leads_packs')
+    .select('diagnostics!inner(client_id)')
+    .eq('statut_vente', 'accepte')
+
+  const comptageParClient = new Map<string, number>()
+  for (const p of packsVendus ?? []) {
+    // @ts-expect-error - jointure Supabase typee dynamiquement
+    const clientId = p.diagnostics?.client_id as string
+    comptageParClient.set(clientId, (comptageParClient.get(clientId) ?? 0) + 1)
+  }
+
+  const clientsAvecComptage = (clients ?? []).map((c) => ({
+    ...c,
+    packs_vendus: comptageParClient.get(c.id) ?? 0,
+  }))
+
+  return NextResponse.json({ clients: clientsAvecComptage })
 }
 
 export async function POST(req: NextRequest) {
