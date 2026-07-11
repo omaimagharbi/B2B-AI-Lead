@@ -2,23 +2,83 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
-const SYSTEM_PROMPT = `Tu es un consultant senior en formation professionnelle et developpement des competences.
-Un decideur (DRH ou Directeur) decrit en une phrase le probleme actuel de ses equipes.
-Tu dois generer un diagnostic pedagogique structure, credible et actionnable.
-
-Reponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni apres, sans balises markdown, au format exact suivant :
+const FORMAT_JSON_ATTENDU = `Reponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni apres, sans balises markdown, au format exact suivant :
 
 {
   "titre": "Titre court et percutant du diagnostic",
   "synthese": "2-3 phrases resumant le probleme identifie et l'enjeu business associe",
   "modules": [
-    { "nom": "Nom du module de formation", "priorite": "haute|moyenne", "description": "1 phrase expliquant l'objectif de ce module" }
+    { "nom": "Nom du module/axe recommande", "priorite": "haute|moyenne", "description": "1 phrase expliquant l'objectif" }
   ],
-  "certification_recommandee": "Nom d'une certification pertinente (ex: PMP, Scrum Master, etc.)",
+  "certification_recommandee": "Nom d'une certification ou reference pertinente",
   "duree_estimee": "Ex: 5 jours / 35 heures"
 }
 
 Genere entre 3 et 4 modules maximum, ordonnes par priorite decroissante.`
+
+// Prompt par defaut (vertical Cabinet de Formation & Conseil)
+const PROMPT_PAR_DEFAUT = `Tu es un consultant senior en formation professionnelle et developpement des competences.
+Un decideur (DRH ou Directeur) decrit en une phrase le probleme actuel de ses equipes.
+Tu dois generer un diagnostic pedagogique structure, credible et actionnable.
+
+${FORMAT_JSON_ATTENDU}`
+
+function genererDiagnosticSimule(probleme: string) {
+  return {
+    titre: 'Diagnostic préliminaire de vos besoins en formation',
+    synthese: `D'après votre description ("${probleme.slice(0, 80)}${
+      probleme.length > 80 ? '...' : ''
+    }"), votre équipe fait face à un enjeu de performance qui peut être adressé par un accompagnement ciblé.`,
+    modules: [
+      {
+        nom: 'Diagnostic approfondi des compétences',
+        priorite: 'haute',
+        description: "Identifier precisement les ecarts de competences au sein de l'equipe.",
+      },
+      {
+        nom: 'Plan de developpement personnalise',
+        priorite: 'haute',
+        description: 'Construire un parcours de formation adapte aux objectifs business.',
+      },
+      {
+        nom: 'Suivi et mesure des resultats',
+        priorite: 'moyenne',
+        description: "Mettre en place des indicateurs de suivi de la progression de l'equipe.",
+      },
+    ],
+    certification_recommandee: "À définir lors de l'entretien de cadrage",
+    duree_estimee: 'À définir selon les besoins',
+    _simule: true, // indicateur interne : rapport d'exemple, pas une vraie generation IA
+  }
+}
+
+async function genererDiagnostic(probleme: string, systemPrompt: string) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+
+  if (!apiKey) {
+    return genererDiagnosticSimule(probleme)
+  }
+
+  try {
+    const anthropic = new Anthropic({ apiKey })
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-5',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: probleme }],
+    })
+
+    const textBlock = message.content.find((block) => block.type === 'text')
+    const rawText = textBlock && 'text' in textBlock ? textBlock.text : '{}'
+    const cleanText = rawText.replace(/```json|```/g, '').trim()
+    return JSON.parse(cleanText)
+  } catch (err) {
+    // Cle invalide, credit insuffisant, erreur reseau, JSON malforme...
+    // On ne bloque jamais le prospect : on bascule sur un rapport simule
+    console.error('Anthropic indisponible, bascule en mode simule:', err)
+    return genererDiagnosticSimule(probleme)
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,10 +88,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Donnees invalides' }, { status: 400 })
     }
 
-    // 1. On verifie que le token correspond a un diagnostic existant
+    // 1. On verifie que le token correspond a un diagnostic existant,
+    // et on recupere au passage le prompt IA propre a son vertical (etape 15)
     const { data: diagnostic, error: findError } = await supabaseAdmin
       .from('diagnostics')
-      .select('id')
+      .select('id, verticals(prompt_ia_config)')
       .eq('token_acces', token)
       .single()
 
@@ -39,19 +100,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Lien invalide ou expire' }, { status: 404 })
     }
 
-    // 2. Appel a l'API Anthropic
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-5',
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: probleme }],
-    })
+    // @ts-expect-error - jointure Supabase typee dynamiquement
+    const promptVertical = diagnostic.verticals?.prompt_ia_config?.system_prompt as
+      | string
+      | undefined
 
-    const textBlock = message.content.find((block) => block.type === 'text')
-    const rawText = textBlock && 'text' in textBlock ? textBlock.text : '{}'
-    const cleanText = rawText.replace(/```json|```/g, '').trim()
-    const rapportComplet = JSON.parse(cleanText)
+    const systemPrompt = promptVertical
+      ? `${promptVertical}\n\n${FORMAT_JSON_ATTENDU}`
+      : PROMPT_PAR_DEFAUT
+
+    // 2. Generation (reelle ou simulee en secours)
+    const rapportComplet = await genererDiagnostic(probleme, systemPrompt)
 
     // 3. On sauvegarde le resultat complet en base (jamais renvoye en entier au front ici)
     await supabaseAdmin

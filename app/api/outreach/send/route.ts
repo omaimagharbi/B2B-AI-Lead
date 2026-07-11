@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     }
 
     const lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
-    const message = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a realiser un diagnostic gratuit et personnalise de vos besoins en formation (15 secondes) :\n${lien}`
+    const message = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a realiser un diagnostic gratuit et personnalise (15 secondes) :\n${lien}`
 
     // 3. Envoi effectif selon le canal
     if (canal === 'whatsapp') {

@@ -10,14 +10,14 @@ const cartes = [
   {
     slug: 'startup-saas',
     titre: 'Startup Tech & SaaS',
-    description: 'Bientôt disponible.',
-    active: false,
+    description: 'Recevez des audits techniques qualifiés directement dans votre pipeline.',
+    active: true,
   },
   {
     slug: 'pme-services',
     titre: 'PME de Services & Entreprises',
-    description: 'Bientôt disponible.',
-    active: false,
+    description: 'Recevez des audits organisationnels qualifiés directement dans votre pipeline.',
+    active: true,
   },
 ]
 

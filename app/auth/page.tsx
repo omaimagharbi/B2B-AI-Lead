@@ -26,7 +26,7 @@ function AuthForm() {
           email,
           password: motDePasse,
           options: {
-            data: { nom_entreprise: nomEntreprise },
+            data: { nom_entreprise: nomEntreprise, vertical_slug: vertical },
           },
         })
         if (error) {
