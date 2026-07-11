@@ -234,6 +234,16 @@ export default function DashboardPage() {
           </button>
         </div>
 
+        {client.statut_abonnement === 'trial' && compteurs.fichesLivrees >= 3 && (
+          <div className="rounded-xl border border-amber-700 bg-amber-950/40 p-4">
+            <p className="font-semibold">Votre essai gratuit est arrivé à son terme 🎉</p>
+            <p className="text-slate-300 text-sm mt-1">
+              Vous avez reçu {compteurs.fichesLivrees} fiches prospects qualifiées. Contactez-nous
+              pour passer à un abonnement et continuer à en recevoir automatiquement.
+            </p>
+          </div>
+        )}
+
         {/* ZONE 1 : CONFIGURATION */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Configuration</h2>

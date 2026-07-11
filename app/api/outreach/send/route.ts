@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+const LIMITE_LEADS_ESSAI_GRATUIT = 3
 
 async function envoyerWhatsapp(telephone: string, message: string) {
   const idInstance = process.env.GREENAPI_ID_INSTANCE
@@ -81,12 +82,30 @@ export async function POST(req: NextRequest) {
 
     const { data: client, error: clientError } = await supabaseAdmin
       .from('clients')
-      .select('id, vertical_id, zone_geographique, nom_entreprise')
+      .select('id, vertical_id, zone_geographique, nom_entreprise, statut_abonnement')
       .eq('id', target.client_id)
       .single()
 
     if (clientError || !client) {
       return NextResponse.json({ error: 'Client introuvable' }, { status: 404 })
+    }
+
+    // Etape 14 - Monetisation : on coupe la gratuite au-dela d'un certain nombre de leads
+    if (client.statut_abonnement === 'trial') {
+      const { count: nombreLeadsLivres } = await supabaseAdmin
+        .from('leads')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', client.id)
+
+      if ((nombreLeadsLivres ?? 0) >= LIMITE_LEADS_ESSAI_GRATUIT) {
+        return NextResponse.json(
+          {
+            error: `Limite de l'essai gratuit atteinte (${LIMITE_LEADS_ESSAI_GRATUIT} fiches). Passez a un abonnement payant pour continuer a recevoir des prospects.`,
+            limite_atteinte: true,
+          },
+          { status: 403 }
+        )
+      }
     }
 
     const canal = client.zone_geographique === 'tunisie' ? 'whatsapp' : 'email'
