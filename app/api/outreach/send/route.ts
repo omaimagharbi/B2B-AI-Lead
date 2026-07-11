@@ -30,6 +30,12 @@ async function envoyerEmail(email: string, message: string) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) throw new Error('Configuration Resend manquante')
 
+  // Par defaut on utilise l'adresse de test Resend (fonctionne sans verifier de domaine,
+  // mais n'envoie qu'a l'adresse email avec laquelle tu t'es inscrit sur Resend).
+  // Une fois ton propre domaine verifie sur resend.com/domains, mets RESEND_FROM_EMAIL
+  // dans Vercel avec une adresse de ce domaine (ex: diagnostic@catalyste.tn)
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -37,14 +43,18 @@ async function envoyerEmail(email: string, message: string) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'diagnostic@votre-domaine-verifie.com',
+      from: fromEmail,
       to: email,
       subject: 'Votre diagnostic de compétences personnalisé',
       html: `<p>${message.replace(/\n/g, '<br/>')}</p>`,
     }),
   })
 
-  if (!res.ok) throw new Error('Echec envoi Email')
+  if (!res.ok) {
+    const detail = await res.text()
+    console.error('Erreur Resend:', detail)
+    throw new Error('Echec envoi Email')
+  }
 }
 
 export async function POST(req: NextRequest) {
