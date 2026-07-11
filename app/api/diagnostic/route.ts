@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-
 const SYSTEM_PROMPT = `Tu es un consultant senior en formation professionnelle et developpement des competences.
 Un decideur (DRH ou Directeur) decrit en une phrase le probleme actuel de ses equipes.
 Tu dois generer un diagnostic pedagogique structure, credible et actionnable.
@@ -42,6 +40,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Appel a l'API Anthropic
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 1024,
