@@ -23,9 +23,10 @@ export async function GET(req: NextRequest) {
     const { data: targets, error: targetsError } = await supabaseAdmin
       .from('targets')
       .select(
-        'id, nom, telephone, email, country, client_id, clients(id, vertical_id, nom_entreprise, statut_abonnement)'
+        'id, nom, telephone, email, country, client_id, ne_plus_contacter, token_desinscription, clients(id, vertical_id, nom_entreprise, statut_abonnement)'
       )
       .eq('statut', 'nouveau')
+      .eq('ne_plus_contacter', false)
       .limit(LIMITE_ENVOIS_PAR_EXECUTION)
 
     if (targetsError) {
@@ -86,7 +87,8 @@ export async function GET(req: NextRequest) {
         if (diagError || !diagnostic) throw new Error('Erreur creation diagnostic')
 
         const lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
-        const message = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}`
+        const lienDesinscription = `${SITE_URL}/desinscription/${target.token_desinscription}`
+        const message = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}\n\n---\nPour ne plus recevoir de message : ${lienDesinscription}`
 
         if (canal === 'whatsapp') {
           await envoyerWhatsapp(target.telephone!, message)

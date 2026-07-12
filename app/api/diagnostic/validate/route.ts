@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const { data: diagnostic, error: diagError } = await supabaseAdmin
       .from('diagnostics')
       .select(
-        'id, token_acces, client_id, targets(nom, telephone, email, country), clients(nom_entreprise)'
+        'id, token_acces, client_id, targets(nom, telephone, email, country, token_desinscription), clients(nom_entreprise)'
       )
       .eq('id', diagnostic_id)
       .single()
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
       telephone: string | null
       email: string | null
       country: string | null
+      token_desinscription: string
     }
     // @ts-expect-error - jointure Supabase typee dynamiquement
     const nomCabinet = diagnostic.clients?.nom_entreprise ?? 'Votre expert'
@@ -72,7 +73,8 @@ export async function POST(req: NextRequest) {
 
     // 4. On envoie le lien au prospect, par le canal adapte a son pays
     const lien = `${SITE_URL}/packs/${diagnostic.token_acces}`
-    const message = `Bonjour ${target.nom},\n\n${nomCabinet} a etudie votre dossier et vous propose une solution personnalisee :\n${lien}`
+    const lienDesinscription = `${SITE_URL}/desinscription/${target.token_desinscription}`
+    const message = `Bonjour ${target.nom},\n\n${nomCabinet} a etudie votre dossier et vous propose une solution personnalisee :\n${lien}\n\n---\nPour ne plus recevoir de message : ${lienDesinscription}`
 
     const canal = canalParPays(target.country ?? 'FR')
 

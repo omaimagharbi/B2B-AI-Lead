@@ -15,12 +15,18 @@ export async function POST(req: NextRequest) {
 
     const { data: target, error: targetError } = await supabaseAdmin
       .from('targets')
-      .select('id, nom, telephone, email, country, client_id, statut')
+      .select(
+        'id, nom, telephone, email, country, client_id, statut, ne_plus_contacter, token_desinscription'
+      )
       .eq('id', target_id)
       .single()
 
     if (targetError || !target) {
       return NextResponse.json({ error: 'Cible introuvable' }, { status: 404 })
+    }
+
+    if (target.ne_plus_contacter) {
+      return NextResponse.json({ error: 'Ce prospect s\'est désinscrit' }, { status: 400 })
     }
 
     if (target.statut !== 'nouveau') {
@@ -80,7 +86,8 @@ export async function POST(req: NextRequest) {
     }
 
     const lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
-    const message = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}`
+    const lienDesinscription = `${SITE_URL}/desinscription/${target.token_desinscription}`
+    const message = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}\n\n---\nPour ne plus recevoir de message : ${lienDesinscription}`
 
     if (canal === 'whatsapp') {
       await envoyerWhatsapp(target.telephone!, message)

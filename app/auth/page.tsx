@@ -9,18 +9,37 @@ function AuthForm() {
   const searchParams = useSearchParams()
   const vertical = searchParams.get('vertical') ?? 'cabinet-formation'
 
-  const [mode, setMode] = useState<'inscription' | 'connexion'>('inscription')
+  const [mode, setMode] = useState<'inscription' | 'connexion' | 'mot_de_passe_oublie'>(
+    'inscription'
+  )
   const [nomEntreprise, setNomEntreprise] = useState('')
   const [email, setEmail] = useState('')
   const [motDePasse, setMotDePasse] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
+  const [messageSucces, setMessageSucces] = useState<string | null>(null)
   const [chargement, setChargement] = useState(false)
 
   const soumettre = async () => {
     setErreur(null)
+    setMessageSucces(null)
     setChargement(true)
 
     try {
+      if (mode === 'mot_de_passe_oublie') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/reset`,
+        })
+        if (error) {
+          setErreur(error.message)
+        } else {
+          setMessageSucces(
+            'Si un compte existe avec cet email, un lien de réinitialisation vient de vous être envoyé.'
+          )
+        }
+        setChargement(false)
+        return
+      }
+
       if (mode === 'inscription') {
         const { error } = await supabase.auth.signUp({
           email,
@@ -63,7 +82,11 @@ function AuthForm() {
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">
-            {mode === 'inscription' ? 'Créez votre compte cabinet' : 'Connexion'}
+            {mode === 'inscription'
+              ? 'Créez votre compte cabinet'
+              : mode === 'connexion'
+              ? 'Connexion'
+              : 'Mot de passe oublié'}
           </h1>
           <p className="text-slate-400 text-sm">
             Vertical sélectionné : <span className="text-accent">{vertical}</span>
@@ -73,6 +96,11 @@ function AuthForm() {
         {erreur && (
           <div className="text-center text-red-400 bg-red-950/40 border border-red-800 rounded-lg p-3 text-sm">
             {erreur}
+          </div>
+        )}
+        {messageSucces && (
+          <div className="text-center text-accent bg-slate-900 border border-accent/40 rounded-lg p-3 text-sm">
+            {messageSucces}
           </div>
         )}
 
@@ -92,34 +120,73 @@ function AuthForm() {
             type="email"
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
           />
-          <input
-            value={motDePasse}
-            onChange={(e) => setMotDePasse(e.target.value)}
-            placeholder="Mot de passe"
-            type="password"
-            className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
-          />
+          {mode !== 'mot_de_passe_oublie' && (
+            <input
+              value={motDePasse}
+              onChange={(e) => setMotDePasse(e.target.value)}
+              placeholder="Mot de passe"
+              type="password"
+              className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
+            />
+          )}
           <button
             onClick={soumettre}
-            disabled={chargement || !email || !motDePasse || (mode === 'inscription' && !nomEntreprise)}
+            disabled={
+              chargement ||
+              !email ||
+              (mode !== 'mot_de_passe_oublie' && !motDePasse) ||
+              (mode === 'inscription' && !nomEntreprise)
+            }
             className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40 hover:opacity-90 transition"
           >
             {chargement
               ? 'Chargement...'
               : mode === 'inscription'
-              ? "Créer mon compte"
-              : 'Se connecter'}
+              ? 'Créer mon compte'
+              : mode === 'connexion'
+              ? 'Se connecter'
+              : 'Envoyer le lien de réinitialisation'}
           </button>
         </div>
 
+        {mode === 'connexion' && (
+          <p className="text-center">
+            <button
+              onClick={() => {
+                setMode('mot_de_passe_oublie')
+                setErreur(null)
+                setMessageSucces(null)
+              }}
+              className="text-slate-400 text-sm underline"
+            >
+              Mot de passe oublié ?
+            </button>
+          </p>
+        )}
+
         <p className="text-center text-slate-400 text-sm">
-          {mode === 'inscription' ? 'Déjà un compte ?' : "Pas encore de compte ?"}{' '}
-          <button
-            onClick={() => setMode(mode === 'inscription' ? 'connexion' : 'inscription')}
-            className="text-accent underline"
-          >
-            {mode === 'inscription' ? 'Se connecter' : "S'inscrire"}
-          </button>
+          {mode === 'mot_de_passe_oublie' ? (
+            <button
+              onClick={() => {
+                setMode('connexion')
+                setErreur(null)
+                setMessageSucces(null)
+              }}
+              className="text-accent underline"
+            >
+              Retour à la connexion
+            </button>
+          ) : (
+            <>
+              {mode === 'inscription' ? 'Déjà un compte ?' : 'Pas encore de compte ?'}{' '}
+              <button
+                onClick={() => setMode(mode === 'inscription' ? 'connexion' : 'inscription')}
+                className="text-accent underline"
+              >
+                {mode === 'inscription' ? 'Se connecter' : "S'inscrire"}
+              </button>
+            </>
+          )}
         </p>
       </div>
     </main>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { construirePrompt, type ModeCiblage } from '@/lib/methodologie'
+import { envoyerEmail } from '@/lib/notifications'
 
 function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
   const etapesAddie = [
@@ -64,10 +65,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Donnees invalides' }, { status: 400 })
     }
 
-    // 1. On recupere le diagnostic + le client (mode de ciblage) + le vertical (prompt metier)
+    // 1. On recupere le diagnostic + le client (mode de ciblage + email) + le vertical (prompt metier)
     const { data: diagnostic, error: findError } = await supabaseAdmin
       .from('diagnostics')
-      .select('id, clients(mode_ciblage), verticals(prompt_ia_config)')
+      .select('id, clients(mode_ciblage, email, nom_entreprise), verticals(prompt_ia_config)')
       .eq('token_acces', token)
       .single()
 
@@ -96,6 +97,25 @@ export async function POST(req: NextRequest) {
         statut_validation: 'en_attente_validation',
       })
       .eq('id', diagnostic.id)
+
+    // 3bis. On notifie le cabinet par email qu'un nouveau diagnostic attend sa validation
+    // (best-effort : si l'envoi echoue, on ne bloque pas le prospect pour autant)
+    // @ts-expect-error - jointure Supabase typee dynamiquement
+    const emailCabinet = diagnostic.clients?.email as string | undefined
+    // @ts-expect-error - jointure Supabase typee dynamiquement
+    const nomCabinet = diagnostic.clients?.nom_entreprise as string | undefined
+    const dashboardUrl = `${(process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')}/dashboard`
+
+    if (emailCabinet) {
+      try {
+        await envoyerEmail(
+          emailCabinet,
+          `Bonjour ${nomCabinet ?? ''},\n\nUn nouveau diagnostic attend votre validation sur votre dashboard :\n${dashboardUrl}`
+        )
+      } catch (err) {
+        console.error('Notification email cabinet echouee (non bloquant):', err)
+      }
+    }
 
     // 4. Le prospect ne recoit qu'une confirmation d'attente, jamais le contenu genere
     return NextResponse.json({ succes: true })

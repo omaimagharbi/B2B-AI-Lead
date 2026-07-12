@@ -59,6 +59,18 @@ export default function Home() {
           )
         )}
       </div>
+
+      <footer className="mt-16 text-center text-slate-600 text-xs space-x-4">
+        <a href="/mentions-legales" className="hover:text-slate-400 underline">
+          Mentions légales
+        </a>
+        <a href="/cgu" className="hover:text-slate-400 underline">
+          CGU
+        </a>
+        <a href="/politique-confidentialite" className="hover:text-slate-400 underline">
+          Politique de confidentialité
+        </a>
+      </footer>
     </main>
   )
 }
