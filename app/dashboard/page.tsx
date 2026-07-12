@@ -11,6 +11,8 @@ type Client = {
   nom_entreprise: string
   statut_abonnement: string
   mode_ciblage: 'entreprise' | 'particulier'
+  secteur_activite: string | null
+  taille_entreprise: string
 }
 
 type Target = {
@@ -48,6 +50,7 @@ export default function DashboardPage() {
   const [packsVendus, setPacksVendus] = useState<PackVendu[]>([])
   const [chargement, setChargement] = useState(true)
   const [maj, setMaj] = useState(false)
+  const [secteurInput, setSecteurInput] = useState('')
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null)
 
   const [nouvelleCible, setNouvelleCible] = useState({
@@ -110,12 +113,15 @@ export default function DashboardPage() {
 
       const { data: clientData } = await supabase
         .from('clients')
-        .select('id, nom_entreprise, statut_abonnement, mode_ciblage, verticals(slug)')
+        .select(
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, verticals(slug)'
+        )
         .eq('id', clientUser.client_id)
         .single()
 
       if (clientData) {
         setClient(clientData as unknown as Client)
+        setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
         // @ts-ignore - jointure Supabase typee dynamiquement
         setEstHybride(clientData.verticals?.slug === 'cabinet-formation')
         await chargerTout(clientData.id)
@@ -152,6 +158,25 @@ export default function DashboardPage() {
     setMaj(true)
     await supabase.from('clients').update({ mode_ciblage: mode }).eq('id', client.id)
     setClient({ ...client, mode_ciblage: mode })
+    setMaj(false)
+  }
+
+  const enregistrerSecteur = async () => {
+    if (!client) return
+    setMaj(true)
+    await supabase
+      .from('clients')
+      .update({ secteur_activite: secteurInput.trim() || null })
+      .eq('id', client.id)
+    setClient({ ...client, secteur_activite: secteurInput.trim() || null })
+    setMaj(false)
+  }
+
+  const changerTailleEntreprise = async (taille: string) => {
+    if (!client) return
+    setMaj(true)
+    await supabase.from('clients').update({ taille_entreprise: taille }).eq('id', client.id)
+    setClient({ ...client, taille_entreprise: taille })
     setMaj(false)
   }
 
@@ -293,6 +318,43 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
+
+          {client.mode_ciblage === 'entreprise' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-slate-400 text-sm">
+                  Secteur d'activité ciblé <span className="text-slate-600">(optionnel)</span>
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    value={secteurInput}
+                    onChange={(e) => setSecteurInput(e.target.value)}
+                    onBlur={enregistrerSecteur}
+                    placeholder="Ex: Banque, Assurance, Industrie textile..."
+                    className="flex-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                  />
+                </div>
+                <p className="text-slate-600 text-xs">
+                  Affine la recherche de prospects sur ce secteur précis
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-slate-400 text-sm">Taille d'entreprise ciblée</p>
+                <select
+                  value={client.taille_entreprise}
+                  onChange={(e) => changerTailleEntreprise(e.target.value)}
+                  disabled={maj}
+                  className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                >
+                  <option value="indifferent">Indifférent</option>
+                  <option value="startup">Startup / Jeune pousse</option>
+                  <option value="pme">PME</option>
+                  <option value="grande_entreprise">Grande entreprise / Groupe</option>
+                </select>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* SUIVI */}
