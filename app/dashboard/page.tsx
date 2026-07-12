@@ -116,7 +116,7 @@ export default function DashboardPage() {
 
       if (clientData) {
         setClient(clientData as unknown as Client)
-        // @ts-expect-error - jointure Supabase typee dynamiquement
+        // @ts-ignore - jointure Supabase typee dynamiquement
         setEstHybride(clientData.verticals?.slug === 'cabinet-formation')
         await chargerTout(clientData.id)
       }

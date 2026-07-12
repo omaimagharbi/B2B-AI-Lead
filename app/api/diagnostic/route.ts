@@ -76,9 +76,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Lien invalide ou expire' }, { status: 404 })
     }
 
-    // @ts-expect-error - jointures Supabase typees dynamiquement
+    // @ts-ignore - jointures Supabase typees dynamiquement
     const modeCiblage = (diagnostic.clients?.mode_ciblage ?? 'entreprise') as ModeCiblage
-    // @ts-expect-error - jointures Supabase typees dynamiquement
+    // @ts-ignore - jointures Supabase typees dynamiquement
     const promptVertical = diagnostic.verticals?.prompt_ia_config?.system_prompt as
       | string
       | undefined
@@ -100,9 +100,9 @@ export async function POST(req: NextRequest) {
 
     // 3bis. On notifie le cabinet par email qu'un nouveau diagnostic attend sa validation
     // (best-effort : si l'envoi echoue, on ne bloque pas le prospect pour autant)
-    // @ts-expect-error - jointure Supabase typee dynamiquement
+    // @ts-ignore - jointure Supabase typee dynamiquement
     const emailCabinet = diagnostic.clients?.email as string | undefined
-    // @ts-expect-error - jointure Supabase typee dynamiquement
+    // @ts-ignore - jointure Supabase typee dynamiquement
     const nomCabinet = diagnostic.clients?.nom_entreprise as string | undefined
     const dashboardUrl = `${(process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')}/dashboard`
 

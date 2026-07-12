@@ -77,9 +77,8 @@ export async function GET(req: NextRequest) {
     }
 
     for (const client of clients ?? []) {
-      // @ts-expect-error - jointures Supabase typees dynamiquement
+      // @ts-ignore - jointures Supabase typees dynamiquement
       const verticalSlug = client.verticals?.slug as string | undefined
-      // @ts-expect-error - jointures Supabase typees dynamiquement
       const paysClient = (client.client_countries ?? []) as { country_code: string }[]
 
       if (paysClient.length === 0) {

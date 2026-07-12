@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     const compteurPacksParClient = new Map<string, number>()
 
     for (const target of targets ?? []) {
-      // @ts-expect-error - jointure Supabase typee dynamiquement
+      // @ts-ignore - jointure Supabase typee dynamiquement
       const client = target.clients as {
         id: string
         vertical_id: string

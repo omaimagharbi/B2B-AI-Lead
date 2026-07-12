@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 
   const comptageParClient = new Map<string, number>()
   for (const p of packsVendus ?? []) {
-    // @ts-expect-error - jointure Supabase typee dynamiquement
+    // @ts-ignore - jointure Supabase typee dynamiquement
     const clientId = p.diagnostics?.client_id as string
     comptageParClient.set(clientId, (comptageParClient.get(clientId) ?? 0) + 1)
   }

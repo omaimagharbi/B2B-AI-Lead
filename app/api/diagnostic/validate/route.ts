@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Diagnostic introuvable' }, { status: 404 })
     }
 
-    // @ts-expect-error - jointure Supabase typee dynamiquement
+    // @ts-ignore - jointure Supabase typee dynamiquement
     const target = diagnostic.targets as {
       nom: string
       telephone: string | null
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       country: string | null
       token_desinscription: string
     }
-    // @ts-expect-error - jointure Supabase typee dynamiquement
+    // @ts-ignore - jointure Supabase typee dynamiquement
     const nomCabinet = diagnostic.clients?.nom_entreprise ?? 'Votre expert'
 
     // 2. On sauvegarde la version validee par l'expert
