@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const { data: diagnostic, error: diagError } = await supabaseAdmin
       .from('diagnostics')
       .select(
-        'id, token_acces, client_id, targets(nom, telephone, email, country, token_desinscription), clients(nom_entreprise)'
+        'id, token_acces, client_id, targets(nom, telephone, email, country, token_desinscription), clients(nom_entreprise, logo_url)'
       )
       .eq('id', diagnostic_id)
       .single()
@@ -47,6 +47,8 @@ export async function POST(req: NextRequest) {
     }
     // @ts-ignore - jointure Supabase typee dynamiquement
     const nomCabinet = diagnostic.clients?.nom_entreprise ?? 'Votre expert'
+    // @ts-ignore - jointure Supabase typee dynamiquement
+    const logoUrl = diagnostic.clients?.logo_url as string | null | undefined
 
     // 2. On sauvegarde la version validee par l'expert
     await supabaseAdmin
@@ -80,9 +82,9 @@ export async function POST(req: NextRequest) {
 
     try {
       if (canal === 'whatsapp' && target.telephone) {
-        await envoyerWhatsapp(target.telephone, message)
+        await envoyerWhatsapp(target.telephone, message, logoUrl)
       } else if (target.email) {
-        await envoyerEmail(target.email, message)
+        await envoyerEmail(target.email, message, logoUrl)
       } else {
         console.error('Aucun moyen de contact disponible pour cette cible')
       }

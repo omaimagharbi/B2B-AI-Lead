@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { envoyerWhatsapp, envoyerEmail } from '@/lib/notifications'
+import { envoyerWhatsapp, envoyerEmail, construireMessage } from '@/lib/notifications'
 import { canalParPays } from '@/lib/pays'
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     const { data: client, error: clientError } = await supabaseAdmin
       .from('clients')
-      .select('id, vertical_id, nom_entreprise, statut_abonnement')
+      .select('id, vertical_id, nom_entreprise, statut_abonnement, message_personnalise, logo_url')
       .eq('id', target.client_id)
       .single()
 
@@ -87,12 +87,17 @@ export async function POST(req: NextRequest) {
 
     const lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
     const lienDesinscription = `${SITE_URL}/desinscription/${target.token_desinscription}`
-    const message = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}\n\n---\nPour ne plus recevoir de message : ${lienDesinscription}`
+    const messageParDefaut = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}`
+    const message = construireMessage(
+      client.message_personnalise,
+      { nom: target.nom, cabinet: client.nom_entreprise, lien, lienDesinscription },
+      messageParDefaut
+    )
 
     if (canal === 'whatsapp') {
-      await envoyerWhatsapp(target.telephone!, message)
+      await envoyerWhatsapp(target.telephone!, message, client.logo_url)
     } else {
-      await envoyerEmail(target.email!, message)
+      await envoyerEmail(target.email!, message, client.logo_url)
     }
 
     await supabaseAdmin.from('outreach_campaigns').insert({

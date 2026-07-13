@@ -17,6 +17,8 @@ type Client = {
   taille_entreprise: string
   canal_sourcing: string
   profil_particulier: string | null
+  message_personnalise: string | null
+  logo_url: string | null
 }
 
 type Target = {
@@ -62,6 +64,10 @@ export default function DashboardPage() {
   const [lancementResultat, setLancementResultat] = useState<Record<string, unknown>[] | null>(
     null
   )
+  const [messageInput, setMessageInput] = useState('')
+  const [logoInput, setLogoInput] = useState('')
+  const [ciblesSelectionnees, setCiblesSelectionnees] = useState<Set<string>>(new Set())
+  const [envoiMasseEnCours, setEnvoiMasseEnCours] = useState(false)
 
   const [nouvelleCible, setNouvelleCible] = useState({
     nom: '',
@@ -130,7 +136,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -138,6 +144,8 @@ export default function DashboardPage() {
       if (clientData) {
         setClient(clientData as unknown as Client)
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
+        setMessageInput((clientData as unknown as Client).message_personnalise ?? '')
+        setLogoInput((clientData as unknown as Client).logo_url ?? '')
         // @ts-ignore - jointure Supabase typee dynamiquement
         const slug = clientData.verticals?.slug as string
         setVerticalSlug(slug ?? '')
@@ -309,6 +317,59 @@ export default function DashboardPage() {
       alert('Impossible de contacter le serveur')
     }
     setEnvoiEnCours(null)
+  }
+
+  const enregistrerMessage = async () => {
+    if (!client) return
+    setMaj(true)
+    await supabase
+      .from('clients')
+      .update({ message_personnalise: messageInput.trim() || null })
+      .eq('id', client.id)
+    setClient({ ...client, message_personnalise: messageInput.trim() || null })
+    setMaj(false)
+  }
+
+  const enregistrerLogo = async () => {
+    if (!client) return
+    setMaj(true)
+    await supabase.from('clients').update({ logo_url: logoInput.trim() || null }).eq('id', client.id)
+    setClient({ ...client, logo_url: logoInput.trim() || null })
+    setMaj(false)
+  }
+
+  const toggleCibleSelectionnee = (targetId: string) => {
+    const nouvelles = new Set(ciblesSelectionnees)
+    nouvelles.has(targetId) ? nouvelles.delete(targetId) : nouvelles.add(targetId)
+    setCiblesSelectionnees(nouvelles)
+  }
+
+  const toggleTouteSelection = () => {
+    const ciblesEnvoyables = targets.filter((t) => t.statut === 'nouveau').map((t) => t.id)
+    const toutesDejaSelectionnees =
+      ciblesEnvoyables.length > 0 && ciblesEnvoyables.every((id) => ciblesSelectionnees.has(id))
+    setCiblesSelectionnees(toutesDejaSelectionnees ? new Set() : new Set(ciblesEnvoyables))
+  }
+
+  const envoyerAuxSelectionnes = async () => {
+    if (!client || ciblesSelectionnees.size === 0) return
+    setEnvoiMasseEnCours(true)
+
+    for (const targetId of ciblesSelectionnees) {
+      try {
+        await fetch('/api/outreach/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_id: targetId }),
+        })
+      } catch {
+        // on continue meme si un envoi echoue, pour ne pas bloquer les autres
+      }
+    }
+
+    setCiblesSelectionnees(new Set())
+    await chargerTout(client.id)
+    setEnvoiMasseEnCours(false)
   }
 
   const deconnexion = async () => {
@@ -541,6 +602,49 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {/* PERSONNALISATION DU MESSAGE ET DU LOGO */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Personnalisation des messages envoyés</h2>
+          <p className="text-slate-500 text-xs">
+            Utilise <code className="text-accent">{'{nom}'}</code>,{' '}
+            <code className="text-accent">{'{cabinet}'}</code> et{' '}
+            <code className="text-accent">{'{lien}'}</code> dans ton texte — ils seront
+            automatiquement remplacés. Le lien de désinscription est toujours ajouté
+            automatiquement à la fin (obligation légale), inutile de l'écrire toi-même.
+          </p>
+
+          <div className="space-y-2">
+            <p className="text-slate-400 text-sm">Message d'invitation personnalisé</p>
+            <textarea
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+              onBlur={enregistrerMessage}
+              placeholder={`Bonjour {nom},\n\n{cabinet} vous invite a decrire votre situation, un expert etudiera votre dossier :\n{lien}`}
+              className="w-full h-28 rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-slate-400 text-sm">
+              URL de ton logo <span className="text-slate-600">(image hébergée en ligne)</span>
+            </p>
+            <input
+              value={logoInput}
+              onChange={(e) => setLogoInput(e.target.value)}
+              onBlur={enregistrerLogo}
+              placeholder="https://ton-site.com/logo.png"
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            />
+            {logoInput && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoInput} alt="Aperçu logo" className="h-12 mt-2 rounded bg-white p-1" />
+            )}
+            <p className="text-slate-600 text-xs">
+              Envoyé en pièce jointe sur WhatsApp, intégré en haut des emails. Héberge ton logo
+              sur ton site, Google Drive (lien public), ou tout autre hébergeur d'images.
+            </p>
+          </div>
+        </section>
 
         {/* SUIVI */}
         <section className="space-y-4">
@@ -632,40 +736,77 @@ export default function DashboardPage() {
           {targets.length === 0 ? (
             <p className="text-slate-500 text-sm italic">Aucune cible pour le moment.</p>
           ) : (
-            <div className="space-y-2">
-              {targets.map((target) => (
-                <div
-                  key={target.id}
-                  className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-center justify-between flex-wrap gap-3"
+            <>
+              <div className="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-lg p-3">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={
+                      targets.filter((t) => t.statut === 'nouveau').length > 0 &&
+                      targets
+                        .filter((t) => t.statut === 'nouveau')
+                        .every((t) => ciblesSelectionnees.has(t.id))
+                    }
+                    onChange={toggleTouteSelection}
+                    className="accent-accent"
+                  />
+                  Tout sélectionner (nouvelles cibles)
+                </label>
+                <button
+                  onClick={envoyerAuxSelectionnes}
+                  disabled={ciblesSelectionnees.size === 0 || envoiMasseEnCours}
+                  className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
                 >
-                  <div>
-                    <p className="font-semibold">
-                      {target.nom}{' '}
-                      {target.entreprise_ou_objectif && (
-                        <span className="text-slate-400 font-normal">
-                          — {target.entreprise_ou_objectif}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-slate-400 text-sm">
-                      {target.telephone ?? '—'} · {target.email ?? '—'} · {target.country ?? '—'} ·{' '}
-                      <span className="text-accent">{target.statut}</span>
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => envoyerDiagnostic(target.id)}
-                    disabled={target.statut !== 'nouveau' || envoiEnCours === target.id}
-                    className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                  {envoiMasseEnCours
+                    ? 'Envoi en cours...'
+                    : `Envoyer aux sélectionnés (${ciblesSelectionnees.size})`}
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {targets.map((target) => (
+                  <div
+                    key={target.id}
+                    className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-center justify-between flex-wrap gap-3"
                   >
-                    {envoiEnCours === target.id
-                      ? 'Envoi...'
-                      : target.statut === 'nouveau'
-                      ? 'Envoyer le diagnostic'
-                      : 'Déjà envoyé'}
-                  </button>
-                </div>
-              ))}
-            </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={ciblesSelectionnees.has(target.id)}
+                        onChange={() => toggleCibleSelectionnee(target.id)}
+                        disabled={target.statut !== 'nouveau'}
+                        className="accent-accent"
+                      />
+                      <div>
+                        <p className="font-semibold">
+                          {target.nom}{' '}
+                          {target.entreprise_ou_objectif && (
+                            <span className="text-slate-400 font-normal">
+                              — {target.entreprise_ou_objectif}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-slate-400 text-sm">
+                          {target.telephone ?? '—'} · {target.email ?? '—'} · {target.country ?? '—'} ·{' '}
+                          <span className="text-accent">{target.statut}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => envoyerDiagnostic(target.id)}
+                      disabled={target.statut !== 'nouveau' || envoiEnCours === target.id}
+                      className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                    >
+                      {envoiEnCours === target.id
+                        ? 'Envoi...'
+                        : target.statut === 'nouveau'
+                        ? 'Envoyer le diagnostic'
+                        : 'Déjà envoyé'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </section>
 
