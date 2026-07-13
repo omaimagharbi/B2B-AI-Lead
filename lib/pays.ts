@@ -1,14 +1,26 @@
 export const PAYS_DISPONIBLES = [
-  { code: 'TN', nom: 'Tunisie' },
-  { code: 'FR', nom: 'France' },
+  { code: 'DZ', nom: 'Algérie' },
+  { code: 'DE', nom: 'Allemagne' },
+  { code: 'SA', nom: 'Arabie Saoudite' },
   { code: 'BE', nom: 'Belgique' },
   { code: 'CA', nom: 'Canada' },
-  { code: 'MA', nom: 'Maroc' },
-  { code: 'DZ', nom: 'Algérie' },
   { code: 'CI', nom: "Côte d'Ivoire" },
-] as const
+  { code: 'AE', nom: 'Émirats Arabes Unis' },
+  { code: 'ES', nom: 'Espagne' },
+  { code: 'US', nom: 'États-Unis' },
+  { code: 'FR', nom: 'France' },
+  { code: 'IT', nom: 'Italie' },
+  { code: 'LU', nom: 'Luxembourg' },
+  { code: 'MA', nom: 'Maroc' },
+  { code: 'NL', nom: 'Pays-Bas' },
+  { code: 'QA', nom: 'Qatar' },
+  { code: 'GB', nom: 'Royaume-Uni' },
+  { code: 'SN', nom: 'Sénégal' },
+  { code: 'CH', nom: 'Suisse' },
+  { code: 'TN', nom: 'Tunisie' },
+].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
 
-export type CodePays = (typeof PAYS_DISPONIBLES)[number]['code']
+export type CodePays = string
 
 // Canal de contact prefere selon le pays (utilise par l'outreach automatique)
 export function canalParPays(countryCode: string): 'whatsapp' | 'email' {

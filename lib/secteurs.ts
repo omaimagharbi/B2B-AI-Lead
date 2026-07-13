@@ -1,0 +1,18 @@
+export const SECTEURS_DISPONIBLES = [
+  'Agroalimentaire',
+  'Assurance',
+  'Banque / Finance',
+  'BTP / Construction',
+  'Commerce / Retail',
+  'Éducation / Formation',
+  'Énergie',
+  'Immobilier',
+  'Industrie',
+  'Informatique / Tech',
+  'Santé',
+  'Services publics',
+  'Textile',
+  'Tourisme / Hôtellerie',
+  'Transport / Logistique',
+  'Autre',
+].sort((a, b) => a.localeCompare(b, 'fr'))

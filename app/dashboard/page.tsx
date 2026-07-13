@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { PAYS_DISPONIBLES } from '@/lib/pays'
+import { SECTEURS_DISPONIBLES } from '@/lib/secteurs'
+import { professionsDisponibles, PROFILS_PARTICULIER } from '@/lib/professions'
 import ValidationItem from './validation-item'
 
 type Client = {
@@ -13,6 +15,8 @@ type Client = {
   mode_ciblage: 'entreprise' | 'particulier'
   secteur_activite: string | null
   taille_entreprise: string
+  canal_sourcing: string
+  profil_particulier: string | null
 }
 
 type Target = {
@@ -44,7 +48,9 @@ export default function DashboardPage() {
   const router = useRouter()
   const [client, setClient] = useState<Client | null>(null)
   const [estHybride, setEstHybride] = useState(false)
+  const [verticalSlug, setVerticalSlug] = useState('')
   const [paysSelectionnes, setPaysSelectionnes] = useState<Set<string>>(new Set())
+  const [professionsSelectionnees, setProfessionsSelectionnees] = useState<Set<string>>(new Set())
   const [targets, setTargets] = useState<Target[]>([])
   const [diagnosticsEnAttente, setDiagnosticsEnAttente] = useState<DiagnosticEnAttente[]>([])
   const [packsVendus, setPacksVendus] = useState<PackVendu[]>([])
@@ -52,6 +58,10 @@ export default function DashboardPage() {
   const [maj, setMaj] = useState(false)
   const [secteurInput, setSecteurInput] = useState('')
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null)
+  const [lancementEnCours, setLancementEnCours] = useState(false)
+  const [lancementResultat, setLancementResultat] = useState<Record<string, unknown>[] | null>(
+    null
+  )
 
   const [nouvelleCible, setNouvelleCible] = useState({
     nom: '',
@@ -68,6 +78,12 @@ export default function DashboardPage() {
       .select('country_code')
       .eq('client_id', clientId)
     setPaysSelectionnes(new Set((paysData ?? []).map((p) => p.country_code)))
+
+    const { data: professionsData } = await supabase
+      .from('client_professions')
+      .select('profession')
+      .eq('client_id', clientId)
+    setProfessionsSelectionnees(new Set((professionsData ?? []).map((p) => p.profession)))
 
     const { data: targetsData } = await supabase
       .from('targets')
@@ -114,7 +130,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -123,7 +139,9 @@ export default function DashboardPage() {
         setClient(clientData as unknown as Client)
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
         // @ts-ignore - jointure Supabase typee dynamiquement
-        setEstHybride(clientData.verticals?.slug === 'cabinet-formation')
+        const slug = clientData.verticals?.slug as string
+        setVerticalSlug(slug ?? '')
+        setEstHybride(slug === 'cabinet-formation')
         await chargerTout(clientData.id)
       }
       setChargement(false)
@@ -161,14 +179,15 @@ export default function DashboardPage() {
     setMaj(false)
   }
 
-  const enregistrerSecteur = async () => {
+  const changerSecteur = async (secteur: string) => {
     if (!client) return
     setMaj(true)
+    setSecteurInput(secteur)
     await supabase
       .from('clients')
-      .update({ secteur_activite: secteurInput.trim() || null })
+      .update({ secteur_activite: secteur || null })
       .eq('id', client.id)
-    setClient({ ...client, secteur_activite: secteurInput.trim() || null })
+    setClient({ ...client, secteur_activite: secteur || null })
     setMaj(false)
   }
 
@@ -178,6 +197,72 @@ export default function DashboardPage() {
     await supabase.from('clients').update({ taille_entreprise: taille }).eq('id', client.id)
     setClient({ ...client, taille_entreprise: taille })
     setMaj(false)
+  }
+
+  const toggleProfession = async (profession: string) => {
+    if (!client) return
+    setMaj(true)
+    const dejaSelectionnee = professionsSelectionnees.has(profession)
+
+    if (dejaSelectionnee) {
+      await supabase
+        .from('client_professions')
+        .delete()
+        .eq('client_id', client.id)
+        .eq('profession', profession)
+    } else {
+      await supabase
+        .from('client_professions')
+        .insert({ client_id: client.id, profession })
+    }
+
+    const nouvelles = new Set(professionsSelectionnees)
+    dejaSelectionnee ? nouvelles.delete(profession) : nouvelles.add(profession)
+    setProfessionsSelectionnees(nouvelles)
+    setMaj(false)
+  }
+
+  const changerCanalSourcing = async (canal: string) => {
+    if (!client) return
+    setMaj(true)
+    await supabase.from('clients').update({ canal_sourcing: canal }).eq('id', client.id)
+    setClient({ ...client, canal_sourcing: canal })
+    setMaj(false)
+  }
+
+  const changerProfilParticulier = async (profil: string) => {
+    if (!client) return
+    setMaj(true)
+    await supabase.from('clients').update({ profil_particulier: profil }).eq('id', client.id)
+    setClient({ ...client, profil_particulier: profil })
+    setMaj(false)
+  }
+
+  const lancerRecherche = async () => {
+    if (!client) return
+    setLancementEnCours(true)
+    setLancementResultat(null)
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/sourcing/lancer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setLancementResultat([{ erreur: data.error ?? 'Erreur lors du lancement' }])
+      } else {
+        setLancementResultat(data.resultats)
+        await chargerTout(client.id)
+      }
+    } catch {
+      setLancementResultat([{ erreur: 'Impossible de contacter le serveur' }])
+    }
+    setLancementEnCours(false)
   }
 
   const ajouterCible = async () => {
@@ -265,7 +350,7 @@ export default function DashboardPage() {
         </div>
 
         {/* CONFIGURATION */}
-        <section className="space-y-4">
+        <section className="space-y-5">
           <h2 className="text-lg font-semibold">Configuration</h2>
 
           {estHybride && (
@@ -298,64 +383,164 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* PAYS - liste triee, cases a cocher scrollables */}
           <div className="space-y-2">
             <p className="text-slate-400 text-sm">Pays cibles pour le sourcing</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900/50 p-2 grid grid-cols-2 md:grid-cols-3 gap-1">
               {PAYS_DISPONIBLES.map((pays) => (
-                <button
+                <label
                   key={pays.code}
-                  onClick={() => togglePays(pays.code)}
-                  disabled={maj}
-                  className={`px-3 py-2 rounded-lg text-sm border ${
-                    paysSelectionnes.has(pays.code)
-                      ? 'border-accent bg-slate-900 text-accent'
-                      : 'border-slate-700 bg-slate-900/50 text-slate-400'
-                  }`}
+                  className="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-slate-800 cursor-pointer"
                 >
-                  {paysSelectionnes.has(pays.code) ? '✓ ' : ''}
-                  {pays.nom}
-                </button>
+                  <input
+                    type="checkbox"
+                    checked={paysSelectionnes.has(pays.code)}
+                    onChange={() => togglePays(pays.code)}
+                    disabled={maj}
+                    className="accent-accent"
+                  />
+                  <span className={paysSelectionnes.has(pays.code) ? 'text-accent' : 'text-slate-300'}>
+                    {pays.nom}
+                  </span>
+                </label>
               ))}
             </div>
           </div>
 
-          {client.mode_ciblage === 'entreprise' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-slate-400 text-sm">
-                  Secteur d'activité ciblé <span className="text-slate-600">(optionnel)</span>
-                </p>
-                <div className="flex gap-2">
-                  <input
+          {client.mode_ciblage === 'entreprise' ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <p className="text-slate-400 text-sm">Secteur d'activité ciblé</p>
+                  <select
                     value={secteurInput}
-                    onChange={(e) => setSecteurInput(e.target.value)}
-                    onBlur={enregistrerSecteur}
-                    placeholder="Ex: Banque, Assurance, Industrie textile..."
-                    className="flex-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
-                  />
+                    onChange={(e) => changerSecteur(e.target.value)}
+                    disabled={maj}
+                    className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                  >
+                    <option value="">Indifférent</option>
+                    {SECTEURS_DISPONIBLES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <p className="text-slate-600 text-xs">
-                  Affine la recherche de prospects sur ce secteur précis
-                </p>
+
+                <div className="space-y-2">
+                  <p className="text-slate-400 text-sm">Taille d'entreprise ciblée</p>
+                  <select
+                    value={client.taille_entreprise}
+                    onChange={(e) => changerTailleEntreprise(e.target.value)}
+                    disabled={maj}
+                    className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                  >
+                    <option value="indifferent">Indifférent</option>
+                    <option value="startup">Startup / Jeune pousse</option>
+                    <option value="pme">PME</option>
+                    <option value="grande_entreprise">Grande entreprise / Groupe</option>
+                  </select>
+                </div>
               </div>
 
+              {/* PROFESSION RECHERCHEE - liste a cocher */}
               <div className="space-y-2">
-                <p className="text-slate-400 text-sm">Taille d'entreprise ciblée</p>
-                <select
-                  value={client.taille_entreprise}
-                  onChange={(e) => changerTailleEntreprise(e.target.value)}
-                  disabled={maj}
-                  className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
-                >
-                  <option value="indifferent">Indifférent</option>
-                  <option value="startup">Startup / Jeune pousse</option>
-                  <option value="pme">PME</option>
-                  <option value="grande_entreprise">Grande entreprise / Groupe</option>
-                </select>
+                <p className="text-slate-400 text-sm">Poste / profession recherché(e)</p>
+                <div className="flex flex-wrap gap-2">
+                  {professionsDisponibles(verticalSlug, 'entreprise').map((prof) => (
+                    <button
+                      key={prof}
+                      onClick={() => toggleProfession(prof)}
+                      disabled={maj}
+                      className={`px-3 py-2 rounded-lg text-sm border ${
+                        professionsSelectionnees.has(prof)
+                          ? 'border-accent bg-slate-900 text-accent'
+                          : 'border-slate-700 bg-slate-900/50 text-slate-400'
+                      }`}
+                    >
+                      {professionsSelectionnees.has(prof) ? '✓ ' : ''}
+                      {prof}
+                    </button>
+                  ))}
+                </div>
               </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-slate-400 text-sm">Profil particulier recherché</p>
+              <select
+                value={client.profil_particulier ?? ''}
+                onChange={(e) => changerProfilParticulier(e.target.value)}
+                disabled={maj}
+                className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm max-w-md"
+              >
+                <option value="">Sélectionner un profil</option>
+                {PROFILS_PARTICULIER.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
+
+          {/* CANAL DE SOURCING */}
+          <div className="space-y-2">
+            <p className="text-slate-400 text-sm">Canal de sourcing</p>
+            <select
+              value={client.canal_sourcing}
+              onChange={(e) => changerCanalSourcing(e.target.value)}
+              disabled={maj}
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm max-w-md"
+            >
+              <option value="linkedin">LinkedIn</option>
+              <option value="facebook">Facebook</option>
+              <option value="email">Email</option>
+              <option value="tous">Tous</option>
+            </select>
+            {client.canal_sourcing !== 'linkedin' && (
+              <p className="text-amber-400 text-xs">
+                ⚠️ Seul le canal LinkedIn est actuellement fonctionnel (via Apify). Les autres
+                canaux sont prévus mais pas encore implémentés.
+              </p>
+            )}
+          </div>
+
+          {/* BOUTON LANCER LA RECHERCHE */}
+          <div className="pt-2">
+            <button
+              onClick={lancerRecherche}
+              disabled={lancementEnCours || paysSelectionnes.size === 0}
+              className="px-6 py-3 rounded-xl bg-accent text-slate-950 font-semibold disabled:opacity-40 hover:opacity-90 transition flex items-center gap-2"
+            >
+              {lancementEnCours ? 'Recherche en cours...' : 'Lancer la recherche maintenant'}
+              {!lancementEnCours && <span>→</span>}
+            </button>
+            {paysSelectionnes.size === 0 && (
+              <p className="text-slate-600 text-xs mt-1">Sélectionne au moins un pays d'abord.</p>
+            )}
+
+            {lancementResultat && (
+              <div className="mt-3 space-y-1 text-sm">
+                {lancementResultat.map((r, i) => (
+                  <div key={i} className="rounded-lg bg-slate-900 border border-slate-700 p-2">
+                    {r.erreur ? (
+                      <span className="text-red-400">❌ {String(r.erreur)}</span>
+                    ) : r.info ? (
+                      <span className="text-slate-400">ℹ️ {String(r.info)}</span>
+                    ) : (
+                      <span className="text-accent">
+                        ✅ {String(r.pays)} — {String(r.nouveaux_ajoutes)} nouveaux prospects
+                        ajoutés ({String(r.profils_trouves)} trouvés au total)
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
+
 
         {/* SUIVI */}
         <section className="space-y-4">
