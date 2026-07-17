@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { construirePrompt, type ModeCiblage } from '@/lib/methodologie'
 import { envoyerEmail } from '@/lib/notifications'
+import { logErreur } from '@/lib/erreurs'
 
 function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
   const etapesAddie = [
@@ -65,6 +66,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Donnees invalides' }, { status: 400 })
     }
 
+    // 0. Rate-limiting anti-abus : max 5 diagnostics par IP toutes les 10 minutes
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'inconnu'
+    const { data: autorise } = await supabaseAdmin.rpc('verifier_rate_limit', {
+      p_identifiant: ip,
+      p_max: 5,
+      p_fenetre_minutes: 10,
+    })
+
+    if (autorise === false) {
+      return NextResponse.json(
+        { error: 'Trop de demandes recentes. Merci de reessayer dans quelques minutes.' },
+        { status: 429 }
+      )
+    }
+
     // 1. On recupere le diagnostic + le client (mode de ciblage + email) + le vertical (prompt metier)
     const { data: diagnostic, error: findError } = await supabaseAdmin
       .from('diagnostics')
@@ -121,6 +137,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ succes: true })
   } catch (err) {
     console.error('Erreur /api/diagnostic:', err)
+    await logErreur('/api/diagnostic', err)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }

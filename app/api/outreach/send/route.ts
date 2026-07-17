@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { envoyerWhatsapp, envoyerEmail, construireMessage } from '@/lib/notifications'
 import { canalParPays } from '@/lib/pays'
+import { logErreur } from '@/lib/erreurs'
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 const LIMITE_PACKS_ESSAI_GRATUIT = 3
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ succes: true, canal })
   } catch (err) {
     console.error('Erreur /api/outreach/send:', err)
+    await logErreur('/api/outreach/send', err)
     return NextResponse.json({ error: "Erreur serveur lors de l'envoi" }, { status: 500 })
   }
 }

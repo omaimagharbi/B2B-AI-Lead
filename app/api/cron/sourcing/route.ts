@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { lancerSourcingPourClient } from '@/lib/sourcing'
+import { logErreur } from '@/lib/erreurs'
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -30,6 +31,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ succes: true, resultats })
   } catch (err) {
     console.error('Erreur cron sourcing:', err)
+    await logErreur('/api/cron/sourcing', err)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }

@@ -68,6 +68,13 @@ export default function DashboardPage() {
   const [logoInput, setLogoInput] = useState('')
   const [ciblesSelectionnees, setCiblesSelectionnees] = useState<Set<string>>(new Set())
   const [envoiMasseEnCours, setEnvoiMasseEnCours] = useState(false)
+  const [membresEquipe, setMembresEquipe] = useState<
+    { id: string; nom_complet: string | null; role: string }[]
+  >([])
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteNom, setInviteNom] = useState('')
+  const [inviteEnCours, setInviteEnCours] = useState(false)
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null)
 
   const [nouvelleCible, setNouvelleCible] = useState({
     nom: '',
@@ -112,6 +119,12 @@ export default function DashboardPage() {
       .eq('diagnostics.client_id', clientId)
       .eq('statut_vente', 'accepte')
     setPacksVendus((packsData ?? []) as unknown as PackVendu[])
+
+    const { data: membresData } = await supabase
+      .from('client_users')
+      .select('id, nom_complet, role')
+      .eq('client_id', clientId)
+    setMembresEquipe(membresData ?? [])
   }
 
   useEffect(() => {
@@ -372,6 +385,36 @@ export default function DashboardPage() {
     setEnvoiMasseEnCours(false)
   }
 
+  const inviterMembre = async () => {
+    if (!client || !inviteEmail.trim()) return
+    setInviteEnCours(true)
+    setInviteMessage(null)
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/team/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: inviteEmail, nom_complet: inviteNom }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setInviteMessage(`❌ ${data.error ?? "Erreur lors de l'invitation"}`)
+      } else {
+        setInviteMessage(`✅ Invitation envoyée à ${inviteEmail}`)
+        setInviteEmail('')
+        setInviteNom('')
+        await chargerTout(client.id)
+      }
+    } catch {
+      setInviteMessage('❌ Impossible de contacter le serveur')
+    }
+    setInviteEnCours(false)
+  }
+
   const deconnexion = async () => {
     await supabase.auth.signOut()
     router.push('/auth')
@@ -547,7 +590,7 @@ export default function DashboardPage() {
 
           {/* CANAL DE SOURCING */}
           <div className="space-y-2">
-            <p className="text-slate-400 text-sm">Canal de sourcing</p>
+            <p className="text-slate-400 text-sm">Source(s) de sourcing</p>
             <select
               value={client.canal_sourcing}
               onChange={(e) => changerCanalSourcing(e.target.value)}
@@ -555,16 +598,15 @@ export default function DashboardPage() {
               className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm max-w-md"
             >
               <option value="linkedin">LinkedIn</option>
-              <option value="facebook">Facebook</option>
-              <option value="email">Email</option>
-              <option value="tous">Tous</option>
+              <option value="google_maps">Google Maps / Google Business</option>
+              <option value="facebook">Facebook Pages</option>
+              <option value="web">Recherche Web générale</option>
+              <option value="tous">Toutes les sources combinées</option>
             </select>
-            {client.canal_sourcing !== 'linkedin' && (
-              <p className="text-amber-400 text-xs">
-                ⚠️ Seul le canal LinkedIn est actuellement fonctionnel (via Apify). Les autres
-                canaux sont prévus mais pas encore implémentés.
-              </p>
-            )}
+            <p className="text-slate-600 text-xs">
+              💡 En Tunisie, beaucoup de PME sont plus présentes sur Google Maps/Facebook que sur
+              LinkedIn — pense à activer "Toutes les sources" pour maximiser la couverture.
+            </p>
           </div>
 
           {/* BOUTON LANCER LA RECHERCHE */}
@@ -808,6 +850,47 @@ export default function DashboardPage() {
               </div>
             </>
           )}
+        </section>
+
+        {/* EQUIPE */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Équipe</h2>
+
+          <div className="space-y-2">
+            {membresEquipe.map((m) => (
+              <div
+                key={m.id}
+                className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
+              >
+                <span>{m.nom_complet || '(nom non renseigné)'}</span>
+                <span className="text-accent text-xs uppercase">{m.role}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
+            <input
+              value={inviteNom}
+              onChange={(e) => setInviteNom(e.target.value)}
+              placeholder="Nom du collègue"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="Email du collègue"
+              type="email"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+            <button
+              onClick={inviterMembre}
+              disabled={inviteEnCours || !inviteEmail.trim()}
+              className="rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
+            >
+              {inviteEnCours ? 'Envoi...' : 'Inviter'}
+            </button>
+          </div>
+          {inviteMessage && <p className="text-sm">{inviteMessage}</p>}
         </section>
 
         {/* PACKS VENDUS */}
