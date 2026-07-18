@@ -116,6 +116,7 @@ function AuthForm() {
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && soumettre()}
             placeholder="Email professionnel"
             type="email"
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
@@ -124,6 +125,7 @@ function AuthForm() {
             <input
               value={motDePasse}
               onChange={(e) => setMotDePasse(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && soumettre()}
               placeholder="Mot de passe"
               type="password"
               className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
