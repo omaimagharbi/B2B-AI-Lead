@@ -345,7 +345,7 @@ export default function DashboardPage() {
     setMaj(false)
   }
 
-  const envoyerDiagnostic = async (targetId: string) => {
+  const envoyerVersTarget = async (targetId: string, typeEnvoi: 'diagnostic' | 'message') => {
     if (!client) return
     setEnvoiEnCours(targetId)
 
@@ -353,7 +353,7 @@ export default function DashboardPage() {
       const res = await fetch('/api/outreach/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_id: targetId }),
+        body: JSON.stringify({ target_id: targetId, type_envoi: typeEnvoi }),
       })
       const data = await res.json()
       if (!res.ok) alert(data.error ?? "Erreur lors de l'envoi")
@@ -363,6 +363,9 @@ export default function DashboardPage() {
     }
     setEnvoiEnCours(null)
   }
+
+  const envoyerDiagnostic = (targetId: string) => envoyerVersTarget(targetId, 'diagnostic')
+  const envoyerMessage = (targetId: string) => envoyerVersTarget(targetId, 'message')
 
   const toggleCibleSelectionnee = (targetId: string) => {
     const nouvelles = new Set(ciblesSelectionnees)
@@ -377,7 +380,7 @@ export default function DashboardPage() {
     setCiblesSelectionnees(toutesDejaSelectionnees ? new Set() : new Set(ciblesEnvoyables))
   }
 
-  const envoyerAuxSelectionnes = async () => {
+  const envoyerAuxSelectionnes = async (typeEnvoi: 'diagnostic' | 'message' = 'diagnostic') => {
     if (!client || ciblesSelectionnees.size === 0) return
     setEnvoiMasseEnCours(true)
 
@@ -386,7 +389,7 @@ export default function DashboardPage() {
         await fetch('/api/outreach/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_id: targetId }),
+          body: JSON.stringify({ target_id: targetId, type_envoi: typeEnvoi }),
         })
       } catch {
         // on continue meme si un envoi echoue, pour ne pas bloquer les autres
@@ -792,15 +795,26 @@ export default function DashboardPage() {
                     />
                     {t('tout_selectionner')}
                   </label>
-                  <button
-                    onClick={envoyerAuxSelectionnes}
-                    disabled={ciblesSelectionnees.size === 0 || envoiMasseEnCours}
-                    className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
-                  >
-                    {envoiMasseEnCours
-                      ? '...'
-                      : `${t('envoyer_selectionnes')} (${ciblesSelectionnees.size})`}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => envoyerAuxSelectionnes('diagnostic')}
+                      disabled={ciblesSelectionnees.size === 0 || envoiMasseEnCours}
+                      className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+                    >
+                      {envoiMasseEnCours
+                        ? '...'
+                        : `📋 Diagnostic (${ciblesSelectionnees.size})`}
+                    </button>
+                    <button
+                      onClick={() => envoyerAuxSelectionnes('message')}
+                      disabled={ciblesSelectionnees.size === 0 || envoiMasseEnCours}
+                      className="text-sm px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 font-semibold disabled:opacity-40"
+                    >
+                      {envoiMasseEnCours
+                        ? '...'
+                        : `✉️ Message pro (${ciblesSelectionnees.size})`}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -833,17 +847,28 @@ export default function DashboardPage() {
                           </p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => envoyerDiagnostic(target.id)}
-                        disabled={target.statut !== 'nouveau' || envoiEnCours === target.id}
-                        className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
-                      >
-                        {envoiEnCours === target.id
-                          ? 'Envoi...'
-                          : target.statut === 'nouveau'
-                          ? 'Envoyer le diagnostic'
-                          : 'Déjà envoyé'}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => envoyerDiagnostic(target.id)}
+                          disabled={target.statut !== 'nouveau' || envoiEnCours === target.id}
+                          className="text-sm px-3 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+                        >
+                          {envoiEnCours === target.id
+                            ? 'Envoi...'
+                            : target.statut === 'nouveau'
+                            ? '📋 Diagnostic'
+                            : 'Déjà envoyé'}
+                        </button>
+                        {target.statut === 'nouveau' && (
+                          <button
+                            onClick={() => envoyerMessage(target.id)}
+                            disabled={envoiEnCours === target.id}
+                            className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                          >
+                            {envoiEnCours === target.id ? 'Envoi...' : '✉️ Message pro'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
