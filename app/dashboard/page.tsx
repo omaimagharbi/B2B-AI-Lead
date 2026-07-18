@@ -489,28 +489,26 @@ export default function DashboardPage() {
             </button>
           ))}
         </nav>
+      </aside>
 
-        <div className="mt-auto px-3 py-4 border-t border-slate-800 space-y-2">
+      {/* CONTENU */}
+      <div className="flex-1 overflow-y-auto">
+        {/* BARRE DU HAUT (langue + deconnexion) */}
+        <div className="flex justify-end items-center gap-3 px-6 py-4 border-b border-slate-800">
           <select
             value={client.langue_preferee}
             onChange={(e) => changerLangue(e.target.value as Langue)}
-            className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
           >
             <option value="fr">🇫🇷 Français</option>
             <option value="en">🇬🇧 English</option>
             <option value="ar">🇹🇳 العربية</option>
           </select>
-          <button
-            onClick={deconnexion}
-            className="w-full text-sm text-slate-400 hover:text-white underline text-left"
-          >
+          <button onClick={deconnexion} className="text-sm text-slate-400 hover:text-white underline">
             {t('deconnexion')}
           </button>
         </div>
-      </aside>
 
-      {/* CONTENU */}
-      <div className="flex-1 overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
         {/* ===================== ONGLET CIBLAGE ===================== */}
         {ongletActif === 'ciblage' && (
