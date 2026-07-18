@@ -464,49 +464,54 @@ export default function DashboardPage() {
   ]
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white" dir={dir}>
-      {/* BARRE DU HAUT */}
-      <div className="border-b border-slate-800 px-6 py-4 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold">{client.nom_entreprise}</h1>
-          <p className="text-slate-400 text-xs">
+    <main className="min-h-screen bg-slate-950 text-white flex flex-col md:flex-row" dir={dir}>
+      {/* BARRE LATERALE GAUCHE */}
+      <aside className="md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col">
+        <div className="px-5 py-4 border-b border-slate-800">
+          <h1 className="text-lg font-bold leading-tight">{client.nom_entreprise}</h1>
+          <p className="text-slate-400 text-xs mt-1">
             {t('statut')} : <span className="text-accent">{client.statut_abonnement}</span>
           </p>
         </div>
-        <div className="flex items-center gap-3">
+
+        <nav className="flex md:flex-col gap-1 px-3 py-3 overflow-x-auto md:overflow-visible">
+          {ONGLETS.map((onglet) => (
+            <button
+              key={onglet.id}
+              onClick={() => setOngletActif(onglet.id)}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap text-left transition ${
+                ongletActif === onglet.id
+                  ? 'bg-accent/10 text-accent border border-accent/40'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'
+              }`}
+            >
+              {onglet.icone} {onglet.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="mt-auto px-3 py-4 border-t border-slate-800 space-y-2">
           <select
             value={client.langue_preferee}
             onChange={(e) => changerLangue(e.target.value as Langue)}
-            className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
           >
             <option value="fr">🇫🇷 Français</option>
             <option value="en">🇬🇧 English</option>
             <option value="ar">🇹🇳 العربية</option>
           </select>
-          <button onClick={deconnexion} className="text-sm text-slate-400 hover:text-white underline">
+          <button
+            onClick={deconnexion}
+            className="w-full text-sm text-slate-400 hover:text-white underline text-left"
+          >
             {t('deconnexion')}
           </button>
         </div>
-      </div>
+      </aside>
 
-      {/* ONGLETS */}
-      <div className="px-6 pt-4 flex gap-2 overflow-x-auto border-b border-slate-800">
-        {ONGLETS.map((onglet) => (
-          <button
-            key={onglet.id}
-            onClick={() => setOngletActif(onglet.id)}
-            className={`px-4 py-2 rounded-t-lg text-sm font-semibold whitespace-nowrap transition ${
-              ongletActif === onglet.id
-                ? 'bg-slate-900 text-accent border-b-2 border-accent'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            {onglet.icone} {onglet.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
+      {/* CONTENU */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
         {/* ===================== ONGLET CIBLAGE ===================== */}
         {ongletActif === 'ciblage' && (
           <>
@@ -976,6 +981,7 @@ export default function DashboardPage() {
             </section>
           </>
         )}
+        </div>
       </div>
     </main>
   )
