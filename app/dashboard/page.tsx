@@ -47,6 +47,13 @@ type DiagnosticEnAttente = {
   targets: { nom: string } | { nom: string }[] | null
 }
 
+type DiagnosticValide = {
+  id: string
+  token_acces: string
+  created_at: string
+  targets: { nom: string } | { nom: string }[] | null
+}
+
 type PackVendu = {
   id: string
   pack_propose_nom: string | null
@@ -65,6 +72,7 @@ export default function DashboardPage() {
   const [professionsSelectionnees, setProfessionsSelectionnees] = useState<Set<string>>(new Set())
   const [targets, setTargets] = useState<Target[]>([])
   const [diagnosticsEnAttente, setDiagnosticsEnAttente] = useState<DiagnosticEnAttente[]>([])
+  const [diagnosticsValides, setDiagnosticsValides] = useState<DiagnosticValide[]>([])
   const [packsVendus, setPacksVendus] = useState<PackVendu[]>([])
   const [chargement, setChargement] = useState(true)
   const [maj, setMaj] = useState(false)
@@ -128,6 +136,15 @@ export default function DashboardPage() {
       .eq('statut_validation', 'en_attente_validation')
       .order('created_at', { ascending: false })
     setDiagnosticsEnAttente((diagData ?? []) as unknown as DiagnosticEnAttente[])
+
+    const { data: diagValidesData } = await supabase
+      .from('diagnostics')
+      .select('id, token_acces, created_at, targets(nom)')
+      .eq('client_id', clientId)
+      .eq('statut_validation', 'valide_par_expert')
+      .order('created_at', { ascending: false })
+      .limit(50)
+    setDiagnosticsValides((diagValidesData ?? []) as unknown as DiagnosticValide[])
 
     const { data: packsData } = await supabase
       .from('leads_packs')
@@ -932,17 +949,53 @@ export default function DashboardPage() {
 
         {/* ===================== ONGLET VALIDATION ===================== */}
         {ongletActif === 'validation' && (
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold">🔔 {t('validation_titre')}</h2>
-            {diagnosticsEnAttente.length === 0 ? (
-              <p className="text-slate-500 text-sm italic">Rien à valider pour le moment.</p>
-            ) : (
-              <div className="space-y-2">
-                {diagnosticsEnAttente.map((d) => (
-                  <ValidationItem key={d.id} diagnostic={d} onValide={() => chargerTout(client.id)} />
-                ))}
-              </div>
-            )}
+          <section className="space-y-6">
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">🔔 {t('validation_titre')}</h2>
+              {diagnosticsEnAttente.length === 0 ? (
+                <p className="text-slate-500 text-sm italic">Rien à valider pour le moment.</p>
+              ) : (
+                <div className="space-y-2">
+                  {diagnosticsEnAttente.map((d) => (
+                    <ValidationItem key={d.id} diagnostic={d} onValide={() => chargerTout(client.id)} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold text-slate-400">📁 Déjà validés</h2>
+              {diagnosticsValides.length === 0 ? (
+                <p className="text-slate-600 text-sm italic">Aucun diagnostic validé pour le moment.</p>
+              ) : (
+                <div className="space-y-2">
+                  {diagnosticsValides.map((d) => {
+                    const nomCible = Array.isArray(d.targets) ? d.targets[0]?.nom : d.targets?.nom
+                    return (
+                      <div
+                        key={d.id}
+                        className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
+                      >
+                        <span>
+                          {nomCible ?? 'Prospect'}{' '}
+                          <span className="text-slate-500 text-xs">
+                            · {new Date(d.created_at).toLocaleDateString('fr-FR')}
+                          </span>
+                        </span>
+                        <a
+                          href={`/api/rapport/${d.token_acces}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-accent underline text-xs"
+                        >
+                          📄 Voir le rapport
+                        </a>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </section>
         )}
 
