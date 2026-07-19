@@ -54,10 +54,18 @@ export async function envoyerWhatsapp(telephone: string, message: string, logoUr
     body: JSON.stringify(body),
   })
 
-  if (!res.ok) {
-    const detail = await res.text()
-    console.error('Erreur GreenAPI:', detail)
-    throw new Error('Echec envoi WhatsApp')
+  const data = await res.json().catch(() => null)
+
+  // GreenAPI peut repondre HTTP 200 tout en signalant un echec dans le corps de la
+  // reponse (instance non autorisee, numero invalide, etc.) - on verifie donc aussi
+  // la presence d'un identifiant de message reel, pas seulement le code HTTP.
+  if (!res.ok || !data?.idMessage) {
+    console.error('Erreur GreenAPI (statut ou reponse invalide):', res.status, JSON.stringify(data))
+    throw new Error(
+      data?.message
+        ? `Echec envoi WhatsApp : ${data.message}`
+        : "Echec envoi WhatsApp - verifie que l'instance GreenAPI est bien autorisee (QR code scanne)"
+    )
   }
 }
 
@@ -88,9 +96,12 @@ export async function envoyerEmail(email: string, message: string, logoUrl?: str
     }),
   })
 
-  if (!res.ok) {
-    const detail = await res.text()
-    console.error('Erreur Resend:', detail)
-    throw new Error('Echec envoi Email')
+  const data = await res.json().catch(() => null)
+
+  if (!res.ok || !data?.id) {
+    console.error('Erreur Resend:', res.status, JSON.stringify(data))
+    throw new Error(
+      data?.message ? `Echec envoi Email : ${data.message}` : 'Echec envoi Email'
+    )
   }
 }

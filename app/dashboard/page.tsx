@@ -672,21 +672,33 @@ export default function DashboardPage() {
 
                 {lancementResultat && (
                   <div className="mt-3 space-y-1 text-sm">
-                    {lancementResultat.map((r, i) => (
-                      <div key={i} className="rounded-lg bg-slate-900 border border-slate-700 p-2">
-                        {r.erreur ? (
-                          <span className="text-red-400">❌ {String(r.erreur)}</span>
-                        ) : r.info ? (
-                          <span className="text-slate-400">ℹ️ {String(r.info)}</span>
-                        ) : (
-                          <span className="text-accent">
-                            ✅ {String(r.pays)} ({String(r.source ?? '')}) —{' '}
-                            {String(r.nouveaux_ajoutes)} nouveaux prospects ajoutés (
-                            {String(r.profils_trouves)} trouvés au total)
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                    {lancementResultat.map((r, i) =>
+                      r.erreur && String(r.erreur).includes('APIFY_API_TOKEN') ? (
+                        <div key={i} className="rounded-lg bg-slate-900 border border-slate-700 p-3">
+                          <p className="text-amber-400">
+                            ⚠️ La recherche automatique n'est pas encore configurée.
+                          </p>
+                          <p className="text-slate-400 text-xs mt-1">
+                            En attendant, tu peux ajouter tes cibles à la main ci-dessous, dans
+                            l'onglet "Cibles".
+                          </p>
+                        </div>
+                      ) : (
+                        <div key={i} className="rounded-lg bg-slate-900 border border-slate-700 p-2">
+                          {r.erreur ? (
+                            <span className="text-red-400">❌ {String(r.erreur)}</span>
+                          ) : r.info ? (
+                            <span className="text-slate-400">ℹ️ {String(r.info)}</span>
+                          ) : (
+                            <span className="text-accent">
+                              ✅ {String(r.pays)} ({String(r.source ?? '')}) —{' '}
+                              {String(r.nouveaux_ajoutes)} nouveaux prospects ajoutés (
+                              {String(r.profils_trouves)} trouvés au total)
+                            </span>
+                          )}
+                        </div>
+                      )
+                    )}
                   </div>
                 )}
               </div>
