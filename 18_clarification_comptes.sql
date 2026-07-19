@@ -6,6 +6,12 @@
 -- A executer dans Supabase > SQL Editor
 -- =====================================================================
 
+-- 0. La contrainte existante limite les valeurs possibles de "role" (ex: 'admin','membre').
+--    On l'elargit pour accepter 'proprietaire' avant de renommer les lignes existantes.
+alter table client_users drop constraint if exists client_users_role_check;
+alter table client_users add constraint client_users_role_check
+  check (role in ('proprietaire', 'membre'));
+
 -- 1. On renomme les lignes existantes
 update client_users set role = 'proprietaire' where role = 'admin';
 
