@@ -131,6 +131,13 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
           (r) => `<div class="reco">
         <div class="reco-titre">${echapperHtml(r.titre)} <span style="font-weight:400;font-size:11px;color:#94a3b8;">(${echapperHtml(LABEL_PRIORITE[r.priorite] ?? r.priorite)})</span></div>
         <div class="reco-action">${echapperHtml(r.action)}</div>
+        ${
+          r.questions && r.questions.length > 0
+            ? `<ul style="margin:6px 0 0 18px;padding:0;font-size:13px;color:#94a3b8;">${r.questions
+                .map((q) => `<li>${echapperHtml(q)}</li>`)
+                .join('')}</ul>`
+            : ''
+        }
       </div>`
         )
         .join('')}

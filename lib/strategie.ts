@@ -33,6 +33,7 @@ export type Recommandation = {
   titre: string
   action: string
   priorite: 'haute' | 'moyenne' | 'basse'
+  questions?: string[]
 }
 
 export type ContenuMarketing = {
@@ -159,6 +160,14 @@ export function calculerScoreChaleur(params: {
 //    au prospect)
 // ---------------------------------------------------------------------
 
+// Questions de clarification pre-ecrites (pas d'IA generative) : a poser au prospect
+// quand le besoin reste flou (categorie "general" faute de mots-cles suffisants).
+const QUESTIONS_CLARIFICATION: string[] = [
+  "Quel est le principal impact de ce problème aujourd'hui (temps perdu, argent, stress) ?",
+  'Depuis combien de temps cette situation dure-t-elle ?',
+  'Avez-vous déjà essayé une solution, et pourquoi ça n\'a pas suffi ?',
+]
+
 export function genererRecommandations(segment: Segment, score: number): Recommandation[] {
   const recos: Recommandation[] = []
 
@@ -228,8 +237,9 @@ export function genererRecommandations(segment: Segment, score: number): Recomma
       recos.push({
         titre: 'Besoin encore flou',
         action:
-          "Poser 1-2 questions de clarification avant de proposer une offre, le besoin n'est pas encore precis.",
+          "Poser ces questions de clarification avant de proposer une offre, le besoin n'est pas encore precis.",
         priorite: 'basse',
+        questions: QUESTIONS_CLARIFICATION,
       })
   }
 

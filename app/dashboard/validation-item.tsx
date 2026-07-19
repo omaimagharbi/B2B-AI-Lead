@@ -10,6 +10,7 @@ type Brouillon = {
   methodologie: string
   etapes: Etape[]
   packs_proposes: Pack[]
+  _simule?: boolean
 }
 
 type DiagnosticEnAttente = {
@@ -20,7 +21,7 @@ type DiagnosticEnAttente = {
   recommandations_json: {
     segment: { categorie: string; urgence: string; budget_mentionne: boolean }
     score: number
-    recommandations: { titre: string; action: string; priorite: string }[]
+    recommandations: { titre: string; action: string; priorite: string; questions?: string[] }[]
     contenuMarketing: { titre: string; accroche_linkedin: string; format_suggere: string }
   } | null
   targets: { nom: string } | { nom: string }[] | null
@@ -125,6 +126,17 @@ export default function ValidationItem({
             </div>
           )}
 
+          {diagnostic.json_ia_brouillon._simule ? (
+            <div className="text-xs px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-800 text-amber-400">
+              ⚙️ Mode simulé — aucune IA n'a généré ce contenu (texte générique de secours). Ajoute
+              une clé GEMINI_API_KEY ou ANTHROPIC_API_KEY sur Vercel pour un vrai contenu spécifique.
+            </div>
+          ) : (
+            <div className="text-xs px-3 py-2 rounded-lg bg-green-950/40 border border-green-800 text-green-400">
+              🤖 Contenu généré par IA
+            </div>
+          )}
+
           {diagnostic.recommandations_json && (
             <div className="rounded-lg bg-slate-950 border border-slate-700 p-3 space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
@@ -159,6 +171,13 @@ export default function ValidationItem({
                   <div key={i} className="text-sm">
                     <span className="font-semibold">{r.titre}</span>
                     <span className="text-slate-400"> — {r.action}</span>
+                    {r.questions && r.questions.length > 0 && (
+                      <ul className="list-disc list-inside text-slate-400 mt-1 ml-2">
+                        {r.questions.map((q, qi) => (
+                          <li key={qi}>{q}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 ))}
               </div>
