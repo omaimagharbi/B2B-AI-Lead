@@ -9,7 +9,11 @@ const LIMITE_PACKS_ESSAI_GRATUIT = 3
 
 export async function POST(req: NextRequest) {
   try {
-    const { target_id } = await req.json()
+    const { target_id, type_envoi } = await req.json()
+    // type_envoi : 'diagnostic' (par defaut, cree un diagnostic + lien) ou 'message'
+    // (envoie juste le message personnalise du cabinet, sans creer de diagnostic)
+    const typeEnvoi: 'diagnostic' | 'message' = type_envoi === 'message' ? 'message' : 'diagnostic'
+
     if (!target_id) {
       return NextResponse.json({ error: 'target_id manquant' }, { status: 400 })
     }
@@ -71,24 +75,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Cette cible n'a pas d'email" }, { status: 400 })
     }
 
-    // On cree le diagnostic (statut par defaut 'brouillon_ia', token auto-genere)
-    const { data: diagnostic, error: diagError } = await supabaseAdmin
-      .from('diagnostics')
-      .insert({
-        target_id: target.id,
-        client_id: client.id,
-        vertical_id: client.vertical_id,
-      })
-      .select('token_acces')
-      .single()
+    // On cree le diagnostic uniquement si on envoie un lien de diagnostic (statut
+    // par defaut 'brouillon_ia', token auto-genere). Pour un simple message pro,
+    // pas de diagnostic cree.
+    let lien = SITE_URL
+    if (typeEnvoi === 'diagnostic') {
+      const { data: diagnostic, error: diagError } = await supabaseAdmin
+        .from('diagnostics')
+        .insert({
+          target_id: target.id,
+          client_id: client.id,
+          vertical_id: client.vertical_id,
+        })
+        .select('token_acces')
+        .single()
 
-    if (diagError || !diagnostic) {
-      return NextResponse.json({ error: 'Erreur creation diagnostic' }, { status: 500 })
+      if (diagError || !diagnostic) {
+        return NextResponse.json({ error: 'Erreur creation diagnostic' }, { status: 500 })
+      }
+
+      lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
     }
 
-    const lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
     const lienDesinscription = `${SITE_URL}/desinscription/${target.token_desinscription}`
-    const messageParDefaut = `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}`
+    const messageParDefaut =
+      typeEnvoi === 'diagnostic'
+        ? `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}`
+        : `Bonjour ${target.nom},\n\n${client.nom_entreprise} souhaitait vous contacter personnellement. N'hesitez pas a repondre a ce message si vous avez des questions.`
     const message = construireMessage(
       client.message_personnalise,
       { nom: target.nom, cabinet: client.nom_entreprise, lien, lienDesinscription },
@@ -107,12 +120,13 @@ export async function POST(req: NextRequest) {
       canal,
       template_message: message,
       statut: 'envoye',
+      type_envoi: typeEnvoi,
       date_envoi: new Date().toISOString(),
     })
 
     await supabaseAdmin.from('targets').update({ statut: 'contacte' }).eq('id', target.id)
 
-    return NextResponse.json({ succes: true, canal })
+    return NextResponse.json({ succes: true, canal, type_envoi: typeEnvoi })
   } catch (err) {
     console.error('Erreur /api/outreach/send:', err)
     await logErreur('/api/outreach/send', err)

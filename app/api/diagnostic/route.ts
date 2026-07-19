@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { construirePrompt, type ModeCiblage } from '@/lib/methodologie'
 import { envoyerEmail } from '@/lib/notifications'
 import { logErreur } from '@/lib/erreurs'
+import { analyserProspect } from '@/lib/strategie'
 
 function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
   const etapesAddie = [
@@ -35,27 +36,70 @@ function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
   }
 }
 
-async function genererBrouillon(probleme: string, systemPrompt: string, modeCiblage: ModeCiblage) {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return genererBrouillonSimule(probleme, modeCiblage)
+async function genererBrouillonGemini(probleme: string, systemPrompt: string, apiKey: string) {
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: probleme }] }],
+      }),
+    }
+  )
 
-  try {
-    const anthropic = new Anthropic({ apiKey })
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-5',
-      max_tokens: 1200,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: probleme }],
-    })
-
-    const textBlock = message.content.find((block) => block.type === 'text')
-    const rawText = textBlock && 'text' in textBlock ? textBlock.text : '{}'
-    const cleanText = rawText.replace(/```json|```/g, '').trim()
-    return JSON.parse(cleanText)
-  } catch (err) {
-    console.error('Anthropic indisponible, bascule en mode simule:', err)
-    return genererBrouillonSimule(probleme, modeCiblage)
+  if (!res.ok) {
+    throw new Error(`Gemini a repondu ${res.status} : ${await res.text()}`)
   }
+
+  const data = await res.json()
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'
+  const cleanText = rawText.replace(/```json|```/g, '').trim()
+  return JSON.parse(cleanText)
+}
+
+async function genererBrouillonAnthropic(probleme: string, systemPrompt: string, apiKey: string) {
+  const anthropic = new Anthropic({ apiKey })
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-5',
+    max_tokens: 1200,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: probleme }],
+  })
+
+  const textBlock = message.content.find((block) => block.type === 'text')
+  const rawText = textBlock && 'text' in textBlock ? textBlock.text : '{}'
+  const cleanText = rawText.replace(/```json|```/g, '').trim()
+  return JSON.parse(cleanText)
+}
+
+// Ordre d'essai : Gemini (palier gratuit, ideal pour tester) -> Anthropic (payant, meilleure
+// qualite en prod) -> mode simule (gratuit, sans aucun appel IA, toujours disponible en secours).
+// Pour tester avec Gemini : mettre GEMINI_API_KEY dans les variables d'environnement Vercel.
+// Cle Google AI Studio gratuite : https://aistudio.google.com/apikey
+async function genererBrouillon(probleme: string, systemPrompt: string, modeCiblage: ModeCiblage) {
+  const geminiKey = process.env.GEMINI_API_KEY
+  const anthropicKey = process.env.ANTHROPIC_API_KEY
+
+  if (geminiKey) {
+    try {
+      return await genererBrouillonGemini(probleme, systemPrompt, geminiKey)
+    } catch (err) {
+      console.error('Gemini indisponible, on essaie la suite:', err)
+    }
+  }
+
+  if (anthropicKey) {
+    try {
+      return await genererBrouillonAnthropic(probleme, systemPrompt, anthropicKey)
+    } catch (err) {
+      console.error('Anthropic indisponible, bascule en mode simule:', err)
+    }
+  }
+
+  return genererBrouillonSimule(probleme, modeCiblage)
 }
 
 export async function POST(req: NextRequest) {
@@ -84,7 +128,9 @@ export async function POST(req: NextRequest) {
     // 1. On recupere le diagnostic + le client (mode de ciblage + email) + le vertical (prompt metier)
     const { data: diagnostic, error: findError } = await supabaseAdmin
       .from('diagnostics')
-      .select('id, clients(mode_ciblage, email, nom_entreprise), verticals(prompt_ia_config)')
+      .select(
+        'id, target_id, clients(mode_ciblage, email, nom_entreprise), verticals(prompt_ia_config), targets(poste_ou_budget)'
+      )
       .eq('token_acces', token)
       .single()
 
@@ -112,6 +158,32 @@ export async function POST(req: NextRequest) {
         json_ia_brouillon: brouillon,
         statut_validation: 'en_attente_validation',
       })
+      .eq('id', diagnostic.id)
+
+    // 3bis. Strategie commerciale (sans IA generative) : segmentation, score de
+    // chaleur et recommandations internes pour le cabinet, calculees par un
+    // moteur de regles a partir du texte brut du prospect.
+    // @ts-ignore - jointure Supabase typee dynamiquement
+    const posteOuBudget = diagnostic.targets?.poste_ou_budget as string | null | undefined
+    const { segment, score, recommandations, contenuMarketing } = analyserProspect({
+      phraseProspect: probleme,
+      posteOuBudget,
+    })
+
+    if (diagnostic.target_id) {
+      await supabaseAdmin
+        .from('targets')
+        .update({
+          segment_categorie: segment.categorie,
+          segment_urgence: segment.urgence,
+          score_chaleur: score,
+        })
+        .eq('id', diagnostic.target_id)
+    }
+
+    await supabaseAdmin
+      .from('diagnostics')
+      .update({ recommandations_json: { segment, score, recommandations, contenuMarketing } })
       .eq('id', diagnostic.id)
 
     // 3bis. On notifie le cabinet par email qu'un nouveau diagnostic attend sa validation
