@@ -33,12 +33,17 @@ type Target = {
   email: string | null
   country: string | null
   statut: string
+  segment_categorie?: string | null
+  segment_urgence?: string | null
+  score_chaleur?: number | null
 }
 
 type DiagnosticEnAttente = {
   id: string
+  token_acces: string
   phrase_brute_prospect: string | null
   json_ia_brouillon: any
+  recommandations_json: any
   targets: { nom: string } | { nom: string }[] | null
 }
 
@@ -109,14 +114,16 @@ export default function DashboardPage() {
 
     const { data: targetsData } = await supabase
       .from('targets')
-      .select('id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut')
+      .select(
+        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, segment_categorie, segment_urgence, score_chaleur'
+      )
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
     setTargets(targetsData ?? [])
 
     const { data: diagData } = await supabase
       .from('diagnostics')
-      .select('id, phrase_brute_prospect, json_ia_brouillon, targets(nom)')
+      .select('id, token_acces, phrase_brute_prospect, json_ia_brouillon, recommandations_json, targets(nom)')
       .eq('client_id', clientId)
       .eq('statut_validation', 'en_attente_validation')
       .order('created_at', { ascending: false })
@@ -848,6 +855,37 @@ export default function DashboardPage() {
                             {target.country ?? '—'} ·{' '}
                             <span className="text-accent">{target.statut}</span>
                           </p>
+                          {(target.segment_categorie || typeof target.score_chaleur === 'number') && (
+                            <div className="flex gap-2 mt-1 flex-wrap">
+                              {target.segment_categorie && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                                  {target.segment_categorie}
+                                </span>
+                              )}
+                              {target.segment_urgence && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                                  {target.segment_urgence === 'haute'
+                                    ? '🔴 urgent'
+                                    : target.segment_urgence === 'basse'
+                                    ? '🟢 pas pressé'
+                                    : '🟠 moyen'}
+                                </span>
+                              )}
+                              {typeof target.score_chaleur === 'number' && (
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                    target.score_chaleur >= 70
+                                      ? 'bg-green-950 text-green-400'
+                                      : target.score_chaleur >= 40
+                                      ? 'bg-amber-950 text-amber-400'
+                                      : 'bg-red-950 text-red-400'
+                                  }`}
+                                >
+                                  🔥 {target.score_chaleur}/100
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-2">

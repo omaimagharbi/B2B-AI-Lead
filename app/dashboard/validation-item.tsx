@@ -14,8 +14,15 @@ type Brouillon = {
 
 type DiagnosticEnAttente = {
   id: string
+  token_acces: string
   phrase_brute_prospect: string | null
   json_ia_brouillon: Brouillon
+  recommandations_json: {
+    segment: { categorie: string; urgence: string; budget_mentionne: boolean }
+    score: number
+    recommandations: { titre: string; action: string; priorite: string }[]
+    contenuMarketing: { titre: string; accroche_linkedin: string; format_suggere: string }
+  } | null
   targets: { nom: string } | { nom: string }[] | null
 }
 
@@ -115,6 +122,46 @@ export default function ValidationItem({
           {erreur && (
             <div className="text-red-400 bg-red-950/40 border border-red-800 rounded-lg p-3 text-sm">
               {erreur}
+            </div>
+          )}
+
+          {diagnostic.recommandations_json && (
+            <div className="rounded-lg bg-slate-950 border border-slate-700 p-3 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs px-2 py-1 rounded-full bg-slate-800">
+                    {diagnostic.recommandations_json.segment.categorie}
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded-full bg-slate-800">
+                    {diagnostic.recommandations_json.segment.urgence === 'haute'
+                      ? '🔴 urgent'
+                      : diagnostic.recommandations_json.segment.urgence === 'basse'
+                      ? '🟢 pas pressé'
+                      : '🟠 moyen'}
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded-full font-semibold bg-slate-800">
+                    🔥 {diagnostic.recommandations_json.score}/100
+                  </span>
+                </div>
+                <a
+                  href={`/api/rapport/${diagnostic.token_acces}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-accent underline"
+                >
+                  📄 Voir le rapport complet
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs text-slate-400 uppercase">Stratégie commerciale suggérée</p>
+                {diagnostic.recommandations_json.recommandations.map((r, i) => (
+                  <div key={i} className="text-sm">
+                    <span className="font-semibold">{r.titre}</span>
+                    <span className="text-slate-400"> — {r.action}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
