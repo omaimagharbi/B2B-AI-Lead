@@ -74,6 +74,7 @@ export default function DashboardPage() {
   const [diagnosticsEnAttente, setDiagnosticsEnAttente] = useState<DiagnosticEnAttente[]>([])
   const [diagnosticsValides, setDiagnosticsValides] = useState<DiagnosticValide[]>([])
   const [messageLinkedin, setMessageLinkedin] = useState<string | null>(null)
+  const [estAdmin, setEstAdmin] = useState(false)
   const [packsVendus, setPacksVendus] = useState<PackVendu[]>([])
   const [chargement, setChargement] = useState(true)
   const [maj, setMaj] = useState(false)
@@ -167,6 +168,20 @@ export default function DashboardPage() {
       if (!userData.user) {
         router.push('/auth')
         return
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (accessToken) {
+        try {
+          const res = await fetch('/api/admin/whoami', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+          const data = await res.json()
+          setEstAdmin(Boolean(data.estAdmin))
+        } catch {
+          setEstAdmin(false)
+        }
       }
 
       const { data: clientUser } = await supabase
@@ -522,8 +537,8 @@ export default function DashboardPage() {
               n'est pas automatisé, il se fait à la main).
             </p>
             <textarea
-              readOnly
               value={messageLinkedin}
+              onChange={(e) => setMessageLinkedin(e.target.value)}
               className="w-full h-40 rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
             />
             <div className="flex gap-2 justify-end">
@@ -552,6 +567,14 @@ export default function DashboardPage() {
           <p className="text-slate-400 text-xs mt-1">
             {t('statut')} : <span className="text-accent">{client.statut_abonnement}</span>
           </p>
+          {estAdmin && (
+            <a
+              href="/admin"
+              className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-accent/10 text-accent border border-accent/40"
+            >
+              🔑 Vous êtes admin — voir tous les cabinets →
+            </a>
+          )}
         </div>
 
         <nav className="flex md:flex-col gap-1 px-3 py-3 overflow-x-auto md:overflow-visible">
@@ -745,18 +768,20 @@ export default function DashboardPage() {
 
                 {lancementResultat && (
                   <div className="mt-3 space-y-1 text-sm">
-                    {lancementResultat.map((r, i) =>
-                      r.erreur && String(r.erreur).includes('APIFY_API_TOKEN') ? (
-                        <div key={i} className="rounded-lg bg-slate-900 border border-slate-700 p-3">
-                          <p className="text-amber-400">
-                            ⚠️ La recherche automatique n'est pas encore configurée.
-                          </p>
-                          <p className="text-slate-400 text-xs mt-1">
-                            En attendant, tu peux ajouter tes cibles à la main ci-dessous, dans
-                            l'onglet "Cibles".
-                          </p>
-                        </div>
-                      ) : (
+                    {lancementResultat.some(
+                      (r) => r.erreur && String(r.erreur).includes('APIFY_API_TOKEN')
+                    ) ? (
+                      <div className="rounded-lg bg-slate-900 border border-slate-700 p-3">
+                        <p className="text-slate-300">
+                          ⚙️ La recherche automatique n'est pas encore configurée.
+                        </p>
+                        <p className="text-slate-500 text-xs mt-1">
+                          En attendant, tu peux ajouter tes cibles à la main ci-dessous, dans
+                          l'onglet "Cibles".
+                        </p>
+                      </div>
+                    ) : (
+                      lancementResultat.map((r, i) => (
                         <div key={i} className="rounded-lg bg-slate-900 border border-slate-700 p-2">
                           {r.erreur ? (
                             <span className="text-red-400">❌ {String(r.erreur)}</span>
@@ -770,7 +795,7 @@ export default function DashboardPage() {
                             </span>
                           )}
                         </div>
-                      )
+                      ))
                     )}
                   </div>
                 )}

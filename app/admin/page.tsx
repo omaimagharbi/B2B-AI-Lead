@@ -92,7 +92,12 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-white px-6 py-10">
       <div className="max-w-5xl mx-auto space-y-6">
-        <h1 className="text-2xl font-bold">Administration — Cabinets</h1>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h1 className="text-2xl font-bold">🔑 Administration — Cabinets</h1>
+          <a href="/dashboard" className="text-sm text-accent underline">
+            ← Voir mon propre dashboard cabinet
+          </a>
+        </div>
 
         <div className="space-y-3">
           {clients.map((client) => {

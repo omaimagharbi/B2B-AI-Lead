@@ -101,7 +101,7 @@ export default function ValidationItem({
   }
 
   return (
-    <div className="rounded-xl border border-amber-700 bg-amber-950/20 overflow-hidden">
+    <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
       <button
         onClick={() => setOuvert(!ouvert)}
         className="w-full p-4 flex items-center justify-between text-left"
@@ -113,13 +113,13 @@ export default function ValidationItem({
             {(diagnostic.phrase_brute_prospect?.length ?? 0) > 100 ? '...' : ''}"
           </p>
         </div>
-        <span className="text-amber-400 text-sm">
+        <span className="text-slate-300 text-sm">
           {ouvert ? 'Fermer ▲' : 'Relire & valider ▼'}
         </span>
       </button>
 
       {ouvert && (
-        <div className="p-4 pt-0 space-y-4 border-t border-amber-800">
+        <div className="p-4 pt-0 space-y-4 border-t border-slate-800">
           {erreur && (
             <div className="text-red-400 bg-red-950/40 border border-red-800 rounded-lg p-3 text-sm">
               {erreur}
@@ -127,7 +127,7 @@ export default function ValidationItem({
           )}
 
           {diagnostic.json_ia_brouillon._simule ? (
-            <div className="text-xs px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-800 text-amber-400">
+            <div className="text-xs px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300">
               ⚙️ Mode simulé — aucune IA n'a généré ce contenu (texte générique de secours). Ajoute
               une clé GEMINI_API_KEY ou ANTHROPIC_API_KEY sur Vercel pour un vrai contenu spécifique.
             </div>

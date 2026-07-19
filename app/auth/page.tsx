@@ -65,7 +65,24 @@ function AuthForm() {
         }
       }
 
-      router.push('/dashboard')
+      // On redirige automatiquement vers /admin si ce compte est administrateur
+      // plateforme (ADMIN_EMAILS), sinon vers le dashboard cabinet normal.
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      let estAdmin = false
+      if (accessToken) {
+        try {
+          const res = await fetch('/api/admin/whoami', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+          const data = await res.json()
+          estAdmin = Boolean(data.estAdmin)
+        } catch {
+          estAdmin = false
+        }
+      }
+
+      router.push(estAdmin ? '/admin' : '/dashboard')
     } catch (err) {
       console.error('Erreur auth:', err)
       setErreur(
