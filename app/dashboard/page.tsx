@@ -73,6 +73,7 @@ export default function DashboardPage() {
   const [targets, setTargets] = useState<Target[]>([])
   const [diagnosticsEnAttente, setDiagnosticsEnAttente] = useState<DiagnosticEnAttente[]>([])
   const [diagnosticsValides, setDiagnosticsValides] = useState<DiagnosticValide[]>([])
+  const [messageLinkedin, setMessageLinkedin] = useState<string | null>(null)
   const [packsVendus, setPacksVendus] = useState<PackVendu[]>([])
   const [chargement, setChargement] = useState(true)
   const [maj, setMaj] = useState(false)
@@ -391,6 +392,29 @@ export default function DashboardPage() {
   const envoyerDiagnostic = (targetId: string) => envoyerVersTarget(targetId, 'diagnostic')
   const envoyerMessage = (targetId: string) => envoyerVersTarget(targetId, 'message')
 
+  const preparerLinkedin = async (targetId: string) => {
+    if (!client) return
+    setEnvoiEnCours(targetId)
+
+    try {
+      const res = await fetch('/api/outreach/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_id: targetId, type_envoi: 'diagnostic', canal_force: 'linkedin' }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error ?? 'Erreur lors de la préparation du message')
+      } else {
+        setMessageLinkedin(data.message)
+        await chargerTout(client.id)
+      }
+    } catch {
+      alert('Impossible de contacter le serveur')
+    }
+    setEnvoiEnCours(null)
+  }
+
   const toggleCibleSelectionnee = (targetId: string) => {
     const nouvelles = new Set(ciblesSelectionnees)
     nouvelles.has(targetId) ? nouvelles.delete(targetId) : nouvelles.add(targetId)
@@ -489,6 +513,38 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col md:flex-row" dir={dir}>
+      {messageLinkedin && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-lg w-full space-y-3">
+            <h3 className="font-semibold text-lg">🔗 Message prêt pour LinkedIn</h3>
+            <p className="text-slate-400 text-xs">
+              Copie ce texte et colle-le dans un message LinkedIn à ce contact (l'envoi LinkedIn
+              n'est pas automatisé, il se fait à la main).
+            </p>
+            <textarea
+              readOnly
+              value={messageLinkedin}
+              className="w-full h-40 rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setMessageLinkedin(null)}
+                className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white"
+              >
+                Fermer
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(messageLinkedin)
+                }}
+                className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm"
+              >
+                📋 Copier
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* BARRE LATERALE GAUCHE */}
       <aside className="md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col">
         <div className="px-5 py-4 border-b border-slate-800">
@@ -938,6 +994,15 @@ export default function DashboardPage() {
                             {envoiEnCours === target.id ? 'Envoi...' : '✉️ Message pro'}
                           </button>
                         )}
+                        {target.statut === 'nouveau' && (
+                          <button
+                            onClick={() => preparerLinkedin(target.id)}
+                            disabled={envoiEnCours === target.id}
+                            className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                          >
+                            {envoiEnCours === target.id ? '...' : '🔗 LinkedIn'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1011,9 +1076,19 @@ export default function DashboardPage() {
                   className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
                 >
                   <span>{m.nom_complet || '(nom non renseigné)'}</span>
-                  <span className="text-accent text-xs uppercase">{m.role}</span>
+                  <span className="text-accent text-xs uppercase">
+                    {m.role === 'proprietaire' || m.role === 'admin'
+                      ? '👑 Propriétaire du cabinet'
+                      : '👤 Membre'}
+                  </span>
                 </div>
               ))}
+            </div>
+
+            <div className="pt-2">
+              <a href="/admin" className="text-xs text-slate-600 hover:text-slate-400 underline">
+                Vous êtes Braise ? Accès administration plateforme →
+              </a>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">

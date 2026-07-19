@@ -83,14 +83,21 @@ function AuthForm() {
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">
             {mode === 'inscription'
-              ? 'Créez votre compte cabinet'
+              ? 'Créez votre compte cabinet (utilisateur)'
               : mode === 'connexion'
-              ? 'Connexion'
+              ? 'Connexion à votre compte cabinet'
               : 'Mot de passe oublié'}
           </h1>
           <p className="text-slate-400 text-sm">
             Vertical sélectionné : <span className="text-accent">{vertical}</span>
           </p>
+          {mode === 'inscription' && (
+            <p className="text-slate-600 text-xs">
+              Ce compte donne accès à votre tableau de bord (prospection, diagnostics, envois).
+              L'accès administration plateforme est réservé à Braise et n'est pas ouvert à
+              l'inscription.
+            </p>
+          )}
         </div>
 
         {erreur && (
