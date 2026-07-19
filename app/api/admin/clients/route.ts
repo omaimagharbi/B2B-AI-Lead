@@ -47,9 +47,28 @@ export async function GET(req: NextRequest) {
     comptageParClient.set(clientId, (comptageParClient.get(clientId) ?? 0) + 1)
   }
 
+  // Nombre total de cibles par client (activite de sourcing/prospection)
+  const { data: toutesLesCibles } = await supabaseAdmin.from('targets').select('client_id')
+  const nbCiblesParClient = new Map<string, number>()
+  for (const c of toutesLesCibles ?? []) {
+    nbCiblesParClient.set(c.client_id, (nbCiblesParClient.get(c.client_id) ?? 0) + 1)
+  }
+
+  // Diagnostics en attente de validation par client (charge de travail en cours)
+  const { data: diagsEnAttente } = await supabaseAdmin
+    .from('diagnostics')
+    .select('client_id')
+    .eq('statut_validation', 'en_attente_validation')
+  const nbAttenteParClient = new Map<string, number>()
+  for (const d of diagsEnAttente ?? []) {
+    nbAttenteParClient.set(d.client_id, (nbAttenteParClient.get(d.client_id) ?? 0) + 1)
+  }
+
   const clientsAvecComptage = (clients ?? []).map((c) => ({
     ...c,
     packs_vendus: comptageParClient.get(c.id) ?? 0,
+    nb_cibles: nbCiblesParClient.get(c.id) ?? 0,
+    nb_diagnostics_attente: nbAttenteParClient.get(c.id) ?? 0,
   }))
 
   return NextResponse.json({ clients: clientsAvecComptage })

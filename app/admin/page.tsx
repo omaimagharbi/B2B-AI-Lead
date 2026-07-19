@@ -11,6 +11,8 @@ type ClientAdmin = {
   plan_tarifaire: string | null
   created_at: string
   packs_vendus: number
+  nb_cibles: number
+  nb_diagnostics_attente: number
 }
 
 export default function AdminPage() {
@@ -104,34 +106,50 @@ export default function AdminPage() {
             return (
               <div
                 key={client.id}
-                className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-center justify-between flex-wrap gap-3"
+                className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex flex-col gap-3"
               >
-                <div>
-                  <p className="font-semibold">{client.nom_entreprise}</p>
-                  <p className="text-slate-400 text-sm">{client.email}</p>
-                  <p className="text-slate-400 text-sm">
-                    {client.packs_vendus} packs vendus · Statut :{' '}
-                    <span
-                      className={
-                        client.statut_abonnement === 'payant' ? 'text-accent' : 'text-amber-400'
-                      }
-                    >
-                      {client.statut_abonnement}
-                    </span>
-                    {client.plan_tarifaire && ` (${client.plan_tarifaire})`}
-                  </p>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="font-semibold">{client.nom_entreprise || '(sans nom)'}</p>
+                    <p className="text-slate-400 text-sm">{client.email || '—'}</p>
+                  </div>
+                  <button
+                    onClick={() => basculerPayant(client.id, client.statut_abonnement)}
+                    disabled={majEnCours === client.id}
+                    className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 transition disabled:opacity-40 shrink-0"
+                  >
+                    {majEnCours === client.id
+                      ? '...'
+                      : client.statut_abonnement === 'payant'
+                      ? 'Repasser en essai'
+                      : 'Passer en payant'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => basculerPayant(client.id, client.statut_abonnement)}
-                  disabled={majEnCours === client.id}
-                  className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 transition disabled:opacity-40"
-                >
-                  {majEnCours === client.id
-                    ? '...'
-                    : client.statut_abonnement === 'payant'
-                    ? 'Repasser en essai'
-                    : 'Passer en payant'}
-                </button>
+
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span
+                    className={`px-2 py-1 rounded-full ${
+                      client.statut_abonnement === 'payant'
+                        ? 'bg-green-950 text-accent'
+                        : 'bg-amber-950 text-amber-400'
+                    }`}
+                  >
+                    {client.statut_abonnement}
+                    {client.plan_tarifaire ? ` (${client.plan_tarifaire})` : ''}
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-300">
+                    🎯 {client.nb_cibles} cibles
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-300">
+                    🔔 {client.nb_diagnostics_attente} en attente
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-300">
+                    💰 {client.packs_vendus} packs vendus
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-500">
+                    Inscrit le {new Date(client.created_at).toLocaleDateString('fr-FR')}
+                  </span>
+                </div>
               </div>
             )
           })}
