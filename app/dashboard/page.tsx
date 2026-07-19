@@ -40,6 +40,7 @@ type Target = {
   nb_relances?: number
   derniere_relance_at?: string | null
   created_at?: string
+  assigne_a?: string | null
 }
 
 type DiagnosticEnAttente = {
@@ -87,6 +88,8 @@ export default function DashboardPage() {
   const [diagnosticsValides, setDiagnosticsValides] = useState<DiagnosticValide[]>([])
   const [messageLinkedin, setMessageLinkedin] = useState<string | null>(null)
   const [estAdmin, setEstAdmin] = useState(false)
+  const [monClientUserId, setMonClientUserId] = useState<string | null>(null)
+  const [filtreAssignation, setFiltreAssignation] = useState<'toutes' | 'mes-cibles'>('toutes')
   const [statsPerformance, setStatsPerformance] = useState<StatsPerformance>({
     nbMessagesEnvoyes: 0,
     nbReponses: 0,
@@ -143,7 +146,7 @@ export default function DashboardPage() {
     const { data: targetsData } = await supabase
       .from('targets')
       .select(
-        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at'
+        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a'
       )
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
@@ -237,7 +240,7 @@ export default function DashboardPage() {
 
       const { data: clientUser } = await supabase
         .from('client_users')
-        .select('client_id')
+        .select('id, client_id')
         .eq('auth_user_id', userData.user.id)
         .single()
 
@@ -245,6 +248,7 @@ export default function DashboardPage() {
         setChargement(false)
         return
       }
+      setMonClientUserId(clientUser.id)
 
       const { data: clientData } = await supabase
         .from('clients')
@@ -435,6 +439,13 @@ export default function DashboardPage() {
     })
     await chargerTout(client.id)
     setMaj(false)
+  }
+
+  const assignerCible = async (targetId: string, clientUserId: string | null) => {
+    await supabase.from('targets').update({ assigne_a: clientUserId }).eq('id', targetId)
+    setTargets((prev) =>
+      prev.map((tg) => (tg.id === targetId ? { ...tg, assigne_a: clientUserId } : tg))
+    )
   }
 
   const envoyerVersTarget = async (targetId: string, typeEnvoi: 'diagnostic' | 'message') => {
@@ -967,6 +978,31 @@ export default function DashboardPage() {
               <p className="text-slate-500 text-sm italic">Aucune cible pour le moment.</p>
             ) : (
               <>
+                {membresEquipe.length > 1 && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setFiltreAssignation('toutes')}
+                      className={`text-xs px-3 py-1.5 rounded-full border ${
+                        filtreAssignation === 'toutes'
+                          ? 'bg-accent/10 text-accent border-accent/40'
+                          : 'bg-slate-900 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      Toutes les cibles ({targets.length})
+                    </button>
+                    <button
+                      onClick={() => setFiltreAssignation('mes-cibles')}
+                      className={`text-xs px-3 py-1.5 rounded-full border ${
+                        filtreAssignation === 'mes-cibles'
+                          ? 'bg-accent/10 text-accent border-accent/40'
+                          : 'bg-slate-900 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      Mes cibles ({targets.filter((tg) => tg.assigne_a === monClientUserId).length})
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-lg p-3">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input
@@ -1005,7 +1041,9 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-2">
-                  {targets.map((target) => (
+                  {targets
+                    .filter((tg) => filtreAssignation === 'toutes' || tg.assigne_a === monClientUserId)
+                    .map((target) => (
                     <div
                       key={target.id}
                       className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-center justify-between flex-wrap gap-3"
@@ -1062,6 +1100,20 @@ export default function DashboardPage() {
                                 </span>
                               )}
                             </div>
+                          )}
+                          {membresEquipe.length > 1 && (
+                            <select
+                              value={target.assigne_a ?? ''}
+                              onChange={(e) => assignerCible(target.id, e.target.value || null)}
+                              className="mt-2 text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                            >
+                              <option value="">Non assigné</option>
+                              {membresEquipe.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  👤 {m.nom_complet || '(sans nom)'}
+                                </option>
+                              ))}
+                            </select>
                           )}
                         </div>
                       </div>
