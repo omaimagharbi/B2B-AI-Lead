@@ -6,14 +6,20 @@
 -- A executer dans Supabase > SQL Editor
 -- =====================================================================
 
--- 0. La contrainte existante limite les valeurs possibles de "role" (ex: 'admin','membre').
---    On l'elargit pour accepter 'proprietaire' avant de renommer les lignes existantes.
+-- 0. La contrainte existante limite les valeurs possibles de "role". On la supprime
+--    d'abord (sans condition), on nettoie TOUTES les valeurs existantes, puis on la
+--    recree - ainsi peu importe ce qu'il y a deja en base, la migration passe.
 alter table client_users drop constraint if exists client_users_role_check;
-alter table client_users add constraint client_users_role_check
-  check (role in ('proprietaire', 'membre'));
 
 -- 1. On renomme les lignes existantes
 update client_users set role = 'proprietaire' where role = 'admin';
+
+-- 1bis. Filet de securite : toute valeur inattendue (vide, null, autre) devient "membre"
+update client_users set role = 'membre' where role is null or role not in ('proprietaire', 'membre');
+
+-- 2. On peut maintenant recreer la contrainte en toute securite
+alter table client_users add constraint client_users_role_check
+  check (role in ('proprietaire', 'membre'));
 
 -- 2. On corrige la fonction de creation de compte pour les futurs inscrits
 create or replace function public.handle_new_client_signup()
