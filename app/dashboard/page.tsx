@@ -7,6 +7,7 @@ import { PAYS_DISPONIBLES } from '@/lib/pays'
 import { SECTEURS_DISPONIBLES } from '@/lib/secteurs'
 import { professionsDisponibles, PROFILS_PARTICULIER } from '@/lib/professions'
 import { traduire, type Langue } from '@/lib/i18n'
+import { templatesPourVertical } from '@/lib/templates'
 import ValidationItem from './validation-item'
 import DropdownMultiSelect from './dropdown-multiselect'
 
@@ -36,6 +37,9 @@ type Target = {
   segment_categorie?: string | null
   segment_urgence?: string | null
   score_chaleur?: number | null
+  nb_relances?: number
+  derniere_relance_at?: string | null
+  created_at?: string
 }
 
 type DiagnosticEnAttente = {
@@ -44,6 +48,7 @@ type DiagnosticEnAttente = {
   phrase_brute_prospect: string | null
   json_ia_brouillon: any
   recommandations_json: any
+  lien_ouvert_at: string | null
   targets: { nom: string } | { nom: string }[] | null
 }
 
@@ -52,6 +57,13 @@ type DiagnosticValide = {
   token_acces: string
   created_at: string
   targets: { nom: string } | { nom: string }[] | null
+}
+
+type StatsPerformance = {
+  nbMessagesEnvoyes: number
+  nbReponses: number
+  nbDiagnosticsValides: number
+  nbPacksAcceptes: number
 }
 
 type PackVendu = {
@@ -75,6 +87,12 @@ export default function DashboardPage() {
   const [diagnosticsValides, setDiagnosticsValides] = useState<DiagnosticValide[]>([])
   const [messageLinkedin, setMessageLinkedin] = useState<string | null>(null)
   const [estAdmin, setEstAdmin] = useState(false)
+  const [statsPerformance, setStatsPerformance] = useState<StatsPerformance>({
+    nbMessagesEnvoyes: 0,
+    nbReponses: 0,
+    nbDiagnosticsValides: 0,
+    nbPacksAcceptes: 0,
+  })
   const [packsVendus, setPacksVendus] = useState<PackVendu[]>([])
   const [chargement, setChargement] = useState(true)
   const [maj, setMaj] = useState(false)
@@ -125,7 +143,7 @@ export default function DashboardPage() {
     const { data: targetsData } = await supabase
       .from('targets')
       .select(
-        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, segment_categorie, segment_urgence, score_chaleur'
+        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at'
       )
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
@@ -133,7 +151,9 @@ export default function DashboardPage() {
 
     const { data: diagData } = await supabase
       .from('diagnostics')
-      .select('id, token_acces, phrase_brute_prospect, json_ia_brouillon, recommandations_json, targets(nom)')
+      .select(
+        'id, token_acces, phrase_brute_prospect, json_ia_brouillon, recommandations_json, lien_ouvert_at, targets(nom)'
+      )
       .eq('client_id', clientId)
       .eq('statut_validation', 'en_attente_validation')
       .order('created_at', { ascending: false })
@@ -160,6 +180,37 @@ export default function DashboardPage() {
       .select('id, nom_complet, role')
       .eq('client_id', clientId)
     setMembresEquipe(membresData ?? [])
+
+    // Statistiques de performance : taux de reponse et de conversion
+    const { count: nbMessagesEnvoyes } = await supabase
+      .from('outreach_campaigns')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+
+    const { count: nbReponses } = await supabase
+      .from('diagnostics')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .not('phrase_brute_prospect', 'is', null)
+
+    const { count: nbDiagnosticsValides } = await supabase
+      .from('diagnostics')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('statut_validation', 'valide_par_expert')
+
+    const { count: nbPacksAcceptes } = await supabase
+      .from('leads_packs')
+      .select('*, diagnostics!inner(client_id)', { count: 'exact', head: true })
+      .eq('diagnostics.client_id', clientId)
+      .eq('statut_vente', 'accepte')
+
+    setStatsPerformance({
+      nbMessagesEnvoyes: nbMessagesEnvoyes ?? 0,
+      nbReponses: nbReponses ?? 0,
+      nbDiagnosticsValides: nbDiagnosticsValides ?? 0,
+      nbPacksAcceptes: nbPacksAcceptes ?? 0,
+    })
   }
 
   useEffect(() => {
@@ -339,14 +390,15 @@ export default function DashboardPage() {
     setLancementEnCours(false)
   }
 
-  const enregistrerMessage = async () => {
+  const enregistrerMessage = async (valeurOverride?: string) => {
     if (!client) return
+    const valeur = valeurOverride ?? messageInput
     setMaj(true)
     await supabase
       .from('clients')
-      .update({ message_personnalise: messageInput.trim() || null })
+      .update({ message_personnalise: valeur.trim() || null })
       .eq('id', client.id)
-    setClient({ ...client, message_personnalise: messageInput.trim() || null })
+    setClient({ ...client, message_personnalise: valeur.trim() || null })
     setMaj(false)
   }
 
@@ -813,10 +865,25 @@ export default function DashboardPage() {
                 automatiquement à la fin (obligation légale).
               </p>
 
+              <div className="flex flex-wrap gap-2">
+                {templatesPourVertical(verticalSlug).map((tpl) => (
+                  <button
+                    key={tpl.titre}
+                    onClick={() => {
+                      setMessageInput(tpl.texte)
+                      enregistrerMessage(tpl.texte)
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 hover:border-accent transition"
+                  >
+                    📄 {tpl.titre}
+                  </button>
+                ))}
+              </div>
+
               <textarea
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
-                onBlur={enregistrerMessage}
+                onBlur={() => enregistrerMessage()}
                 placeholder={`Bonjour {nom},\n\n{cabinet} vous invite a decrire votre situation, un expert etudiera votre dossier :\n{lien}`}
                 className="w-full h-28 rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
               />
@@ -1160,6 +1227,144 @@ export default function DashboardPage() {
                   <p className="text-3xl font-bold mt-2">{packsVendus.length}</p>
                 </div>
               </div>
+            </section>
+
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold">📈 Taux de performance</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                  <p className="text-slate-400 text-sm">Taux de réponse</p>
+                  <p className="text-3xl font-bold mt-2">
+                    {statsPerformance.nbMessagesEnvoyes > 0
+                      ? Math.round(
+                          (statsPerformance.nbReponses / statsPerformance.nbMessagesEnvoyes) * 100
+                        )
+                      : 0}
+                    %
+                  </p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {statsPerformance.nbReponses} réponses sur {statsPerformance.nbMessagesEnvoyes}{' '}
+                    messages envoyés
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                  <p className="text-slate-400 text-sm">Taux de conversion</p>
+                  <p className="text-3xl font-bold mt-2">
+                    {statsPerformance.nbDiagnosticsValides > 0
+                      ? Math.round(
+                          (statsPerformance.nbPacksAcceptes /
+                            statsPerformance.nbDiagnosticsValides) *
+                            100
+                        )
+                      : 0}
+                    %
+                  </p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {statsPerformance.nbPacksAcceptes} packs acceptés sur{' '}
+                    {statsPerformance.nbDiagnosticsValides} diagnostics validés
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {(() => {
+              const segments = new Map<string, { total: number; contactes: number }>()
+              for (const tg of targets) {
+                const key = tg.segment_categorie ?? 'non segmenté'
+                const entry = segments.get(key) ?? { total: 0, contactes: 0 }
+                entry.total++
+                if (tg.statut === 'contacte') entry.contactes++
+                segments.set(key, entry)
+              }
+              const lignes = Array.from(segments.entries())
+              if (lignes.length === 0) return null
+              return (
+                <section className="space-y-3">
+                  <h2 className="text-lg font-semibold">🧩 Répartition par segment</h2>
+                  <div className="space-y-2">
+                    {lignes.map(([categorie, stats]) => (
+                      <div
+                        key={categorie}
+                        className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
+                      >
+                        <span className="capitalize">{categorie}</span>
+                        <span className="text-slate-400">
+                          {stats.contactes}/{stats.total} contactées
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )
+            })()}
+
+            {(() => {
+              const MS_PAR_JOUR = 1000 * 60 * 60 * 24
+              const chauds = targets.filter((tg) => {
+                if ((tg.score_chaleur ?? 0) < 70) return false
+                if (tg.statut !== 'contacte') return false
+                const derniereActivite = tg.derniere_relance_at ?? tg.created_at
+                if (!derniereActivite) return false
+                const jours = (Date.now() - new Date(derniereActivite).getTime()) / MS_PAR_JOUR
+                return jours >= 3
+              })
+              if (chauds.length === 0) return null
+              return (
+                <section className="space-y-3">
+                  <h2 className="text-lg font-semibold text-amber-400">
+                    ⚠️ {chauds.length} prospect{chauds.length > 1 ? 's' : ''} chaud
+                    {chauds.length > 1 ? 's' : ''} sans relance récente
+                  </h2>
+                  <div className="space-y-2">
+                    {chauds.map((tg) => (
+                      <div
+                        key={tg.id}
+                        className="flex items-center justify-between rounded-lg bg-amber-950/20 border border-amber-900 px-3 py-2 text-sm"
+                      >
+                        <span>{tg.nom}</span>
+                        <span className="text-amber-400 font-semibold">
+                          🔥 {tg.score_chaleur}/100
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )
+            })()}
+
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold">📤 Export</h2>
+              <button
+                onClick={() => {
+                  const entetes = ['nom', 'entreprise', 'telephone', 'email', 'pays', 'statut', 'segment', 'urgence', 'score']
+                  const lignes = targets.map((tg) =>
+                    [
+                      tg.nom,
+                      tg.entreprise_ou_objectif ?? '',
+                      tg.telephone ?? '',
+                      tg.email ?? '',
+                      tg.country ?? '',
+                      tg.statut,
+                      tg.segment_categorie ?? '',
+                      tg.segment_urgence ?? '',
+                      String(tg.score_chaleur ?? ''),
+                    ]
+                      .map((valeur) => `"${String(valeur).replace(/"/g, '""')}"`)
+                      .join(',')
+                  )
+                  const csv = [entetes.join(','), ...lignes].join('\n')
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                  const url = URL.createObjectURL(blob)
+                  const lien = document.createElement('a')
+                  lien.href = url
+                  lien.download = `cibles-${new Date().toISOString().slice(0, 10)}.csv`
+                  lien.click()
+                  URL.revokeObjectURL(url)
+                }}
+                className="text-sm px-4 py-2 rounded-lg bg-slate-800 border border-slate-600"
+              >
+                📥 Exporter mes cibles en CSV
+              </button>
             </section>
 
             <section className="space-y-4">

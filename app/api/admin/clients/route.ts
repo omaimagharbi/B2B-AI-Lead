@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const { data: clients, error } = await supabaseAdmin
     .from('clients')
-    .select('id, nom_entreprise, email, statut_abonnement, plan_tarifaire, created_at')
+    .select('id, nom_entreprise, email, statut_abonnement, plan_tarifaire, commission_pourcentage, created_at')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -37,14 +37,16 @@ export async function GET(req: NextRequest) {
   // On compte separement les packs vendus par client (jointure via diagnostics)
   const { data: packsVendus } = await supabaseAdmin
     .from('leads_packs')
-    .select('diagnostics!inner(client_id)')
+    .select('prix_pack, diagnostics!inner(client_id)')
     .eq('statut_vente', 'accepte')
 
   const comptageParClient = new Map<string, number>()
+  const montantParClient = new Map<string, number>()
   for (const p of packsVendus ?? []) {
     // @ts-ignore - jointure Supabase typee dynamiquement
     const clientId = p.diagnostics?.client_id as string
     comptageParClient.set(clientId, (comptageParClient.get(clientId) ?? 0) + 1)
+    montantParClient.set(clientId, (montantParClient.get(clientId) ?? 0) + (p.prix_pack ?? 0))
   }
 
   // Nombre total de cibles par client (activite de sourcing/prospection)
@@ -64,12 +66,18 @@ export async function GET(req: NextRequest) {
     nbAttenteParClient.set(d.client_id, (nbAttenteParClient.get(d.client_id) ?? 0) + 1)
   }
 
-  const clientsAvecComptage = (clients ?? []).map((c) => ({
-    ...c,
-    packs_vendus: comptageParClient.get(c.id) ?? 0,
-    nb_cibles: nbCiblesParClient.get(c.id) ?? 0,
-    nb_diagnostics_attente: nbAttenteParClient.get(c.id) ?? 0,
-  }))
+  const clientsAvecComptage = (clients ?? []).map((c) => {
+    const montantVendu = montantParClient.get(c.id) ?? 0
+    const commissionPourcentage = c.commission_pourcentage ?? 0
+    return {
+      ...c,
+      packs_vendus: comptageParClient.get(c.id) ?? 0,
+      montant_vendu: montantVendu,
+      commission_due: Math.round(montantVendu * (commissionPourcentage / 100) * 100) / 100,
+      nb_cibles: nbCiblesParClient.get(c.id) ?? 0,
+      nb_diagnostics_attente: nbAttenteParClient.get(c.id) ?? 0,
+    }
+  })
 
   return NextResponse.json({ clients: clientsAvecComptage })
 }
@@ -79,16 +87,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Non autorise' }, { status: 403 })
   }
 
-  const { client_id, statut_abonnement, plan_tarifaire } = await req.json()
+  const { client_id, statut_abonnement, plan_tarifaire, commission_pourcentage } = await req.json()
 
   if (!client_id) {
     return NextResponse.json({ error: 'client_id manquant' }, { status: 400 })
   }
 
-  const { error } = await supabaseAdmin
-    .from('clients')
-    .update({ statut_abonnement, plan_tarifaire })
-    .eq('id', client_id)
+  const misAJour: Record<string, unknown> = {}
+  if (statut_abonnement !== undefined) misAJour.statut_abonnement = statut_abonnement
+  if (plan_tarifaire !== undefined) misAJour.plan_tarifaire = plan_tarifaire
+  if (commission_pourcentage !== undefined) misAJour.commission_pourcentage = commission_pourcentage
+
+  const { error } = await supabaseAdmin.from('clients').update(misAJour).eq('id', client_id)
 
   if (error) {
     return NextResponse.json({ error: 'Erreur de mise a jour' }, { status: 500 })

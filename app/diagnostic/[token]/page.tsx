@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 type Etape = 'saisie' | 'envoi' | 'termine'
 
@@ -8,6 +8,16 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
   const [etape, setEtape] = useState<Etape>('saisie')
   const [probleme, setProbleme] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
+
+  // Suivi d'ouverture : on signale une seule fois que le prospect a bien ouvert
+  // le lien, pour que le cabinet sache si un message a ete vu ou non.
+  useEffect(() => {
+    fetch('/api/diagnostic/ouverture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: params.token }),
+    }).catch(() => {})
+  }, [params.token])
 
   const soumettre = async () => {
     if (probleme.trim().length < 10) return

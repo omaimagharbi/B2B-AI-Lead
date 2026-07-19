@@ -18,6 +18,7 @@ type DiagnosticEnAttente = {
   token_acces: string
   phrase_brute_prospect: string | null
   json_ia_brouillon: Brouillon
+  lien_ouvert_at: string | null
   recommandations_json: {
     segment: { categorie: string; urgence: string; budget_mentionne: boolean }
     score: number
@@ -111,6 +112,11 @@ export default function ValidationItem({
           <p className="text-slate-400 text-sm italic">
             "{diagnostic.phrase_brute_prospect?.slice(0, 100)}
             {(diagnostic.phrase_brute_prospect?.length ?? 0) > 100 ? '...' : ''}"
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            {diagnostic.lien_ouvert_at
+              ? `👁️ Lien ouvert le ${new Date(diagnostic.lien_ouvert_at).toLocaleDateString('fr-FR')}`
+              : '👁️‍🗨️ Lien pas encore ouvert (mais réponse déjà reçue)'}
           </p>
         </div>
         <span className="text-slate-300 text-sm">

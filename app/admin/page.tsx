@@ -11,6 +11,9 @@ type ClientAdmin = {
   plan_tarifaire: string | null
   created_at: string
   packs_vendus: number
+  montant_vendu: number
+  commission_pourcentage: number | null
+  commission_due: number
   nb_cibles: number
   nb_diagnostics_attente: number
 }
@@ -69,6 +72,24 @@ export default function AdminPage() {
         statut_abonnement: nouveauStatut,
         plan_tarifaire: nouveauStatut === 'payant' ? '400dt_mois' : null,
       }),
+    })
+
+    await charger()
+    setMajEnCours(null)
+  }
+
+  const modifierCommission = async (clientId: string, pourcentage: number) => {
+    setMajEnCours(clientId)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    await fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ client_id: clientId, commission_pourcentage: pourcentage }),
     })
 
     await charger()
@@ -149,6 +170,24 @@ export default function AdminPage() {
                   <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-500">
                     Inscrit le {new Date(client.created_at).toLocaleDateString('fr-FR')}
                   </span>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs pt-1 border-t border-slate-800">
+                  <label className="text-slate-400">Commission :</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    defaultValue={client.commission_pourcentage ?? 0}
+                    onBlur={(e) => modifierCommission(client.id, Number(e.target.value))}
+                    className="w-16 rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                  />
+                  <span className="text-slate-500">%</span>
+                  {(client.commission_pourcentage ?? 0) > 0 && (
+                    <span className="text-accent font-semibold ml-2">
+                      → {client.commission_due} dû (sur {client.montant_vendu} vendu)
+                    </span>
+                  )}
                 </div>
               </div>
             )
