@@ -40,10 +40,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Aucun cabinet associe' }, { status: 403 })
     }
 
-    const { email, nom_complet } = await req.json()
+    const { email, nom_complet, role } = await req.json()
     if (!email) {
       return NextResponse.json({ error: 'Email manquant' }, { status: 400 })
     }
+
+    // Seul un role "commercial" ou "directeur commercial" peut etre attribue via
+    // l'invitation - jamais "proprietaire" (reserve a la creation du cabinet).
+    const roleFinal = role === 'directeur_commercial' ? 'directeur_commercial' : 'membre'
 
     const motDePasseTemporaire = genererMotDePasseTemporaire()
 
@@ -61,7 +65,7 @@ export async function POST(req: NextRequest) {
       user_metadata: {
         client_id: clientUser.client_id,
         nom_complet: nom_complet ?? '',
-        role: 'membre',
+        role: roleFinal,
       },
     })
 

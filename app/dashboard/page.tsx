@@ -89,6 +89,7 @@ export default function DashboardPage() {
   const [messageLinkedin, setMessageLinkedin] = useState<string | null>(null)
   const [estAdmin, setEstAdmin] = useState(false)
   const [monClientUserId, setMonClientUserId] = useState<string | null>(null)
+  const [monRole, setMonRole] = useState<string | null>(null)
   const [filtreAssignation, setFiltreAssignation] = useState<'toutes' | 'mes-cibles'>('toutes')
   const [statsPerformance, setStatsPerformance] = useState<StatsPerformance>({
     nbMessagesEnvoyes: 0,
@@ -114,6 +115,7 @@ export default function DashboardPage() {
   >([])
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteNom, setInviteNom] = useState('')
+  const [inviteRole, setInviteRole] = useState<'membre' | 'directeur_commercial'>('membre')
   const [inviteEnCours, setInviteEnCours] = useState(false)
   const [inviteMessage, setInviteMessage] = useState<string | null>(null)
   const [ongletActif, setOngletActif] = useState<Onglet>('ciblage')
@@ -129,6 +131,9 @@ export default function DashboardPage() {
 
   const langue: Langue = client?.langue_preferee ?? 'fr'
   const t = (cle: string) => traduire(langue, cle)
+  // Le proprietaire et le directeur commercial voient/gerent toute l'equipe ;
+  // un simple commercial ("membre") ne voit que son propre suivi.
+  const peutSuperviser = monRole === 'proprietaire' || monRole === 'admin' || monRole === 'directeur_commercial'
 
   const chargerTout = async (clientId: string) => {
     const { data: paysData } = await supabase
@@ -240,7 +245,7 @@ export default function DashboardPage() {
 
       const { data: clientUser } = await supabase
         .from('client_users')
-        .select('id, client_id')
+        .select('id, client_id, role')
         .eq('auth_user_id', userData.user.id)
         .single()
 
@@ -249,6 +254,7 @@ export default function DashboardPage() {
         return
       }
       setMonClientUserId(clientUser.id)
+      setMonRole(clientUser.role ?? 'membre')
 
       const { data: clientData } = await supabase
         .from('clients')
@@ -539,7 +545,7 @@ export default function DashboardPage() {
       const res = await fetch('/api/team/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email: inviteEmail, nom_complet: inviteNom }),
+        body: JSON.stringify({ email: inviteEmail, nom_complet: inviteNom, role: inviteRole }),
       })
       const data = await res.json()
 
@@ -551,6 +557,7 @@ export default function DashboardPage() {
         )
         setInviteEmail('')
         setInviteNom('')
+        setInviteRole('membre')
         await chargerTout(client.id)
       }
     } catch {
@@ -1045,7 +1052,15 @@ export default function DashboardPage() {
                 <div className="space-y-2">
                   {targets
                     .filter((tg) => filtreAssignation === 'toutes' || tg.assigne_a === monClientUserId)
-                    .map((target) => (
+                    .map((target) => {
+                      const estPriseParAutre = Boolean(
+                        target.assigne_a && target.assigne_a !== monClientUserId
+                      )
+                      const nomCollegue = estPriseParAutre
+                        ? membresEquipe.find((m) => m.id === target.assigne_a)?.nom_complet ||
+                          'un(e) collègue'
+                        : null
+                      return (
                     <div
                       key={target.id}
                       className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-center justify-between flex-wrap gap-3"
@@ -1055,7 +1070,14 @@ export default function DashboardPage() {
                           type="checkbox"
                           checked={ciblesSelectionnees.has(target.id)}
                           onChange={() => toggleCibleSelectionnee(target.id)}
-                          disabled={target.statut !== 'nouveau'}
+                          disabled={
+                            target.statut !== 'nouveau' || (estPriseParAutre && !peutSuperviser)
+                          }
+                          title={
+                            estPriseParAutre && !peutSuperviser
+                              ? `Déjà pris en charge par ${nomCollegue}`
+                              : undefined
+                          }
                           className="accent-accent"
                         />
                         <div>
@@ -1072,6 +1094,12 @@ export default function DashboardPage() {
                             {target.country ?? '—'} ·{' '}
                             <span className="text-accent">{target.statut}</span>
                           </p>
+                          {estPriseParAutre && (
+                            <p className="text-amber-400 text-xs mt-1">
+                              🔒 Déjà pris en charge par {nomCollegue} — merci de ne pas le contacter
+                              de ton côté.
+                            </p>
+                          )}
                           {(target.segment_categorie || typeof target.score_chaleur === 'number') && (
                             <div className="flex gap-2 mt-1 flex-wrap">
                               {target.segment_categorie && (
@@ -1107,10 +1135,14 @@ export default function DashboardPage() {
                             <select
                               value={target.assigne_a ?? ''}
                               onChange={(e) => assignerCible(target.id, e.target.value || null)}
-                              className="mt-2 text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                              disabled={estPriseParAutre && !peutSuperviser}
+                              className="mt-2 text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1 disabled:opacity-50"
                             >
                               <option value="">Non assigné</option>
-                              {membresEquipe.map((m) => (
+                              {(peutSuperviser
+                                ? membresEquipe
+                                : membresEquipe.filter((m) => m.id === monClientUserId)
+                              ).map((m) => (
                                 <option key={m.id} value={m.id}>
                                   👤 {m.nom_complet || '(sans nom)'}
                                 </option>
@@ -1122,7 +1154,11 @@ export default function DashboardPage() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => envoyerDiagnostic(target.id)}
-                          disabled={target.statut !== 'nouveau' || envoiEnCours === target.id}
+                          disabled={
+                            target.statut !== 'nouveau' ||
+                            envoiEnCours === target.id ||
+                            (estPriseParAutre && !peutSuperviser)
+                          }
                           className="text-sm px-3 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
                         >
                           {envoiEnCours === target.id
@@ -1151,7 +1187,8 @@ export default function DashboardPage() {
                         )}
                       </div>
                     </div>
-                  ))}
+                      )
+                    })}
                 </div>
               </>
             )}
@@ -1225,11 +1262,52 @@ export default function DashboardPage() {
                   <span className="text-accent text-xs uppercase">
                     {m.role === 'proprietaire' || m.role === 'admin'
                       ? '👑 Propriétaire du cabinet'
-                      : '👤 Membre'}
+                      : m.role === 'directeur_commercial'
+                      ? '🧭 Directeur commercial'
+                      : '👤 Commercial'}
                   </span>
                 </div>
               ))}
             </div>
+
+            {peutSuperviser && membresEquipe.length > 1 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-slate-300">📊 Suivi de l'équipe</h3>
+                <div className="space-y-2">
+                  {membresEquipe
+                    .filter((m) => m.role !== 'proprietaire' && m.role !== 'admin')
+                    .map((m) => {
+                      const ciblesDuMembre = targets.filter((tg) => tg.assigne_a === m.id)
+                      const ciblesContacteesDuMembre = ciblesDuMembre.filter(
+                        (tg) => tg.statut === 'contacte'
+                      )
+                      return (
+                        <div
+                          key={m.id}
+                          className="rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm flex items-center justify-between flex-wrap gap-2"
+                        >
+                          <span>
+                            👤 {m.nom_complet || '(sans nom)'}{' '}
+                            {m.role === 'directeur_commercial' && (
+                              <span className="text-accent text-xs">— directeur commercial</span>
+                            )}
+                          </span>
+                          <span className="text-slate-400 text-xs">
+                            {ciblesDuMembre.length} cible(s) assignée(s) ·{' '}
+                            {ciblesContacteesDuMembre.length} contactée(s)
+                          </span>
+                        </div>
+                      )
+                    })}
+                  {targets.filter((tg) => !tg.assigne_a).length > 0 && (
+                    <p className="text-slate-500 text-xs italic">
+                      {targets.filter((tg) => !tg.assigne_a).length} cible(s) pas encore assignée(s)
+                      à un commercial.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="pt-2">
               <a href="/admin" className="text-xs text-slate-600 hover:text-slate-400 underline">
@@ -1258,6 +1336,16 @@ export default function DashboardPage() {
               >
                 {inviteEnCours ? '...' : t('inviter')}
               </button>
+              {(monRole === 'proprietaire' || monRole === 'admin') && (
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as 'membre' | 'directeur_commercial')}
+                  className="md:col-span-3 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                >
+                  <option value="membre">👤 Commercial</option>
+                  <option value="directeur_commercial">🧭 Directeur commercial</option>
+                </select>
+              )}
             </div>
             {inviteMessage && <p className="text-sm">{inviteMessage}</p>}
           </section>
