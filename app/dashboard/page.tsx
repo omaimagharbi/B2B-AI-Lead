@@ -57,6 +57,7 @@ type DiagnosticValide = {
   id: string
   token_acces: string
   created_at: string
+  target_id: string
   targets: { nom: string } | { nom: string }[] | null
 }
 
@@ -72,6 +73,7 @@ type PackVendu = {
   pack_propose_nom: string | null
   prix_pack: number | null
   statut_vente: string
+  diagnostics?: { target_id: string } | { target_id: string }[] | null
 }
 
 type Onglet = 'ciblage' | 'cibles' | 'validation' | 'equipe' | 'stats'
@@ -169,7 +171,7 @@ export default function DashboardPage() {
 
     const { data: diagValidesData } = await supabase
       .from('diagnostics')
-      .select('id, token_acces, created_at, targets(nom)')
+      .select('id, token_acces, created_at, target_id, targets(nom)')
       .eq('client_id', clientId)
       .eq('statut_validation', 'valide_par_expert')
       .order('created_at', { ascending: false })
@@ -178,7 +180,7 @@ export default function DashboardPage() {
 
     const { data: packsData } = await supabase
       .from('leads_packs')
-      .select('id, pack_propose_nom, prix_pack, statut_vente, diagnostics!inner(client_id)')
+      .select('id, pack_propose_nom, prix_pack, statut_vente, diagnostics!inner(client_id, target_id)')
       .eq('diagnostics.client_id', clientId)
       .eq('statut_vente', 'accepte')
     setPacksVendus((packsData ?? []) as unknown as PackVendu[])
@@ -564,6 +566,34 @@ export default function DashboardPage() {
       setInviteMessage('❌ Impossible de contacter le serveur')
     }
     setInviteEnCours(false)
+  }
+
+  const supprimerMembre = async (clientUserId: string, nom: string | null) => {
+    const confirme = window.confirm(
+      `Retirer ${nom || 'ce membre'} de l'équipe ? Il ne pourra plus se connecter. Ses cibles assignées repasseront à "non assigné".`
+    )
+    if (!confirme || !client) return
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/team/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ client_user_id: clientUserId }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setInviteMessage(`❌ ${data.error ?? 'Erreur lors de la suppression'}`)
+      } else {
+        setInviteMessage(`✅ ${nom || 'Le membre'} a été retiré de l'équipe`)
+        await chargerTout(client.id)
+      }
+    } catch {
+      setInviteMessage('❌ Impossible de contacter le serveur')
+    }
   }
 
   const deconnexion = async () => {
@@ -1259,13 +1289,26 @@ export default function DashboardPage() {
                   className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
                 >
                   <span>{m.nom_complet || '(nom non renseigné)'}</span>
-                  <span className="text-accent text-xs uppercase">
-                    {m.role === 'proprietaire' || m.role === 'admin'
-                      ? '👑 Propriétaire du cabinet'
-                      : m.role === 'directeur_commercial'
-                      ? '🧭 Directeur commercial'
-                      : '👤 Commercial'}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-accent text-xs uppercase">
+                      {m.role === 'proprietaire' || m.role === 'admin'
+                        ? '👑 Propriétaire du cabinet'
+                        : m.role === 'directeur_commercial'
+                        ? '🧭 Directeur commercial'
+                        : '👤 Commercial'}
+                    </span>
+                    {peutSuperviser &&
+                      m.role !== 'proprietaire' &&
+                      m.role !== 'admin' &&
+                      m.id !== monClientUserId && (
+                        <button
+                          onClick={() => supprimerMembre(m.id, m.nom_complet)}
+                          className="text-xs text-red-400 hover:text-red-300 underline"
+                        >
+                          Retirer
+                        </button>
+                      )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1281,6 +1324,18 @@ export default function DashboardPage() {
                       const ciblesContacteesDuMembre = ciblesDuMembre.filter(
                         (tg) => tg.statut === 'contacte'
                       )
+                      const diagnosticsValidesDuMembre = diagnosticsValides.filter(
+                        (d) => targets.find((tg) => tg.id === d.target_id)?.assigne_a === m.id
+                      )
+                      const packsDuMembre = packsVendus.filter((p) => {
+                        const diag = Array.isArray(p.diagnostics) ? p.diagnostics[0] : p.diagnostics
+                        const targetId = diag?.target_id
+                        return targetId && targets.find((tg) => tg.id === targetId)?.assigne_a === m.id
+                      })
+                      const montantDuMembre = packsDuMembre.reduce(
+                        (total, p) => total + (p.prix_pack ?? 0),
+                        0
+                      )
                       return (
                         <div
                           key={m.id}
@@ -1293,8 +1348,9 @@ export default function DashboardPage() {
                             )}
                           </span>
                           <span className="text-slate-400 text-xs">
-                            {ciblesDuMembre.length} cible(s) assignée(s) ·{' '}
-                            {ciblesContacteesDuMembre.length} contactée(s)
+                            {ciblesDuMembre.length} cible(s) · {ciblesContacteesDuMembre.length}{' '}
+                            contactée(s) · {diagnosticsValidesDuMembre.length} diagnostic(s) validé(s) ·{' '}
+                            {packsDuMembre.length} pack(s) vendu(s) ({montantDuMembre} TND/EUR)
                           </span>
                         </div>
                       )
