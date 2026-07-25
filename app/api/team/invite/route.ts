@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+// Genere un mot de passe temporaire simple (lettres + chiffres, sans caracteres
+// ambigus comme 0/O ou 1/l) que le cabinet transmet lui-meme a son collegue.
+function genererMotDePasseTemporaire(): string {
+  const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  let mdp = ''
+  for (let i = 0; i < 10; i++) {
+    mdp += caracteres[Math.floor(Math.random() * caracteres.length)]
+  }
+  return mdp
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,22 +45,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email manquant' }, { status: 400 })
     }
 
-    // On invite ce nouvel utilisateur en lui rattachant directement le client_id existant
-    // (voir trigger SQL handle_new_client_signup : cas 1 = invitation, cas 2 = nouveau cabinet)
-    const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      data: {
+    const motDePasseTemporaire = genererMotDePasseTemporaire()
+
+    // On cree directement le compte au lieu d'envoyer un email d'invitation
+    // (inviteUserByEmail depend de l'envoi d'email Supabase, non fiable ici).
+    // Le cabinet transmet lui-meme l'email + mot de passe temporaire a son
+    // collegue (WhatsApp, en main propre, etc.). Le trigger SQL
+    // handle_new_client_signup (voir 20_correctif_invite_equipe.sql) rattache
+    // automatiquement ce nouveau compte au client_id existant grace au
+    // client_id passe ici dans les metadonnees.
+    const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: motDePasseTemporaire,
+      email_confirm: true,
+      user_metadata: {
         client_id: clientUser.client_id,
         nom_complet: nom_complet ?? '',
         role: 'membre',
       },
-      redirectTo: `${SITE_URL}/auth/reset`,
     })
 
-    if (inviteError) {
-      return NextResponse.json({ error: inviteError.message }, { status: 500 })
+    if (createError) {
+      return NextResponse.json({ error: createError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ succes: true })
+    return NextResponse.json({ succes: true, motDePasseTemporaire })
   } catch (err) {
     console.error('Erreur /api/team/invite:', err)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

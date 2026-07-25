@@ -15,6 +15,7 @@ function AuthForm() {
   const [nomEntreprise, setNomEntreprise] = useState('')
   const [email, setEmail] = useState('')
   const [motDePasse, setMotDePasse] = useState('')
+  const [nouveauMotDePasse, setNouveauMotDePasse] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
   const [messageSucces, setMessageSucces] = useState<string | null>(null)
   const [chargement, setChargement] = useState(false)
@@ -26,15 +27,21 @@ function AuthForm() {
 
     try {
       if (mode === 'mot_de_passe_oublie') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/reset`,
+        // Changement direct, sans email (le flux email Supabase n'est pas fiable ici) :
+        // le compte est identifie par son email, le nouveau mot de passe est applique
+        // immediatement.
+        const res = await fetch('/api/auth/reset-password-direct', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, nouveauMotDePasse }),
         })
-        if (error) {
-          setErreur(error.message)
+        const data = await res.json()
+        if (!res.ok) {
+          setErreur(data.error ?? 'Erreur lors du changement de mot de passe')
         } else {
-          setMessageSucces(
-            'Si un compte existe avec cet email, un lien de réinitialisation vient de vous être envoyé.'
-          )
+          setMessageSucces('Mot de passe mis à jour ! Tu peux te connecter.')
+          setNouveauMotDePasse('')
+          setMode('connexion')
         }
         setChargement(false)
         return
@@ -155,12 +162,23 @@ function AuthForm() {
               className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
             />
           )}
+          {mode === 'mot_de_passe_oublie' && (
+            <input
+              value={nouveauMotDePasse}
+              onChange={(e) => setNouveauMotDePasse(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && soumettre()}
+              placeholder="Nouveau mot de passe"
+              type="password"
+              className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
+            />
+          )}
           <button
             onClick={soumettre}
             disabled={
               chargement ||
               !email ||
               (mode !== 'mot_de_passe_oublie' && !motDePasse) ||
+              (mode === 'mot_de_passe_oublie' && nouveauMotDePasse.length < 6) ||
               (mode === 'inscription' && !nomEntreprise)
             }
             className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40 hover:opacity-90 transition"
@@ -171,7 +189,7 @@ function AuthForm() {
               ? 'Créer mon compte'
               : mode === 'connexion'
               ? 'Se connecter'
-              : 'Envoyer le lien de réinitialisation'}
+              : 'Mettre à jour le mot de passe'}
           </button>
         </div>
 

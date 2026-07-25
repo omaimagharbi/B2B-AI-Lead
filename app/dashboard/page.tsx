@@ -546,7 +546,9 @@ export default function DashboardPage() {
       if (!res.ok) {
         setInviteMessage(`❌ ${data.error ?? "Erreur lors de l'invitation"}`)
       } else {
-        setInviteMessage(`✅ Invitation envoyée à ${inviteEmail}`)
+        setInviteMessage(
+          `✅ Compte créé pour ${inviteEmail} — mot de passe temporaire : ${data.motDePasseTemporaire} (transmets-le toi-même, il n'y a pas d'email envoyé)`
+        )
         setInviteEmail('')
         setInviteNom('')
         await chargerTout(client.id)
