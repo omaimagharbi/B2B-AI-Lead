@@ -187,6 +187,21 @@ export default function ValidationItem({
                   </div>
                 ))}
               </div>
+
+              {diagnostic.recommandations_json.contenuMarketing && (
+                <div className="space-y-1 border-t border-slate-800 pt-2">
+                  <p className="text-xs text-slate-400 uppercase">📣 Contenu marketing suggéré</p>
+                  <p className="text-sm font-semibold">
+                    {diagnostic.recommandations_json.contenuMarketing.titre}
+                  </p>
+                  <p className="text-sm text-slate-300">
+                    {diagnostic.recommandations_json.contenuMarketing.accroche_linkedin}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Format : {diagnostic.recommandations_json.contenuMarketing.format_suggere}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

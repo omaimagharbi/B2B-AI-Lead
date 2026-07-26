@@ -3,26 +3,51 @@
 import { useState, useEffect } from 'react'
 
 type Etape = 'saisie' | 'envoi' | 'termine'
+type ModeCiblage = 'entreprise' | 'particulier'
 
 export default function DiagnosticPage({ params }: { params: { token: string } }) {
   const [etape, setEtape] = useState<Etape>('saisie')
-  const [probleme, setProbleme] = useState('')
+  const [modeCiblage, setModeCiblage] = useState<ModeCiblage>('entreprise')
   const [erreur, setErreur] = useState<string | null>(null)
 
-  // Suivi d'ouverture : on signale une seule fois que le prospect a bien ouvert
-  // le lien, pour que le cabinet sache si un message a ete vu ou non.
+  // Questionnaire structure (au lieu d'une seule case libre) : de meilleures
+  // reponses ici donnent un diagnostic bien plus precis a l'expert et a l'IA.
+  const [defi, setDefi] = useState('')
+  const [depuisQuand, setDepuisQuand] = useState('')
+  const [dejaEssaye, setDejaEssaye] = useState('')
+  const [urgence, setUrgence] = useState('')
+
+  // Suivi d'ouverture + recuperation du mode de ciblage (entreprise/particulier)
+  // pour adapter les questions posees.
   useEffect(() => {
     fetch('/api/diagnostic/ouverture', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: params.token }),
-    }).catch(() => {})
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.mode_ciblage === 'particulier') setModeCiblage('particulier')
+      })
+      .catch(() => {})
   }, [params.token])
 
+  const estValide = defi.trim().length >= 15 && depuisQuand && urgence
+
   const soumettre = async () => {
-    if (probleme.trim().length < 10) return
+    if (!estValide) return
     setErreur(null)
     setEtape('envoi')
+
+    // On combine les reponses en un texte structure envoye au backend (le
+    // format de l'API ne change pas : une seule chaine "probleme"), mais
+    // desormais bien plus riche que "quelques mots".
+    const probleme = [
+      `Défi / objectif : ${defi.trim()}`,
+      `Depuis quand : ${depuisQuand}`,
+      `Déjà essayé : ${dejaEssaye.trim() || 'Rien de particulier pour le moment'}`,
+      `Urgence à agir : ${urgence}`,
+    ].join('\n')
 
     try {
       const res = await fetch('/api/diagnostic', {
@@ -45,8 +70,13 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
     }
   }
 
+  const libelleDefi =
+    modeCiblage === 'particulier'
+      ? "Quel est l'objectif ou le blocage que vous cherchez à résoudre ?"
+      : 'Quel est le principal défi que rencontre votre entreprise ou votre équipe ?'
+
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-4">
+    <main className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-2xl">
         {erreur && (
           <div className="mb-4 text-center text-red-400 bg-red-950/40 border border-red-800 rounded-lg p-3">
@@ -55,23 +85,76 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
         )}
 
         {etape === 'saisie' && (
-          <div className="text-center space-y-6">
-            <h1 className="text-3xl md:text-4xl font-bold">
-              Décrivez votre situation actuelle
-            </h1>
-            <p className="text-slate-400">
-              Un expert étudiera votre dossier personnellement et vous recontactera avec une
-              solution sur-mesure.
-            </p>
-            <textarea
-              value={probleme}
-              onChange={(e) => setProbleme(e.target.value)}
-              placeholder="Décrivez en quelques mots le défi ou l'objectif que vous rencontrez actuellement..."
-              className="w-full h-32 rounded-xl bg-slate-900 border border-slate-700 p-4 text-white placeholder-slate-500 focus:outline-none focus:border-accent"
-            />
+          <div className="space-y-6">
+            <div className="text-center space-y-2">
+              <h1 className="text-3xl md:text-4xl font-bold">Décrivez votre situation</h1>
+              <p className="text-slate-400">
+                Un expert étudiera votre dossier personnellement et vous recontactera avec une
+                solution sur-mesure.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-sm text-slate-300">{libelleDefi}</label>
+                <textarea
+                  value={defi}
+                  onChange={(e) => setDefi(e.target.value)}
+                  placeholder="Décrivez la situation avec le plus de détails possible..."
+                  className="w-full h-28 rounded-xl bg-slate-900 border border-slate-700 p-4 text-white placeholder-slate-500 focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm text-slate-300">
+                  Depuis combien de temps rencontrez-vous cette situation ?
+                </label>
+                <select
+                  value={depuisQuand}
+                  onChange={(e) => setDepuisQuand(e.target.value)}
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-white focus:outline-none focus:border-accent"
+                >
+                  <option value="">Sélectionner...</option>
+                  <option value="Moins d'1 mois">Moins d'1 mois</option>
+                  <option value="1 à 6 mois">1 à 6 mois</option>
+                  <option value="Plus de 6 mois">Plus de 6 mois</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm text-slate-300">
+                  Qu'avez-vous déjà essayé pour y remédier ? (optionnel)
+                </label>
+                <textarea
+                  value={dejaEssaye}
+                  onChange={(e) => setDejaEssaye(e.target.value)}
+                  placeholder="Ex : formation en interne, prestataire externe, rien pour l'instant..."
+                  className="w-full h-20 rounded-xl bg-slate-900 border border-slate-700 p-4 text-white placeholder-slate-500 focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm text-slate-300">
+                  Quel est votre niveau d'urgence pour agir ?
+                </label>
+                <select
+                  value={urgence}
+                  onChange={(e) => setUrgence(e.target.value)}
+                  className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-white focus:outline-none focus:border-accent"
+                >
+                  <option value="">Sélectionner...</option>
+                  <option value="Pas pressé, j'explore">Pas pressé, j'explore</option>
+                  <option value="Modéré, dans les prochains mois">Modéré, dans les prochains mois</option>
+                  <option value="Urgent, je veux avancer rapidement">
+                    Urgent, je veux avancer rapidement
+                  </option>
+                </select>
+              </div>
+            </div>
+
             <button
               onClick={soumettre}
-              disabled={probleme.trim().length < 10}
+              disabled={!estValide}
               className="w-full md:w-auto px-8 py-3 rounded-xl bg-accent text-slate-950 font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition"
             >
               Envoyer à mon expert

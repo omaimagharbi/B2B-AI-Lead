@@ -33,7 +33,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Donnees invalides' }, { status: 400 })
     }
 
-    const lignes = contacts.map((c) => ({
+    // Dedoublonnage : meme logique que le sourcing interne (lib/sourcing.ts),
+    // on compare sur linkedin_url pour ce client. Les contacts sans linkedin_url
+    // sont inseres tels quels (impossible de les dedoublonner sur ce champ).
+    const { data: ciblesExistantes } = await supabaseAdmin
+      .from('targets')
+      .select('linkedin_url')
+      .eq('client_id', client_id)
+      .not('linkedin_url', 'is', null)
+
+    const urlsExistantes = new Set((ciblesExistantes ?? []).map((c) => c.linkedin_url))
+    const contactsFiltres = contacts.filter(
+      (c) => !c.linkedin_url || !urlsExistantes.has(c.linkedin_url)
+    )
+    const nombreDoublons = contacts.length - contactsFiltres.length
+
+    if (contactsFiltres.length === 0) {
+      return NextResponse.json({ succes: true, nombre_ajoute: 0, doublons_ignores: nombreDoublons })
+    }
+
+    const lignes = contactsFiltres.map((c) => ({
       client_id,
       nom: c.nom,
       entreprise_ou_objectif: c.entreprise_ou_objectif ?? null,
@@ -53,7 +72,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Erreur insertion' }, { status: 500 })
     }
 
-    return NextResponse.json({ succes: true, nombre_ajoute: lignes.length })
+    return NextResponse.json({
+      succes: true,
+      nombre_ajoute: lignes.length,
+      doublons_ignores: nombreDoublons,
+    })
   } catch (err) {
     console.error('Erreur webhook scraping:', err)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

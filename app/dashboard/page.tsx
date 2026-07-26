@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { PAYS_DISPONIBLES } from '@/lib/pays'
@@ -58,6 +58,18 @@ type DiagnosticValide = {
   token_acces: string
   created_at: string
   target_id: string
+  recommandations_json: any
+  targets: { nom: string } | { nom: string }[] | null
+}
+
+type MessageRecu = {
+  id: string
+  target_id: string | null
+  canal: 'whatsapp' | 'email'
+  contenu: string
+  expediteur: string | null
+  lu: boolean
+  created_at: string
   targets: { nom: string } | { nom: string }[] | null
 }
 
@@ -76,7 +88,7 @@ type PackVendu = {
   diagnostics?: { target_id: string } | { target_id: string }[] | null
 }
 
-type Onglet = 'ciblage' | 'cibles' | 'validation' | 'equipe' | 'stats'
+type Onglet = 'ciblage' | 'cibles' | 'validation' | 'equipe' | 'marketing' | 'inbox' | 'stats'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -87,6 +99,9 @@ export default function DashboardPage() {
   const [professionsSelectionnees, setProfessionsSelectionnees] = useState<Set<string>>(new Set())
   const [targets, setTargets] = useState<Target[]>([])
   const [diagnosticsEnAttente, setDiagnosticsEnAttente] = useState<DiagnosticEnAttente[]>([])
+  const [messagesRecus, setMessagesRecus] = useState<MessageRecu[]>([])
+  const [reponseTexte, setReponseTexte] = useState<Record<string, string>>({})
+  const [envoiReponseEnCours, setEnvoiReponseEnCours] = useState<string | null>(null)
   const [diagnosticsValides, setDiagnosticsValides] = useState<DiagnosticValide[]>([])
   const [messageLinkedin, setMessageLinkedin] = useState<string | null>(null)
   const [estAdmin, setEstAdmin] = useState(false)
@@ -130,6 +145,9 @@ export default function DashboardPage() {
     email: '',
     country: 'TN',
   })
+  const inputFichierCSV = useRef<HTMLInputElement>(null)
+  const [importCSVEnCours, setImportCSVEnCours] = useState(false)
+  const [messageImportCSV, setMessageImportCSV] = useState<string | null>(null)
 
   const langue: Langue = client?.langue_preferee ?? 'fr'
   const t = (cle: string) => traduire(langue, cle)
@@ -171,12 +189,20 @@ export default function DashboardPage() {
 
     const { data: diagValidesData } = await supabase
       .from('diagnostics')
-      .select('id, token_acces, created_at, target_id, targets(nom)')
+      .select('id, token_acces, created_at, target_id, recommandations_json, targets(nom)')
       .eq('client_id', clientId)
       .eq('statut_validation', 'valide_par_expert')
       .order('created_at', { ascending: false })
       .limit(50)
     setDiagnosticsValides((diagValidesData ?? []) as unknown as DiagnosticValide[])
+
+    const { data: messagesRecusData } = await supabase
+      .from('messages_recus')
+      .select('id, target_id, canal, contenu, expediteur, lu, created_at, targets(nom)')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+    setMessagesRecus((messagesRecusData ?? []) as unknown as MessageRecu[])
 
     const { data: packsData } = await supabase
       .from('leads_packs')
@@ -449,6 +475,92 @@ export default function DashboardPage() {
     setMaj(false)
   }
 
+  // Parseur CSV minimal : gere les guillemets et les virgules a l'interieur
+  // des champs. Suffisant pour des exports simples (Excel, Google Sheets).
+  const parserCSV = (texte: string): Record<string, string>[] => {
+    const lignes = texte.split(/\r?\n/).filter((l) => l.trim().length > 0)
+    if (lignes.length < 2) return []
+
+    const parserLigne = (ligne: string): string[] => {
+      const champs: string[] = []
+      let champActuel = ''
+      let dansGuillemets = false
+      for (let i = 0; i < ligne.length; i++) {
+        const car = ligne[i]
+        if (car === '"') {
+          dansGuillemets = !dansGuillemets
+        } else if (car === ',' && !dansGuillemets) {
+          champs.push(champActuel.trim())
+          champActuel = ''
+        } else {
+          champActuel += car
+        }
+      }
+      champs.push(champActuel.trim())
+      return champs
+    }
+
+    const entetes = parserLigne(lignes[0]).map((e) =>
+      e.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    )
+
+    return lignes.slice(1).map((ligne) => {
+      const valeurs = parserLigne(ligne)
+      const objet: Record<string, string> = {}
+      entetes.forEach((entete, i) => {
+        objet[entete] = valeurs[i] ?? ''
+      })
+      return objet
+    })
+  }
+
+  const importerCibles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fichier = e.target.files?.[0]
+    if (!fichier || !client) return
+
+    setImportCSVEnCours(true)
+    setMessageImportCSV(null)
+
+    try {
+      const texte = await fichier.text()
+      const lignes = parserCSV(texte)
+
+      const contacts = lignes.map((l) => ({
+        nom: l.nom || l.name || '',
+        telephone: l.telephone || l.tel || l.phone || l.numero || '',
+        email: l.email || l.mail || '',
+        entreprise: l.entreprise || l.company || l.societe || l.objectif || '',
+        pays: l.pays || l.country || '',
+      }))
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/cibles/importer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ contacts }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setMessageImportCSV(`❌ ${data.error ?? "Erreur lors de l'import"}`)
+      } else {
+        setMessageImportCSV(
+          `✅ ${data.nombre_ajoute} cible(s) ajoutée(s)` +
+            (data.doublons_ignores > 0 ? ` · ${data.doublons_ignores} doublon(s) ignoré(s)` : '') +
+            (data.sans_nom_ignores > 0 ? ` · ${data.sans_nom_ignores} ligne(s) sans nom ignorée(s)` : '')
+        )
+        await chargerTout(client.id)
+      }
+    } catch {
+      setMessageImportCSV('❌ Impossible de lire ce fichier')
+    }
+
+    setImportCSVEnCours(false)
+    if (inputFichierCSV.current) inputFichierCSV.current.value = ''
+  }
+
   const assignerCible = async (targetId: string, clientUserId: string | null) => {
     await supabase.from('targets').update({ assigne_a: clientUserId }).eq('id', targetId)
     setTargets((prev) =>
@@ -596,6 +708,39 @@ export default function DashboardPage() {
     }
   }
 
+  const marquerCommeLu = async (messageId: string) => {
+    await supabase.from('messages_recus').update({ lu: true }).eq('id', messageId)
+    setMessagesRecus((prev) => prev.map((m) => (m.id === messageId ? { ...m, lu: true } : m)))
+  }
+
+  const repondreMessage = async (messageId: string, targetId: string, canal: 'whatsapp' | 'email') => {
+    const message = reponseTexte[messageId]?.trim()
+    if (!message) return
+
+    setEnvoiReponseEnCours(messageId)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/inbox/repondre', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ target_id: targetId, canal, message }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        alert(data.error ?? "Échec de l'envoi")
+      } else {
+        setReponseTexte((prev) => ({ ...prev, [messageId]: '' }))
+        await marquerCommeLu(messageId)
+      }
+    } catch {
+      alert('Impossible de contacter le serveur')
+    }
+    setEnvoiReponseEnCours(null)
+  }
+
   const deconnexion = async () => {
     await supabase.auth.signOut()
     router.push('/auth')
@@ -625,6 +770,12 @@ export default function DashboardPage() {
     { id: 'cibles', label: t('onglet_cibles'), icone: '📋' },
     { id: 'validation', label: t('onglet_validation'), icone: '🔔' },
     { id: 'equipe', label: t('onglet_equipe'), icone: '👥' },
+    { id: 'marketing', label: 'Marketing', icone: '📣' },
+    {
+      id: 'inbox',
+      label: `Boîte de réception${messagesRecus.filter((m) => !m.lu).length > 0 ? ` (${messagesRecus.filter((m) => !m.lu).length})` : ''}`,
+      icone: '📥',
+    },
     { id: 'stats', label: t('onglet_stats'), icone: '📊' },
   ]
 
@@ -1012,6 +1163,27 @@ export default function DashboardPage() {
                 {t('ajouter')}
               </button>
             </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                ref={inputFichierCSV}
+                type="file"
+                accept=".csv"
+                onChange={importerCibles}
+                className="hidden"
+              />
+              <button
+                onClick={() => inputFichierCSV.current?.click()}
+                disabled={importCSVEnCours}
+                className="text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-accent disabled:opacity-50"
+              >
+                {importCSVEnCours ? 'Import en cours...' : '📁 Importer une liste (CSV)'}
+              </button>
+              <span className="text-xs text-slate-500">
+                Colonnes attendues : nom, telephone, email, entreprise, pays
+              </span>
+            </div>
+            {messageImportCSV && <p className="text-sm text-slate-300">{messageImportCSV}</p>}
 
             {targets.length === 0 ? (
               <p className="text-slate-500 text-sm italic">Aucune cible pour le moment.</p>
@@ -1404,6 +1576,148 @@ export default function DashboardPage() {
               )}
             </div>
             {inviteMessage && <p className="text-sm">{inviteMessage}</p>}
+          </section>
+        )}
+
+        {/* ===================== ONGLET MARKETING ===================== */}
+        {ongletActif === 'marketing' && (
+          <section className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Idées de contenu générées automatiquement à partir des diagnostics des prospects — à
+              copier-coller pour vos publications (LinkedIn, blog...). Rien n'est publié
+              automatiquement.
+            </p>
+            {(() => {
+              const tousLesDiagnostics = [...diagnosticsEnAttente, ...diagnosticsValides]
+              const suggestions = tousLesDiagnostics
+                .map((d) => {
+                  const reco = d.recommandations_json as {
+                    contenuMarketing?: { titre: string; accroche_linkedin: string; format_suggere: string }
+                    segment?: { categorie: string }
+                  } | null
+                  const nomCible = Array.isArray(d.targets) ? d.targets[0]?.nom : d.targets?.nom
+                  return reco?.contenuMarketing
+                    ? { id: d.id, nomCible, ...reco.contenuMarketing, categorie: reco.segment?.categorie }
+                    : null
+                })
+                .filter((s): s is NonNullable<typeof s> => s !== null)
+
+              if (suggestions.length === 0) {
+                return (
+                  <p className="text-slate-500 text-sm italic">
+                    Pas encore de suggestion — elles apparaissent dès qu'un prospect répond à un
+                    diagnostic.
+                  </p>
+                )
+              }
+
+              return (
+                <div className="space-y-3">
+                  {suggestions.map((s) => (
+                    <div
+                      key={s.id}
+                      className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-1"
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <p className="font-semibold">{s.titre}</p>
+                        {s.categorie && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-slate-800 text-slate-300">
+                            {s.categorie}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-300 text-sm">{s.accroche_linkedin}</p>
+                      <p className="text-slate-500 text-xs">
+                        Format suggéré : {s.format_suggere}
+                        {s.nomCible ? ` · inspiré par ${s.nomCible}` : ''}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+          </section>
+        )}
+
+        {/* ===================== ONGLET BOITE DE RECEPTION ===================== */}
+        {ongletActif === 'inbox' && (
+          <section className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Réponses des prospects par WhatsApp ou Email. Tu peux répondre directement d'ici.
+            </p>
+            {messagesRecus.length === 0 ? (
+              <p className="text-slate-500 text-sm italic">
+                Aucun message reçu pour le moment.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {messagesRecus.map((m) => {
+                  const nomCible = Array.isArray(m.targets) ? m.targets[0]?.nom : m.targets?.nom
+                  return (
+                    <div
+                      key={m.id}
+                      className={`rounded-xl border p-4 space-y-2 ${
+                        m.lu ? 'border-slate-700 bg-slate-900' : 'border-accent bg-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-1 rounded-full bg-slate-800">
+                            {m.canal === 'whatsapp' ? '💬 WhatsApp' : '✉️ Email'}
+                          </span>
+                          <span className="font-semibold text-sm">
+                            {nomCible ?? m.expediteur ?? 'Inconnu'}
+                          </span>
+                          {!m.lu && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-slate-950 font-semibold">
+                              Nouveau
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-slate-500 text-xs">
+                          {new Date(m.created_at).toLocaleString('fr-FR')}
+                        </span>
+                      </div>
+                      <p className="text-slate-300 text-sm whitespace-pre-wrap">{m.contenu}</p>
+
+                      {!m.lu && (
+                        <button
+                          onClick={() => marquerCommeLu(m.id)}
+                          className="text-xs text-slate-400 underline"
+                        >
+                          Marquer comme lu
+                        </button>
+                      )}
+
+                      {m.target_id && (
+                        <div className="flex gap-2 pt-1">
+                          <input
+                            value={reponseTexte[m.id] ?? ''}
+                            onChange={(e) =>
+                              setReponseTexte((prev) => ({ ...prev, [m.id]: e.target.value }))
+                            }
+                            onKeyDown={(e) =>
+                              e.key === 'Enter' && repondreMessage(m.id, m.target_id!, m.canal)
+                            }
+                            placeholder="Écrire une réponse..."
+                            className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                          />
+                          <button
+                            onClick={() => repondreMessage(m.id, m.target_id!, m.canal)}
+                            disabled={
+                              envoiReponseEnCours === m.id || !reponseTexte[m.id]?.trim()
+                            }
+                            className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
+                          >
+                            {envoiReponseEnCours === m.id ? '...' : 'Envoyer'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </section>
         )}
 
