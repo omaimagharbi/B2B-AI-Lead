@@ -448,6 +448,7 @@ export default function DashboardPage() {
     setMaj(false)
   }
 
+
   const ajouterCible = async () => {
     if (!client || !nouvelleCible.nom.trim()) return
     setMaj(true)

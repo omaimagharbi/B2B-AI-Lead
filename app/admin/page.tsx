@@ -24,6 +24,17 @@ export default function AdminPage() {
   const [erreur, setErreur] = useState<string | null>(null)
   const [majEnCours, setMajEnCours] = useState<string | null>(null)
 
+  const [nouveauNom, setNouveauNom] = useState('')
+  const [nouvelEmail, setNouvelEmail] = useState('')
+  const [nouveauContact, setNouveauContact] = useState('')
+  const [nouveauVertical, setNouveauVertical] = useState('cabinet-formation')
+  const [creationEnCours, setCreationEnCours] = useState(false)
+  const [resultatCreation, setResultatCreation] = useState<{
+    email: string
+    motDePasseTemporaire: string
+  } | null>(null)
+  const [erreurCreation, setErreurCreation] = useState<string | null>(null)
+
   const charger = async () => {
     setChargement(true)
     const { data: sessionData } = await supabase.auth.getSession()
@@ -96,6 +107,39 @@ export default function AdminPage() {
     setMajEnCours(null)
   }
 
+  const creerCabinet = async () => {
+    if (!nouveauNom.trim() || !nouvelEmail.trim()) return
+    setCreationEnCours(true)
+    setErreurCreation(null)
+    setResultatCreation(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    const res = await fetch('/api/admin/clients/creer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        nom_entreprise: nouveauNom,
+        email: nouvelEmail,
+        nom_complet: nouveauContact,
+        vertical_slug: nouveauVertical,
+      }),
+    })
+    const data = await res.json()
+
+    if (!res.ok) {
+      setErreurCreation(data.error ?? 'Erreur lors de la création')
+    } else {
+      setResultatCreation({ email: data.email, motDePasseTemporaire: data.motDePasseTemporaire })
+      setNouveauNom('')
+      setNouvelEmail('')
+      setNouveauContact('')
+      await charger()
+    }
+    setCreationEnCours(false)
+  }
+
   if (chargement) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
@@ -120,6 +164,53 @@ export default function AdminPage() {
           <a href="/dashboard" className="text-sm text-accent underline">
             ← Voir mon propre dashboard cabinet
           </a>
+        </div>
+
+        <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+          <h2 className="font-semibold">➕ Créer un nouveau cabinet</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <input
+              value={nouveauNom}
+              onChange={(e) => setNouveauNom(e.target.value)}
+              placeholder="Nom du cabinet"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              value={nouvelEmail}
+              onChange={(e) => setNouvelEmail(e.target.value)}
+              placeholder="Email du propriétaire"
+              type="email"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              value={nouveauContact}
+              onChange={(e) => setNouveauContact(e.target.value)}
+              placeholder="Nom du contact (optionnel)"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              value={nouveauVertical}
+              onChange={(e) => setNouveauVertical(e.target.value)}
+              placeholder="cabinet-formation"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+          </div>
+          <button
+            onClick={creerCabinet}
+            disabled={creationEnCours || !nouveauNom.trim() || !nouvelEmail.trim()}
+            className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+          >
+            {creationEnCours ? '...' : 'Créer le cabinet'}
+          </button>
+          {erreurCreation && <p className="text-red-400 text-sm">{erreurCreation}</p>}
+          {resultatCreation && (
+            <p className="text-sm text-accent bg-slate-950 border border-accent/40 rounded-lg p-3">
+              ✅ Cabinet créé — transmets ces identifiants au client (par WhatsApp, en main propre...) :
+              <br />
+              Email : <strong>{resultatCreation.email}</strong> · Mot de passe temporaire :{' '}
+              <strong>{resultatCreation.motDePasseTemporaire}</strong>
+            </p>
+          )}
         </div>
 
         <div className="space-y-3">
