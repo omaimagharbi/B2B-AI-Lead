@@ -11,6 +11,11 @@ type ClientAdmin = {
   plan_tarifaire: string | null
   created_at: string
   packs_vendus: number
+  montant_vendu: number
+  commission_pourcentage: number | null
+  commission_due: number
+  nb_cibles: number
+  nb_diagnostics_attente: number
 }
 
 export default function AdminPage() {
@@ -18,6 +23,17 @@ export default function AdminPage() {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState<string | null>(null)
   const [majEnCours, setMajEnCours] = useState<string | null>(null)
+
+  const [nouveauNom, setNouveauNom] = useState('')
+  const [nouvelEmail, setNouvelEmail] = useState('')
+  const [nouveauContact, setNouveauContact] = useState('')
+  const [nouveauVertical, setNouveauVertical] = useState('cabinet-formation')
+  const [creationEnCours, setCreationEnCours] = useState(false)
+  const [resultatCreation, setResultatCreation] = useState<{
+    email: string
+    motDePasseTemporaire: string
+  } | null>(null)
+  const [erreurCreation, setErreurCreation] = useState<string | null>(null)
 
   const charger = async () => {
     setChargement(true)
@@ -73,6 +89,57 @@ export default function AdminPage() {
     setMajEnCours(null)
   }
 
+  const modifierCommission = async (clientId: string, pourcentage: number) => {
+    setMajEnCours(clientId)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    await fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ client_id: clientId, commission_pourcentage: pourcentage }),
+    })
+
+    await charger()
+    setMajEnCours(null)
+  }
+
+  const creerCabinet = async () => {
+    if (!nouveauNom.trim() || !nouvelEmail.trim()) return
+    setCreationEnCours(true)
+    setErreurCreation(null)
+    setResultatCreation(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    const res = await fetch('/api/admin/clients/creer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        nom_entreprise: nouveauNom,
+        email: nouvelEmail,
+        nom_complet: nouveauContact,
+        vertical_slug: nouveauVertical,
+      }),
+    })
+    const data = await res.json()
+
+    if (!res.ok) {
+      setErreurCreation(data.error ?? 'Erreur lors de la création')
+    } else {
+      setResultatCreation({ email: data.email, motDePasseTemporaire: data.motDePasseTemporaire })
+      setNouveauNom('')
+      setNouvelEmail('')
+      setNouveauContact('')
+      await charger()
+    }
+    setCreationEnCours(false)
+  }
+
   if (chargement) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
@@ -92,41 +159,127 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-white px-6 py-10">
       <div className="max-w-5xl mx-auto space-y-6">
-        <h1 className="text-2xl font-bold">Administration — Cabinets</h1>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h1 className="text-2xl font-bold">🔑 Administration — Cabinets</h1>
+          <a href="/dashboard" className="text-sm text-accent underline">
+            ← Voir mon propre dashboard cabinet
+          </a>
+        </div>
+
+        <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+          <h2 className="font-semibold">➕ Créer un nouveau cabinet</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <input
+              value={nouveauNom}
+              onChange={(e) => setNouveauNom(e.target.value)}
+              placeholder="Nom du cabinet"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              value={nouvelEmail}
+              onChange={(e) => setNouvelEmail(e.target.value)}
+              placeholder="Email du propriétaire"
+              type="email"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              value={nouveauContact}
+              onChange={(e) => setNouveauContact(e.target.value)}
+              placeholder="Nom du contact (optionnel)"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              value={nouveauVertical}
+              onChange={(e) => setNouveauVertical(e.target.value)}
+              placeholder="cabinet-formation"
+              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            />
+          </div>
+          <button
+            onClick={creerCabinet}
+            disabled={creationEnCours || !nouveauNom.trim() || !nouvelEmail.trim()}
+            className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+          >
+            {creationEnCours ? '...' : 'Créer le cabinet'}
+          </button>
+          {erreurCreation && <p className="text-red-400 text-sm">{erreurCreation}</p>}
+          {resultatCreation && (
+            <p className="text-sm text-accent bg-slate-950 border border-accent/40 rounded-lg p-3">
+              ✅ Cabinet créé — transmets ces identifiants au client (par WhatsApp, en main propre...) :
+              <br />
+              Email : <strong>{resultatCreation.email}</strong> · Mot de passe temporaire :{' '}
+              <strong>{resultatCreation.motDePasseTemporaire}</strong>
+            </p>
+          )}
+        </div>
 
         <div className="space-y-3">
           {clients.map((client) => {
             return (
               <div
                 key={client.id}
-                className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-center justify-between flex-wrap gap-3"
+                className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex flex-col gap-3"
               >
-                <div>
-                  <p className="font-semibold">{client.nom_entreprise}</p>
-                  <p className="text-slate-400 text-sm">{client.email}</p>
-                  <p className="text-slate-400 text-sm">
-                    {client.packs_vendus} packs vendus · Statut :{' '}
-                    <span
-                      className={
-                        client.statut_abonnement === 'payant' ? 'text-accent' : 'text-amber-400'
-                      }
-                    >
-                      {client.statut_abonnement}
-                    </span>
-                    {client.plan_tarifaire && ` (${client.plan_tarifaire})`}
-                  </p>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="font-semibold">{client.nom_entreprise || '(sans nom)'}</p>
+                    <p className="text-slate-400 text-sm">{client.email || '—'}</p>
+                  </div>
+                  <button
+                    onClick={() => basculerPayant(client.id, client.statut_abonnement)}
+                    disabled={majEnCours === client.id}
+                    className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 transition disabled:opacity-40 shrink-0"
+                  >
+                    {majEnCours === client.id
+                      ? '...'
+                      : client.statut_abonnement === 'payant'
+                      ? 'Repasser en essai'
+                      : 'Passer en payant'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => basculerPayant(client.id, client.statut_abonnement)}
-                  disabled={majEnCours === client.id}
-                  className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 transition disabled:opacity-40"
-                >
-                  {majEnCours === client.id
-                    ? '...'
-                    : client.statut_abonnement === 'payant'
-                    ? 'Repasser en essai'
-                    : 'Passer en payant'}
-                </button>
+
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span
+                    className={`px-2 py-1 rounded-full ${
+                      client.statut_abonnement === 'payant'
+                        ? 'bg-green-950 text-accent'
+                        : 'bg-amber-950 text-amber-400'
+                    }`}
+                  >
+                    {client.statut_abonnement}
+                    {client.plan_tarifaire ? ` (${client.plan_tarifaire})` : ''}
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-300">
+                    🎯 {client.nb_cibles} cibles
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-300">
+                    🔔 {client.nb_diagnostics_attente} en attente
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-300">
+                    💰 {client.packs_vendus} packs vendus
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-500">
+                    Inscrit le {new Date(client.created_at).toLocaleDateString('fr-FR')}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs pt-1 border-t border-slate-800">
+                  <label className="text-slate-400">Commission :</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    defaultValue={client.commission_pourcentage ?? 0}
+                    onBlur={(e) => modifierCommission(client.id, Number(e.target.value))}
+                    className="w-16 rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                  />
+                  <span className="text-slate-500">%</span>
+                  {(client.commission_pourcentage ?? 0) > 0 && (
+                    <span className="text-accent font-semibold ml-2">
+                      → {client.commission_due} dû (sur {client.montant_vendu} vendu)
+                    </span>
+                  )}
+                </div>
               </div>
             )
           })}

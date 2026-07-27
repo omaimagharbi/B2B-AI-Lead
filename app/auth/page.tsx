@@ -15,6 +15,7 @@ function AuthForm() {
   const [nomEntreprise, setNomEntreprise] = useState('')
   const [email, setEmail] = useState('')
   const [motDePasse, setMotDePasse] = useState('')
+  const [nouveauMotDePasse, setNouveauMotDePasse] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
   const [messageSucces, setMessageSucces] = useState<string | null>(null)
   const [chargement, setChargement] = useState(false)
@@ -26,15 +27,21 @@ function AuthForm() {
 
     try {
       if (mode === 'mot_de_passe_oublie') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/reset`,
+        // Changement direct, sans email (le flux email Supabase n'est pas fiable ici) :
+        // le compte est identifie par son email, le nouveau mot de passe est applique
+        // immediatement.
+        const res = await fetch('/api/auth/reset-password-direct', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, nouveauMotDePasse }),
         })
-        if (error) {
-          setErreur(error.message)
+        const data = await res.json()
+        if (!res.ok) {
+          setErreur(data.error ?? 'Erreur lors du changement de mot de passe')
         } else {
-          setMessageSucces(
-            'Si un compte existe avec cet email, un lien de réinitialisation vient de vous être envoyé.'
-          )
+          setMessageSucces('Mot de passe mis à jour ! Tu peux te connecter.')
+          setNouveauMotDePasse('')
+          setMode('connexion')
         }
         setChargement(false)
         return
@@ -65,7 +72,24 @@ function AuthForm() {
         }
       }
 
-      router.push('/dashboard')
+      // On redirige automatiquement vers /admin si ce compte est administrateur
+      // plateforme (ADMIN_EMAILS), sinon vers le dashboard cabinet normal.
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      let estAdmin = false
+      if (accessToken) {
+        try {
+          const res = await fetch('/api/admin/whoami', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+          const data = await res.json()
+          estAdmin = Boolean(data.estAdmin)
+        } catch {
+          estAdmin = false
+        }
+      }
+
+      router.push(estAdmin ? '/admin' : '/dashboard')
     } catch (err) {
       console.error('Erreur auth:', err)
       setErreur(
@@ -83,14 +107,21 @@ function AuthForm() {
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">
             {mode === 'inscription'
-              ? 'Créez votre compte cabinet'
+              ? 'Créez votre compte cabinet (utilisateur)'
               : mode === 'connexion'
-              ? 'Connexion'
+              ? 'Connexion à votre compte cabinet'
               : 'Mot de passe oublié'}
           </h1>
           <p className="text-slate-400 text-sm">
             Vertical sélectionné : <span className="text-accent">{vertical}</span>
           </p>
+          {mode === 'inscription' && (
+            <p className="text-slate-600 text-xs">
+              Ce compte donne accès à votre tableau de bord (prospection, diagnostics, envois).
+              L'accès administration plateforme est réservé à Braise et n'est pas ouvert à
+              l'inscription.
+            </p>
+          )}
         </div>
 
         {erreur && (
@@ -116,6 +147,7 @@ function AuthForm() {
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && soumettre()}
             placeholder="Email professionnel"
             type="email"
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
@@ -124,7 +156,18 @@ function AuthForm() {
             <input
               value={motDePasse}
               onChange={(e) => setMotDePasse(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && soumettre()}
               placeholder="Mot de passe"
+              type="password"
+              className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
+            />
+          )}
+          {mode === 'mot_de_passe_oublie' && (
+            <input
+              value={nouveauMotDePasse}
+              onChange={(e) => setNouveauMotDePasse(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && soumettre()}
+              placeholder="Nouveau mot de passe"
               type="password"
               className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
             />
@@ -135,6 +178,7 @@ function AuthForm() {
               chargement ||
               !email ||
               (mode !== 'mot_de_passe_oublie' && !motDePasse) ||
+              (mode === 'mot_de_passe_oublie' && nouveauMotDePasse.length < 6) ||
               (mode === 'inscription' && !nomEntreprise)
             }
             className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40 hover:opacity-90 transition"
@@ -145,7 +189,7 @@ function AuthForm() {
               ? 'Créer mon compte'
               : mode === 'connexion'
               ? 'Se connecter'
-              : 'Envoyer le lien de réinitialisation'}
+              : 'Mettre à jour le mot de passe'}
           </button>
         </div>
 

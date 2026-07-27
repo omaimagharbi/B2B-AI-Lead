@@ -1,12 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { PAYS_DISPONIBLES } from '@/lib/pays'
 import { SECTEURS_DISPONIBLES } from '@/lib/secteurs'
 import { professionsDisponibles, PROFILS_PARTICULIER } from '@/lib/professions'
+import { traduire, type Langue } from '@/lib/i18n'
+import { templatesPourVertical } from '@/lib/templates'
 import ValidationItem from './validation-item'
+import DropdownMultiSelect from './dropdown-multiselect'
 
 type Client = {
   id: string
@@ -19,6 +22,7 @@ type Client = {
   profil_particulier: string | null
   message_personnalise: string | null
   logo_url: string | null
+  langue_preferee: Langue
 }
 
 type Target = {
@@ -30,13 +34,59 @@ type Target = {
   email: string | null
   country: string | null
   statut: string
+  segment_categorie?: string | null
+  segment_urgence?: string | null
+  score_chaleur?: number | null
+  nb_relances?: number
+  derniere_relance_at?: string | null
+  created_at?: string
+  assigne_a?: string | null
 }
 
 type DiagnosticEnAttente = {
   id: string
+  token_acces: string
   phrase_brute_prospect: string | null
   json_ia_brouillon: any
+  recommandations_json: any
+  lien_ouvert_at: string | null
   targets: { nom: string } | { nom: string }[] | null
+}
+
+type DiagnosticValide = {
+  id: string
+  token_acces: string
+  created_at: string
+  target_id: string
+  recommandations_json: any
+  targets: { nom: string } | { nom: string }[] | null
+}
+
+type OffreCatalogue = {
+  id: string
+  nom: string
+  description: string | null
+  prix: number | null
+  duree: string | null
+  public_cible: string | null
+}
+
+type MessageRecu = {
+  id: string
+  target_id: string | null
+  canal: 'whatsapp' | 'email'
+  contenu: string
+  expediteur: string | null
+  lu: boolean
+  created_at: string
+  targets: { nom: string } | { nom: string }[] | null
+}
+
+type StatsPerformance = {
+  nbMessagesEnvoyes: number
+  nbReponses: number
+  nbDiagnosticsValides: number
+  nbPacksAcceptes: number
 }
 
 type PackVendu = {
@@ -44,7 +94,10 @@ type PackVendu = {
   pack_propose_nom: string | null
   prix_pack: number | null
   statut_vente: string
+  diagnostics?: { target_id: string } | { target_id: string }[] | null
 }
+
+type Onglet = 'ciblage' | 'cibles' | 'validation' | 'equipe' | 'marketing' | 'inbox' | 'strategie' | 'catalogue' | 'stats'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -55,6 +108,43 @@ export default function DashboardPage() {
   const [professionsSelectionnees, setProfessionsSelectionnees] = useState<Set<string>>(new Set())
   const [targets, setTargets] = useState<Target[]>([])
   const [diagnosticsEnAttente, setDiagnosticsEnAttente] = useState<DiagnosticEnAttente[]>([])
+  const [messagesRecus, setMessagesRecus] = useState<MessageRecu[]>([])
+  const [catalogue, setCatalogue] = useState<OffreCatalogue[]>([])
+  const [nouvelleOffre, setNouvelleOffre] = useState({
+    nom: '',
+    description: '',
+    prix: '',
+    duree: '',
+    public_cible: '',
+  })
+  const [strategieEnCours, setStrategieEnCours] = useState(false)
+  const [strategieResultat, setStrategieResultat] = useState<{
+    recommandationCommerciale: string
+    recommandationMarketing: string | null
+    parCanal: { canal: string; total: number; gagnes: number; taux: number }[]
+    parSegment: { canal: string; total: number; gagnes: number; taux: number }[]
+    parThemeMarketing: { canal: string; total: number }[]
+    historique: {
+      id: string
+      recommandation_commerciale: string | null
+      recommandation_marketing: string | null
+      created_at: string
+    }[]
+  } | null>(null)
+  const [reponseTexte, setReponseTexte] = useState<Record<string, string>>({})
+  const [envoiReponseEnCours, setEnvoiReponseEnCours] = useState<string | null>(null)
+  const [diagnosticsValides, setDiagnosticsValides] = useState<DiagnosticValide[]>([])
+  const [messageLinkedin, setMessageLinkedin] = useState<string | null>(null)
+  const [estAdmin, setEstAdmin] = useState(false)
+  const [monClientUserId, setMonClientUserId] = useState<string | null>(null)
+  const [monRole, setMonRole] = useState<string | null>(null)
+  const [filtreAssignation, setFiltreAssignation] = useState<'toutes' | 'mes-cibles'>('toutes')
+  const [statsPerformance, setStatsPerformance] = useState<StatsPerformance>({
+    nbMessagesEnvoyes: 0,
+    nbReponses: 0,
+    nbDiagnosticsValides: 0,
+    nbPacksAcceptes: 0,
+  })
   const [packsVendus, setPacksVendus] = useState<PackVendu[]>([])
   const [chargement, setChargement] = useState(true)
   const [maj, setMaj] = useState(false)
@@ -73,8 +163,10 @@ export default function DashboardPage() {
   >([])
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteNom, setInviteNom] = useState('')
+  const [inviteRole, setInviteRole] = useState<'membre' | 'directeur_commercial'>('membre')
   const [inviteEnCours, setInviteEnCours] = useState(false)
   const [inviteMessage, setInviteMessage] = useState<string | null>(null)
+  const [ongletActif, setOngletActif] = useState<Onglet>('ciblage')
 
   const [nouvelleCible, setNouvelleCible] = useState({
     nom: '',
@@ -84,6 +176,15 @@ export default function DashboardPage() {
     email: '',
     country: 'TN',
   })
+  const inputFichierCSV = useRef<HTMLInputElement>(null)
+  const [importCSVEnCours, setImportCSVEnCours] = useState(false)
+  const [messageImportCSV, setMessageImportCSV] = useState<string | null>(null)
+
+  const langue: Langue = client?.langue_preferee ?? 'fr'
+  const t = (cle: string) => traduire(langue, cle)
+  // Le proprietaire et le directeur commercial voient/gerent toute l'equipe ;
+  // un simple commercial ("membre") ne voit que son propre suivi.
+  const peutSuperviser = monRole === 'proprietaire' || monRole === 'admin' || monRole === 'directeur_commercial'
 
   const chargerTout = async (clientId: string) => {
     const { data: paysData } = await supabase
@@ -100,22 +201,50 @@ export default function DashboardPage() {
 
     const { data: targetsData } = await supabase
       .from('targets')
-      .select('id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut')
+      .select(
+        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a'
+      )
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
     setTargets(targetsData ?? [])
 
     const { data: diagData } = await supabase
       .from('diagnostics')
-      .select('id, phrase_brute_prospect, json_ia_brouillon, targets(nom)')
+      .select(
+        'id, token_acces, phrase_brute_prospect, json_ia_brouillon, recommandations_json, lien_ouvert_at, targets(nom)'
+      )
       .eq('client_id', clientId)
       .eq('statut_validation', 'en_attente_validation')
       .order('created_at', { ascending: false })
     setDiagnosticsEnAttente((diagData ?? []) as unknown as DiagnosticEnAttente[])
 
+    const { data: diagValidesData } = await supabase
+      .from('diagnostics')
+      .select('id, token_acces, created_at, target_id, recommandations_json, targets(nom)')
+      .eq('client_id', clientId)
+      .eq('statut_validation', 'valide_par_expert')
+      .order('created_at', { ascending: false })
+      .limit(50)
+    setDiagnosticsValides((diagValidesData ?? []) as unknown as DiagnosticValide[])
+
+    const { data: messagesRecusData } = await supabase
+      .from('messages_recus')
+      .select('id, target_id, canal, contenu, expediteur, lu, created_at, targets(nom)')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+    setMessagesRecus((messagesRecusData ?? []) as unknown as MessageRecu[])
+
+    const { data: catalogueData } = await supabase
+      .from('catalogue_offres')
+      .select('id, nom, description, prix, duree, public_cible')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+    setCatalogue((catalogueData ?? []) as OffreCatalogue[])
+
     const { data: packsData } = await supabase
       .from('leads_packs')
-      .select('id, pack_propose_nom, prix_pack, statut_vente, diagnostics!inner(client_id)')
+      .select('id, pack_propose_nom, prix_pack, statut_vente, diagnostics!inner(client_id, target_id)')
       .eq('diagnostics.client_id', clientId)
       .eq('statut_vente', 'accepte')
     setPacksVendus((packsData ?? []) as unknown as PackVendu[])
@@ -125,6 +254,37 @@ export default function DashboardPage() {
       .select('id, nom_complet, role')
       .eq('client_id', clientId)
     setMembresEquipe(membresData ?? [])
+
+    // Statistiques de performance : taux de reponse et de conversion
+    const { count: nbMessagesEnvoyes } = await supabase
+      .from('outreach_campaigns')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+
+    const { count: nbReponses } = await supabase
+      .from('diagnostics')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .not('phrase_brute_prospect', 'is', null)
+
+    const { count: nbDiagnosticsValides } = await supabase
+      .from('diagnostics')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('statut_validation', 'valide_par_expert')
+
+    const { count: nbPacksAcceptes } = await supabase
+      .from('leads_packs')
+      .select('*, diagnostics!inner(client_id)', { count: 'exact', head: true })
+      .eq('diagnostics.client_id', clientId)
+      .eq('statut_vente', 'accepte')
+
+    setStatsPerformance({
+      nbMessagesEnvoyes: nbMessagesEnvoyes ?? 0,
+      nbReponses: nbReponses ?? 0,
+      nbDiagnosticsValides: nbDiagnosticsValides ?? 0,
+      nbPacksAcceptes: nbPacksAcceptes ?? 0,
+    })
   }
 
   useEffect(() => {
@@ -135,9 +295,23 @@ export default function DashboardPage() {
         return
       }
 
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (accessToken) {
+        try {
+          const res = await fetch('/api/admin/whoami', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+          const data = await res.json()
+          setEstAdmin(Boolean(data.estAdmin))
+        } catch {
+          setEstAdmin(false)
+        }
+      }
+
       const { data: clientUser } = await supabase
         .from('client_users')
-        .select('client_id')
+        .select('id, client_id, role')
         .eq('auth_user_id', userData.user.id)
         .single()
 
@@ -145,11 +319,13 @@ export default function DashboardPage() {
         setChargement(false)
         return
       }
+      setMonClientUserId(clientUser.id)
+      setMonRole(clientUser.role ?? 'membre')
 
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -232,9 +408,7 @@ export default function DashboardPage() {
         .eq('client_id', client.id)
         .eq('profession', profession)
     } else {
-      await supabase
-        .from('client_professions')
-        .insert({ client_id: client.id, profession })
+      await supabase.from('client_professions').insert({ client_id: client.id, profession })
     }
 
     const nouvelles = new Set(professionsSelectionnees)
@@ -257,6 +431,12 @@ export default function DashboardPage() {
     await supabase.from('clients').update({ profil_particulier: profil }).eq('id', client.id)
     setClient({ ...client, profil_particulier: profil })
     setMaj(false)
+  }
+
+  const changerLangue = async (nouvelleLangue: Langue) => {
+    if (!client) return
+    setClient({ ...client, langue_preferee: nouvelleLangue })
+    await supabase.from('clients').update({ langue_preferee: nouvelleLangue }).eq('id', client.id)
   }
 
   const lancerRecherche = async () => {
@@ -286,6 +466,27 @@ export default function DashboardPage() {
     setLancementEnCours(false)
   }
 
+  const enregistrerMessage = async (valeurOverride?: string) => {
+    if (!client) return
+    const valeur = valeurOverride ?? messageInput
+    setMaj(true)
+    await supabase
+      .from('clients')
+      .update({ message_personnalise: valeur.trim() || null })
+      .eq('id', client.id)
+    setClient({ ...client, message_personnalise: valeur.trim() || null })
+    setMaj(false)
+  }
+
+  const enregistrerLogo = async () => {
+    if (!client) return
+    setMaj(true)
+    await supabase.from('clients').update({ logo_url: logoInput.trim() || null }).eq('id', client.id)
+    setClient({ ...client, logo_url: logoInput.trim() || null })
+    setMaj(false)
+  }
+
+
   const ajouterCible = async () => {
     if (!client || !nouvelleCible.nom.trim()) return
     setMaj(true)
@@ -313,7 +514,102 @@ export default function DashboardPage() {
     setMaj(false)
   }
 
-  const envoyerDiagnostic = async (targetId: string) => {
+  // Parseur CSV minimal : gere les guillemets et les virgules a l'interieur
+  // des champs. Suffisant pour des exports simples (Excel, Google Sheets).
+  const parserCSV = (texte: string): Record<string, string>[] => {
+    const lignes = texte.split(/\r?\n/).filter((l) => l.trim().length > 0)
+    if (lignes.length < 2) return []
+
+    const parserLigne = (ligne: string): string[] => {
+      const champs: string[] = []
+      let champActuel = ''
+      let dansGuillemets = false
+      for (let i = 0; i < ligne.length; i++) {
+        const car = ligne[i]
+        if (car === '"') {
+          dansGuillemets = !dansGuillemets
+        } else if (car === ',' && !dansGuillemets) {
+          champs.push(champActuel.trim())
+          champActuel = ''
+        } else {
+          champActuel += car
+        }
+      }
+      champs.push(champActuel.trim())
+      return champs
+    }
+
+    const entetes = parserLigne(lignes[0]).map((e) =>
+      e.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    )
+
+    return lignes.slice(1).map((ligne) => {
+      const valeurs = parserLigne(ligne)
+      const objet: Record<string, string> = {}
+      entetes.forEach((entete, i) => {
+        objet[entete] = valeurs[i] ?? ''
+      })
+      return objet
+    })
+  }
+
+  const importerCibles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fichier = e.target.files?.[0]
+    if (!fichier || !client) return
+
+    setImportCSVEnCours(true)
+    setMessageImportCSV(null)
+
+    try {
+      const texte = await fichier.text()
+      const lignes = parserCSV(texte)
+
+      const contacts = lignes.map((l) => ({
+        nom: l.nom || l.name || '',
+        telephone: l.telephone || l.tel || l.phone || l.numero || '',
+        email: l.email || l.mail || '',
+        entreprise: l.entreprise || l.company || l.societe || l.objectif || '',
+        pays: l.pays || l.country || '',
+        canal: l.canal || l.source || '',
+        resultat: l.resultat || l.result || l.statut_historique || '',
+      }))
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/cibles/importer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ contacts }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setMessageImportCSV(`❌ ${data.error ?? "Erreur lors de l'import"}`)
+      } else {
+        setMessageImportCSV(
+          `✅ ${data.nombre_ajoute} cible(s) ajoutée(s)` +
+            (data.doublons_ignores > 0 ? ` · ${data.doublons_ignores} doublon(s) ignoré(s)` : '') +
+            (data.sans_nom_ignores > 0 ? ` · ${data.sans_nom_ignores} ligne(s) sans nom ignorée(s)` : '')
+        )
+        await chargerTout(client.id)
+      }
+    } catch {
+      setMessageImportCSV('❌ Impossible de lire ce fichier')
+    }
+
+    setImportCSVEnCours(false)
+    if (inputFichierCSV.current) inputFichierCSV.current.value = ''
+  }
+
+  const assignerCible = async (targetId: string, clientUserId: string | null) => {
+    await supabase.from('targets').update({ assigne_a: clientUserId }).eq('id', targetId)
+    setTargets((prev) =>
+      prev.map((tg) => (tg.id === targetId ? { ...tg, assigne_a: clientUserId } : tg))
+    )
+  }
+
+  const envoyerVersTarget = async (targetId: string, typeEnvoi: 'diagnostic' | 'message') => {
     if (!client) return
     setEnvoiEnCours(targetId)
 
@@ -321,7 +617,7 @@ export default function DashboardPage() {
       const res = await fetch('/api/outreach/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_id: targetId }),
+        body: JSON.stringify({ target_id: targetId, type_envoi: typeEnvoi }),
       })
       const data = await res.json()
       if (!res.ok) alert(data.error ?? "Erreur lors de l'envoi")
@@ -332,23 +628,30 @@ export default function DashboardPage() {
     setEnvoiEnCours(null)
   }
 
-  const enregistrerMessage = async () => {
-    if (!client) return
-    setMaj(true)
-    await supabase
-      .from('clients')
-      .update({ message_personnalise: messageInput.trim() || null })
-      .eq('id', client.id)
-    setClient({ ...client, message_personnalise: messageInput.trim() || null })
-    setMaj(false)
-  }
+  const envoyerDiagnostic = (targetId: string) => envoyerVersTarget(targetId, 'diagnostic')
+  const envoyerMessage = (targetId: string) => envoyerVersTarget(targetId, 'message')
 
-  const enregistrerLogo = async () => {
+  const preparerLinkedin = async (targetId: string) => {
     if (!client) return
-    setMaj(true)
-    await supabase.from('clients').update({ logo_url: logoInput.trim() || null }).eq('id', client.id)
-    setClient({ ...client, logo_url: logoInput.trim() || null })
-    setMaj(false)
+    setEnvoiEnCours(targetId)
+
+    try {
+      const res = await fetch('/api/outreach/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_id: targetId, type_envoi: 'diagnostic', canal_force: 'linkedin' }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error ?? 'Erreur lors de la préparation du message')
+      } else {
+        setMessageLinkedin(data.message)
+        await chargerTout(client.id)
+      }
+    } catch {
+      alert('Impossible de contacter le serveur')
+    }
+    setEnvoiEnCours(null)
   }
 
   const toggleCibleSelectionnee = (targetId: string) => {
@@ -364,7 +667,7 @@ export default function DashboardPage() {
     setCiblesSelectionnees(toutesDejaSelectionnees ? new Set() : new Set(ciblesEnvoyables))
   }
 
-  const envoyerAuxSelectionnes = async () => {
+  const envoyerAuxSelectionnes = async (typeEnvoi: 'diagnostic' | 'message' = 'diagnostic') => {
     if (!client || ciblesSelectionnees.size === 0) return
     setEnvoiMasseEnCours(true)
 
@@ -373,7 +676,7 @@ export default function DashboardPage() {
         await fetch('/api/outreach/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_id: targetId }),
+          body: JSON.stringify({ target_id: targetId, type_envoi: typeEnvoi }),
         })
       } catch {
         // on continue meme si un envoi echoue, pour ne pas bloquer les autres
@@ -397,22 +700,129 @@ export default function DashboardPage() {
       const res = await fetch('/api/team/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email: inviteEmail, nom_complet: inviteNom }),
+        body: JSON.stringify({ email: inviteEmail, nom_complet: inviteNom, role: inviteRole }),
       })
       const data = await res.json()
 
       if (!res.ok) {
         setInviteMessage(`❌ ${data.error ?? "Erreur lors de l'invitation"}`)
       } else {
-        setInviteMessage(`✅ Invitation envoyée à ${inviteEmail}`)
+        setInviteMessage(
+          `✅ Compte créé pour ${inviteEmail} — mot de passe temporaire : ${data.motDePasseTemporaire} (transmets-le toi-même, il n'y a pas d'email envoyé)`
+        )
         setInviteEmail('')
         setInviteNom('')
+        setInviteRole('membre')
         await chargerTout(client.id)
       }
     } catch {
       setInviteMessage('❌ Impossible de contacter le serveur')
     }
     setInviteEnCours(false)
+  }
+
+  const supprimerMembre = async (clientUserId: string, nom: string | null) => {
+    const confirme = window.confirm(
+      `Retirer ${nom || 'ce membre'} de l'équipe ? Il ne pourra plus se connecter. Ses cibles assignées repasseront à "non assigné".`
+    )
+    if (!confirme || !client) return
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/team/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ client_user_id: clientUserId }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setInviteMessage(`❌ ${data.error ?? 'Erreur lors de la suppression'}`)
+      } else {
+        setInviteMessage(`✅ ${nom || 'Le membre'} a été retiré de l'équipe`)
+        await chargerTout(client.id)
+      }
+    } catch {
+      setInviteMessage('❌ Impossible de contacter le serveur')
+    }
+  }
+
+  const marquerCommeLu = async (messageId: string) => {
+    await supabase.from('messages_recus').update({ lu: true }).eq('id', messageId)
+    setMessagesRecus((prev) => prev.map((m) => (m.id === messageId ? { ...m, lu: true } : m)))
+  }
+
+  const repondreMessage = async (messageId: string, targetId: string, canal: 'whatsapp' | 'email') => {
+    const message = reponseTexte[messageId]?.trim()
+    if (!message) return
+
+    setEnvoiReponseEnCours(messageId)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/inbox/repondre', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ target_id: targetId, canal, message }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        alert(data.error ?? "Échec de l'envoi")
+      } else {
+        setReponseTexte((prev) => ({ ...prev, [messageId]: '' }))
+        await marquerCommeLu(messageId)
+      }
+    } catch {
+      alert('Impossible de contacter le serveur')
+    }
+    setEnvoiReponseEnCours(null)
+  }
+
+  const genererStrategie = async () => {
+    setStrategieEnCours(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/strategie/generer', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (res.ok) setStrategieResultat(data)
+    } catch {
+      // best-effort, pas critique
+    }
+    setStrategieEnCours(false)
+  }
+
+  const ajouterOffre = async () => {
+    if (!client || !nouvelleOffre.nom.trim()) return
+    setMaj(true)
+    const { data } = await supabase
+      .from('catalogue_offres')
+      .insert({
+        client_id: client.id,
+        nom: nouvelleOffre.nom.trim(),
+        description: nouvelleOffre.description.trim() || null,
+        prix: nouvelleOffre.prix ? Number(nouvelleOffre.prix) : null,
+        duree: nouvelleOffre.duree.trim() || null,
+        public_cible: nouvelleOffre.public_cible.trim() || null,
+      })
+      .select('id, nom, description, prix, duree, public_cible')
+      .single()
+    if (data) setCatalogue((prev) => [data as OffreCatalogue, ...prev])
+    setNouvelleOffre({ nom: '', description: '', prix: '', duree: '', public_cible: '' })
+    setMaj(false)
+  }
+
+  const supprimerOffre = async (id: string) => {
+    await supabase.from('catalogue_offres').delete().eq('id', id)
+    setCatalogue((prev) => prev.filter((o) => o.id !== id))
   }
 
   const deconnexion = async () => {
@@ -436,482 +846,1338 @@ export default function DashboardPage() {
     )
   }
 
-  const ciblesContactees = targets.filter((t) => t.statut === 'contacte').length
+  const ciblesContactees = targets.filter((tg) => tg.statut === 'contacte').length
+  const dir = langue === 'ar' ? 'rtl' : 'ltr'
+
+  const ONGLETS: { id: Onglet; label: string; icone: string }[] = [
+    { id: 'ciblage', label: t('onglet_ciblage'), icone: '🎯' },
+    { id: 'cibles', label: t('onglet_cibles'), icone: '📋' },
+    { id: 'validation', label: t('onglet_validation'), icone: '🔔' },
+    { id: 'equipe', label: t('onglet_equipe'), icone: '👥' },
+    { id: 'marketing', label: 'Marketing', icone: '📣' },
+    {
+      id: 'inbox',
+      label: `Boîte de réception${messagesRecus.filter((m) => !m.lu).length > 0 ? ` (${messagesRecus.filter((m) => !m.lu).length})` : ''}`,
+      icone: '📥',
+    },
+    { id: 'strategie', label: '🧭 Stratégie', icone: '🧭' },
+    { id: 'catalogue', label: '📚 Catalogue', icone: '📚' },
+    { id: 'stats', label: t('onglet_stats'), icone: '📊' },
+  ]
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white px-6 py-10">
-      <div className="max-w-5xl mx-auto space-y-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{client.nom_entreprise}</h1>
-            <p className="text-slate-400 text-sm">
-              Statut : <span className="text-accent">{client.statut_abonnement}</span>
+    <main className="min-h-screen bg-slate-950 text-white flex flex-col md:flex-row" dir={dir}>
+      {messageLinkedin && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-lg w-full space-y-3">
+            <h3 className="font-semibold text-lg">🔗 Message prêt pour LinkedIn</h3>
+            <p className="text-slate-400 text-xs">
+              Copie ce texte et colle-le dans un message LinkedIn à ce contact (l'envoi LinkedIn
+              n'est pas automatisé, il se fait à la main).
             </p>
+            <textarea
+              value={messageLinkedin}
+              onChange={(e) => setMessageLinkedin(e.target.value)}
+              className="w-full h-40 rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setMessageLinkedin(null)}
+                className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white"
+              >
+                Fermer
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(messageLinkedin)
+                }}
+                className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm"
+              >
+                📋 Copier
+              </button>
+            </div>
           </div>
+        </div>
+      )}
+      {/* BARRE LATERALE GAUCHE */}
+      <aside className="md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col">
+        <div className="px-5 py-4 border-b border-slate-800">
+          <h1 className="text-lg font-bold leading-tight">{client.nom_entreprise}</h1>
+          <p className="text-slate-400 text-xs mt-1">
+            {t('statut')} : <span className="text-accent">{client.statut_abonnement}</span>
+          </p>
+          {estAdmin && (
+            <a
+              href="/admin"
+              className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-accent/10 text-accent border border-accent/40"
+            >
+              🔑 Vous êtes admin — voir tous les cabinets →
+            </a>
+          )}
+        </div>
+
+        <nav className="flex md:flex-col gap-1 px-3 py-3 overflow-x-auto md:overflow-visible">
+          {ONGLETS.map((onglet) => (
+            <button
+              key={onglet.id}
+              onClick={() => setOngletActif(onglet.id)}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap text-left transition ${
+                ongletActif === onglet.id
+                  ? 'bg-accent/10 text-accent border border-accent/40'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'
+              }`}
+            >
+              {onglet.icone} {onglet.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      {/* CONTENU */}
+      <div className="flex-1 overflow-y-auto">
+        {/* BARRE DU HAUT (langue + deconnexion) */}
+        <div className="flex justify-end items-center gap-3 px-6 py-4 border-b border-slate-800">
+          <select
+            value={client.langue_preferee}
+            onChange={(e) => changerLangue(e.target.value as Langue)}
+            className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+          >
+            <option value="fr">🇫🇷 Français</option>
+            <option value="en">🇬🇧 English</option>
+            <option value="ar">🇹🇳 العربية</option>
+          </select>
           <button onClick={deconnexion} className="text-sm text-slate-400 hover:text-white underline">
-            Se déconnecter
+            {t('deconnexion')}
           </button>
         </div>
 
-        {/* CONFIGURATION */}
-        <section className="space-y-5">
-          <h2 className="text-lg font-semibold">Configuration</h2>
-
-          {estHybride && (
-            <div className="space-y-2">
-              <p className="text-slate-400 text-sm">Mode de ciblage</p>
-              <div className="grid grid-cols-2 gap-3 max-w-md">
-                <button
-                  onClick={() => changerModeCiblage('entreprise')}
-                  disabled={maj}
-                  className={`rounded-xl border p-3 text-sm font-semibold ${
-                    client.mode_ciblage === 'entreprise'
-                      ? 'border-accent bg-slate-900'
-                      : 'border-slate-700 bg-slate-900/50'
-                  }`}
-                >
-                  🏢 Entreprise (ADDIE)
-                </button>
-                <button
-                  onClick={() => changerModeCiblage('particulier')}
-                  disabled={maj}
-                  className={`rounded-xl border p-3 text-sm font-semibold ${
-                    client.mode_ciblage === 'particulier'
-                      ? 'border-accent bg-slate-900'
-                      : 'border-slate-700 bg-slate-900/50'
-                  }`}
-                >
-                  🙋 Particulier (GROW)
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* PAYS - liste triee, cases a cocher scrollables */}
-          <div className="space-y-2">
-            <p className="text-slate-400 text-sm">Pays cibles pour le sourcing</p>
-            <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900/50 p-2 grid grid-cols-2 md:grid-cols-3 gap-1">
-              {PAYS_DISPONIBLES.map((pays) => (
-                <label
-                  key={pays.code}
-                  className="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-slate-800 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={paysSelectionnes.has(pays.code)}
-                    onChange={() => togglePays(pays.code)}
-                    disabled={maj}
-                    className="accent-accent"
-                  />
-                  <span className={paysSelectionnes.has(pays.code) ? 'text-accent' : 'text-slate-300'}>
-                    {pays.nom}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {client.mode_ciblage === 'entreprise' ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
+        {/* ===================== ONGLET CIBLAGE ===================== */}
+        {ongletActif === 'ciblage' && (
+          <>
+            <section className="space-y-5">
+              {estHybride && (
                 <div className="space-y-2">
-                  <p className="text-slate-400 text-sm">Secteur d'activité ciblé</p>
+                  <p className="text-slate-400 text-sm">{t('mode_ciblage')}</p>
+                  <div className="grid grid-cols-2 gap-3 max-w-md">
+                    <button
+                      onClick={() => changerModeCiblage('entreprise')}
+                      disabled={maj}
+                      className={`rounded-xl border p-3 text-sm font-semibold ${
+                        client.mode_ciblage === 'entreprise'
+                          ? 'border-accent bg-slate-900'
+                          : 'border-slate-700 bg-slate-900/50'
+                      }`}
+                    >
+                      🏢 {t('entreprise')}
+                    </button>
+                    <button
+                      onClick={() => changerModeCiblage('particulier')}
+                      disabled={maj}
+                      className={`rounded-xl border p-3 text-sm font-semibold ${
+                        client.mode_ciblage === 'particulier'
+                          ? 'border-accent bg-slate-900'
+                          : 'border-slate-700 bg-slate-900/50'
+                      }`}
+                    >
+                      🙋 {t('particulier')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* PAYS - dropdown multi-select */}
+              <div className="space-y-2 max-w-md">
+                <p className="text-slate-400 text-sm">{t('pays_cibles')}</p>
+                <DropdownMultiSelect
+                  options={PAYS_DISPONIBLES.map((p) => ({ value: p.code, label: p.nom }))}
+                  selectionnes={paysSelectionnes}
+                  onToggle={togglePays}
+                  placeholder="Sélectionner des pays..."
+                  disabled={maj}
+                />
+              </div>
+
+              {client.mode_ciblage === 'entreprise' ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <p className="text-slate-400 text-sm">{t('secteur')}</p>
+                      <select
+                        value={secteurInput}
+                        onChange={(e) => changerSecteur(e.target.value)}
+                        disabled={maj}
+                        className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                      >
+                        <option value="">Indifférent</option>
+                        {SECTEURS_DISPONIBLES.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-slate-400 text-sm">{t('taille')}</p>
+                      <select
+                        value={client.taille_entreprise}
+                        onChange={(e) => changerTailleEntreprise(e.target.value)}
+                        disabled={maj}
+                        className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                      >
+                        <option value="indifferent">Indifférent</option>
+                        <option value="startup">Startup / Jeune pousse</option>
+                        <option value="pme">PME</option>
+                        <option value="grande_entreprise">Grande entreprise / Groupe</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* POSTE - dropdown multi-select */}
+                  <div className="space-y-2 max-w-md">
+                    <p className="text-slate-400 text-sm">{t('poste')}</p>
+                    <DropdownMultiSelect
+                      options={professionsDisponibles(verticalSlug, 'entreprise').map((p) => ({
+                        value: p,
+                        label: p,
+                      }))}
+                      selectionnes={professionsSelectionnees}
+                      onToggle={toggleProfession}
+                      placeholder="Sélectionner des postes..."
+                      disabled={maj}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2 max-w-md">
+                  <p className="text-slate-400 text-sm">{t('profil_particulier')}</p>
                   <select
-                    value={secteurInput}
-                    onChange={(e) => changerSecteur(e.target.value)}
+                    value={client.profil_particulier ?? ''}
+                    onChange={(e) => changerProfilParticulier(e.target.value)}
                     disabled={maj}
                     className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                   >
-                    <option value="">Indifférent</option>
-                    {SECTEURS_DISPONIBLES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    <option value="">Sélectionner un profil</option>
+                    {PROFILS_PARTICULIER.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
                       </option>
                     ))}
                   </select>
                 </div>
+              )}
 
-                <div className="space-y-2">
-                  <p className="text-slate-400 text-sm">Taille d'entreprise ciblée</p>
-                  <select
-                    value={client.taille_entreprise}
-                    onChange={(e) => changerTailleEntreprise(e.target.value)}
-                    disabled={maj}
-                    className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+              {/* CANAL DE SOURCING */}
+              <div className="space-y-2 max-w-md">
+                <p className="text-slate-400 text-sm">{t('source_sourcing')}</p>
+                <select
+                  value={client.canal_sourcing}
+                  onChange={(e) => changerCanalSourcing(e.target.value)}
+                  disabled={maj}
+                  className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                >
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="google_maps">Google Maps / Google Business</option>
+                  <option value="facebook">Facebook Pages</option>
+                  <option value="web">Recherche Web générale</option>
+                  <option value="tous">Toutes les sources combinées</option>
+                </select>
+                <p className="text-slate-600 text-xs">
+                  💡 En Tunisie, beaucoup de PME sont plus présentes sur Google Maps/Facebook que
+                  sur LinkedIn — pense à activer "Toutes les sources" pour maximiser la couverture.
+                </p>
+              </div>
+
+              {/* BOUTON LANCER LA RECHERCHE */}
+              <div className="pt-2">
+                <button
+                  onClick={lancerRecherche}
+                  disabled={lancementEnCours || paysSelectionnes.size === 0}
+                  className="px-6 py-3 rounded-xl bg-accent text-slate-950 font-semibold disabled:opacity-40 hover:opacity-90 transition flex items-center gap-2"
+                >
+                  {lancementEnCours ? '...' : t('lancer_recherche')}
+                  {!lancementEnCours && <span>→</span>}
+                </button>
+                {paysSelectionnes.size === 0 && (
+                  <p className="text-slate-600 text-xs mt-1">
+                    Sélectionne au moins un pays d'abord.
+                  </p>
+                )}
+
+                {lancementResultat && (
+                  <div className="mt-3 space-y-1 text-sm">
+                    {lancementResultat.some(
+                      (r) => r.erreur && String(r.erreur).includes('APIFY_API_TOKEN')
+                    ) ? (
+                      <div className="rounded-lg bg-slate-900 border border-slate-700 p-3">
+                        <p className="text-slate-300">
+                          ⚙️ La recherche automatique n'est pas encore configurée.
+                        </p>
+                        <p className="text-slate-500 text-xs mt-1">
+                          En attendant, tu peux ajouter tes cibles à la main ci-dessous, dans
+                          l'onglet "Cibles".
+                        </p>
+                      </div>
+                    ) : (
+                      lancementResultat.map((r, i) => (
+                        <div key={i} className="rounded-lg bg-slate-900 border border-slate-700 p-2">
+                          {r.erreur ? (
+                            <span className="text-red-400">❌ {String(r.erreur)}</span>
+                          ) : r.info ? (
+                            <span className="text-slate-400">ℹ️ {String(r.info)}</span>
+                          ) : (
+                            <span className="text-accent">
+                              ✅ {String(r.pays)} ({String(r.source ?? '')}) —{' '}
+                              {String(r.nouveaux_ajoutes)} nouveaux prospects ajoutés (
+                              {String(r.profils_trouves)} trouvés au total)
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* PERSONNALISATION DU MESSAGE ET DU LOGO */}
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold">{t('message_personnalise')}</h2>
+              <p className="text-slate-500 text-xs">
+                Utilise <code className="text-accent">{'{nom}'}</code>,{' '}
+                <code className="text-accent">{'{cabinet}'}</code> et{' '}
+                <code className="text-accent">{'{lien}'}</code> dans ton texte — ils seront
+                automatiquement remplacés. Le lien de désinscription est toujours ajouté
+                automatiquement à la fin (obligation légale).
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                {templatesPourVertical(verticalSlug).map((tpl) => (
+                  <button
+                    key={tpl.titre}
+                    onClick={() => {
+                      setMessageInput(tpl.texte)
+                      enregistrerMessage(tpl.texte)
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 hover:border-accent transition"
                   >
-                    <option value="indifferent">Indifférent</option>
-                    <option value="startup">Startup / Jeune pousse</option>
-                    <option value="pme">PME</option>
-                    <option value="grande_entreprise">Grande entreprise / Groupe</option>
-                  </select>
-                </div>
+                    📄 {tpl.titre}
+                  </button>
+                ))}
               </div>
 
-              {/* PROFESSION RECHERCHEE - liste a cocher */}
+              <textarea
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onBlur={() => enregistrerMessage()}
+                placeholder={`Bonjour {nom},\n\n{cabinet} vous invite a decrire votre situation, un expert etudiera votre dossier :\n{lien}`}
+                className="w-full h-28 rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
+              />
+
               <div className="space-y-2">
-                <p className="text-slate-400 text-sm">Poste / profession recherché(e)</p>
-                <div className="flex flex-wrap gap-2">
-                  {professionsDisponibles(verticalSlug, 'entreprise').map((prof) => (
-                    <button
-                      key={prof}
-                      onClick={() => toggleProfession(prof)}
-                      disabled={maj}
-                      className={`px-3 py-2 rounded-lg text-sm border ${
-                        professionsSelectionnees.has(prof)
-                          ? 'border-accent bg-slate-900 text-accent'
-                          : 'border-slate-700 bg-slate-900/50 text-slate-400'
-                      }`}
-                    >
-                      {professionsSelectionnees.has(prof) ? '✓ ' : ''}
-                      {prof}
-                    </button>
-                  ))}
-                </div>
+                <p className="text-slate-400 text-sm">
+                  {t('logo')}{' '}
+                  <span className="text-slate-600">(URL d'image hébergée en ligne)</span>
+                </p>
+                <input
+                  value={logoInput}
+                  onChange={(e) => setLogoInput(e.target.value)}
+                  onBlur={enregistrerLogo}
+                  placeholder="https://ton-site.com/logo.png"
+                  className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                />
+                {logoInput && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={logoInput}
+                    alt="Aperçu logo"
+                    className="h-12 mt-2 rounded bg-white p-1"
+                  />
+                )}
               </div>
-            </>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-slate-400 text-sm">Profil particulier recherché</p>
+            </section>
+          </>
+        )}
+
+        {/* ===================== ONGLET CIBLES ===================== */}
+        {ongletActif === 'cibles' && (
+          <section className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
+              <input
+                value={nouvelleCible.nom}
+                onChange={(e) => setNouvelleCible({ ...nouvelleCible, nom: e.target.value })}
+                placeholder="Nom"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleCible.entreprise_ou_objectif}
+                onChange={(e) =>
+                  setNouvelleCible({ ...nouvelleCible, entreprise_ou_objectif: e.target.value })
+                }
+                placeholder={client.mode_ciblage === 'particulier' ? 'Objectif' : 'Entreprise'}
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleCible.telephone}
+                onChange={(e) => setNouvelleCible({ ...nouvelleCible, telephone: e.target.value })}
+                placeholder="Téléphone"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleCible.email}
+                onChange={(e) => setNouvelleCible({ ...nouvelleCible, email: e.target.value })}
+                placeholder="Email"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
               <select
-                value={client.profil_particulier ?? ''}
-                onChange={(e) => changerProfilParticulier(e.target.value)}
-                disabled={maj}
-                className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm max-w-md"
+                value={nouvelleCible.country}
+                onChange={(e) => setNouvelleCible({ ...nouvelleCible, country: e.target.value })}
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               >
-                <option value="">Sélectionner un profil</option>
-                {PROFILS_PARTICULIER.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
+                {PAYS_DISPONIBLES.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.nom}
                   </option>
                 ))}
               </select>
+              <button
+                onClick={ajouterCible}
+                disabled={maj || !nouvelleCible.nom.trim()}
+                className="rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
+              >
+                {t('ajouter')}
+              </button>
             </div>
-          )}
 
-          {/* CANAL DE SOURCING */}
-          <div className="space-y-2">
-            <p className="text-slate-400 text-sm">Source(s) de sourcing</p>
-            <select
-              value={client.canal_sourcing}
-              onChange={(e) => changerCanalSourcing(e.target.value)}
-              disabled={maj}
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm max-w-md"
-            >
-              <option value="linkedin">LinkedIn</option>
-              <option value="google_maps">Google Maps / Google Business</option>
-              <option value="facebook">Facebook Pages</option>
-              <option value="web">Recherche Web générale</option>
-              <option value="tous">Toutes les sources combinées</option>
-            </select>
-            <p className="text-slate-600 text-xs">
-              💡 En Tunisie, beaucoup de PME sont plus présentes sur Google Maps/Facebook que sur
-              LinkedIn — pense à activer "Toutes les sources" pour maximiser la couverture.
-            </p>
-          </div>
-
-          {/* BOUTON LANCER LA RECHERCHE */}
-          <div className="pt-2">
-            <button
-              onClick={lancerRecherche}
-              disabled={lancementEnCours || paysSelectionnes.size === 0}
-              className="px-6 py-3 rounded-xl bg-accent text-slate-950 font-semibold disabled:opacity-40 hover:opacity-90 transition flex items-center gap-2"
-            >
-              {lancementEnCours ? 'Recherche en cours...' : 'Lancer la recherche maintenant'}
-              {!lancementEnCours && <span>→</span>}
-            </button>
-            {paysSelectionnes.size === 0 && (
-              <p className="text-slate-600 text-xs mt-1">Sélectionne au moins un pays d'abord.</p>
-            )}
-
-            {lancementResultat && (
-              <div className="mt-3 space-y-1 text-sm">
-                {lancementResultat.map((r, i) => (
-                  <div key={i} className="rounded-lg bg-slate-900 border border-slate-700 p-2">
-                    {r.erreur ? (
-                      <span className="text-red-400">❌ {String(r.erreur)}</span>
-                    ) : r.info ? (
-                      <span className="text-slate-400">ℹ️ {String(r.info)}</span>
-                    ) : (
-                      <span className="text-accent">
-                        ✅ {String(r.pays)} — {String(r.nouveaux_ajoutes)} nouveaux prospects
-                        ajoutés ({String(r.profils_trouves)} trouvés au total)
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* PERSONNALISATION DU MESSAGE ET DU LOGO */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Personnalisation des messages envoyés</h2>
-          <p className="text-slate-500 text-xs">
-            Utilise <code className="text-accent">{'{nom}'}</code>,{' '}
-            <code className="text-accent">{'{cabinet}'}</code> et{' '}
-            <code className="text-accent">{'{lien}'}</code> dans ton texte — ils seront
-            automatiquement remplacés. Le lien de désinscription est toujours ajouté
-            automatiquement à la fin (obligation légale), inutile de l'écrire toi-même.
-          </p>
-
-          <div className="space-y-2">
-            <p className="text-slate-400 text-sm">Message d'invitation personnalisé</p>
-            <textarea
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              onBlur={enregistrerMessage}
-              placeholder={`Bonjour {nom},\n\n{cabinet} vous invite a decrire votre situation, un expert etudiera votre dossier :\n{lien}`}
-              className="w-full h-28 rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-slate-400 text-sm">
-              URL de ton logo <span className="text-slate-600">(image hébergée en ligne)</span>
-            </p>
-            <input
-              value={logoInput}
-              onChange={(e) => setLogoInput(e.target.value)}
-              onBlur={enregistrerLogo}
-              placeholder="https://ton-site.com/logo.png"
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
-            />
-            {logoInput && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoInput} alt="Aperçu logo" className="h-12 mt-2 rounded bg-white p-1" />
-            )}
-            <p className="text-slate-600 text-xs">
-              Envoyé en pièce jointe sur WhatsApp, intégré en haut des emails. Héberge ton logo
-              sur ton site, Google Drive (lien public), ou tout autre hébergeur d'images.
-            </p>
-          </div>
-        </section>
-
-        {/* SUIVI */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Suivi en temps réel</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
-              <p className="text-slate-400 text-sm">Cibles contactées</p>
-              <p className="text-3xl font-bold mt-2">{ciblesContactees}</p>
+            <div className="flex items-center gap-3">
+              <input
+                ref={inputFichierCSV}
+                type="file"
+                accept=".csv"
+                onChange={importerCibles}
+                className="hidden"
+              />
+              <button
+                onClick={() => inputFichierCSV.current?.click()}
+                disabled={importCSVEnCours}
+                className="text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-accent disabled:opacity-50"
+              >
+                {importCSVEnCours ? 'Import en cours...' : '📁 Importer une liste (CSV)'}
+              </button>
+              <span className="text-xs text-slate-500">
+                Colonnes : nom, telephone, email, entreprise, pays — et pour l'historique
+                (optionnel) : canal, resultat (gagné/perdu)
+              </span>
             </div>
-            <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
-              <p className="text-slate-400 text-sm">En attente de validation</p>
-              <p className="text-3xl font-bold mt-2">{diagnosticsEnAttente.length}</p>
-            </div>
-            <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
-              <p className="text-slate-400 text-sm">Packs vendus</p>
-              <p className="text-3xl font-bold mt-2">{packsVendus.length}</p>
-            </div>
-          </div>
-        </section>
+            {messageImportCSV && <p className="text-sm text-slate-300">{messageImportCSV}</p>}
 
-        {/* VALIDATION HUMAINE - LE COEUR DU WORKFLOW */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">🔔 Diagnostics en attente de validation</h2>
-          {diagnosticsEnAttente.length === 0 ? (
-            <p className="text-slate-500 text-sm italic">Rien à valider pour le moment.</p>
-          ) : (
-            <div className="space-y-2">
-              {diagnosticsEnAttente.map((d) => (
-                <ValidationItem
-                  key={d.id}
-                  diagnostic={d}
-                  onValide={() => chargerTout(client.id)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* CIBLES */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Cibles</h2>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
-            <input
-              value={nouvelleCible.nom}
-              onChange={(e) => setNouvelleCible({ ...nouvelleCible, nom: e.target.value })}
-              placeholder="Nom"
-              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-            />
-            <input
-              value={nouvelleCible.entreprise_ou_objectif}
-              onChange={(e) =>
-                setNouvelleCible({ ...nouvelleCible, entreprise_ou_objectif: e.target.value })
-              }
-              placeholder={client.mode_ciblage === 'particulier' ? 'Objectif' : 'Entreprise'}
-              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-            />
-            <input
-              value={nouvelleCible.telephone}
-              onChange={(e) => setNouvelleCible({ ...nouvelleCible, telephone: e.target.value })}
-              placeholder="Téléphone"
-              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-            />
-            <input
-              value={nouvelleCible.email}
-              onChange={(e) => setNouvelleCible({ ...nouvelleCible, email: e.target.value })}
-              placeholder="Email"
-              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-            />
-            <select
-              value={nouvelleCible.country}
-              onChange={(e) => setNouvelleCible({ ...nouvelleCible, country: e.target.value })}
-              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-            >
-              {PAYS_DISPONIBLES.map((p) => (
-                <option key={p.code} value={p.code}>
-                  {p.nom}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={ajouterCible}
-              disabled={maj || !nouvelleCible.nom.trim()}
-              className="rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
-            >
-              Ajouter
-            </button>
-          </div>
-
-          {targets.length === 0 ? (
-            <p className="text-slate-500 text-sm italic">Aucune cible pour le moment.</p>
-          ) : (
-            <>
-              <div className="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-lg p-3">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={
-                      targets.filter((t) => t.statut === 'nouveau').length > 0 &&
-                      targets
-                        .filter((t) => t.statut === 'nouveau')
-                        .every((t) => ciblesSelectionnees.has(t.id))
-                    }
-                    onChange={toggleTouteSelection}
-                    className="accent-accent"
-                  />
-                  Tout sélectionner (nouvelles cibles)
-                </label>
-                <button
-                  onClick={envoyerAuxSelectionnes}
-                  disabled={ciblesSelectionnees.size === 0 || envoiMasseEnCours}
-                  className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
-                >
-                  {envoiMasseEnCours
-                    ? 'Envoi en cours...'
-                    : `Envoyer aux sélectionnés (${ciblesSelectionnees.size})`}
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {targets.map((target) => (
-                  <div
-                    key={target.id}
-                    className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-center justify-between flex-wrap gap-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={ciblesSelectionnees.has(target.id)}
-                        onChange={() => toggleCibleSelectionnee(target.id)}
-                        disabled={target.statut !== 'nouveau'}
-                        className="accent-accent"
-                      />
-                      <div>
-                        <p className="font-semibold">
-                          {target.nom}{' '}
-                          {target.entreprise_ou_objectif && (
-                            <span className="text-slate-400 font-normal">
-                              — {target.entreprise_ou_objectif}
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-slate-400 text-sm">
-                          {target.telephone ?? '—'} · {target.email ?? '—'} · {target.country ?? '—'} ·{' '}
-                          <span className="text-accent">{target.statut}</span>
-                        </p>
-                      </div>
-                    </div>
+            {targets.length === 0 ? (
+              <p className="text-slate-500 text-sm italic">Aucune cible pour le moment.</p>
+            ) : (
+              <>
+                {membresEquipe.length > 1 && (
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => envoyerDiagnostic(target.id)}
-                      disabled={target.statut !== 'nouveau' || envoiEnCours === target.id}
-                      className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                      onClick={() => setFiltreAssignation('toutes')}
+                      className={`text-xs px-3 py-1.5 rounded-full border ${
+                        filtreAssignation === 'toutes'
+                          ? 'bg-accent/10 text-accent border-accent/40'
+                          : 'bg-slate-900 text-slate-400 border-slate-700'
+                      }`}
                     >
-                      {envoiEnCours === target.id
-                        ? 'Envoi...'
-                        : target.statut === 'nouveau'
-                        ? 'Envoyer le diagnostic'
-                        : 'Déjà envoyé'}
+                      Toutes les cibles ({targets.length})
+                    </button>
+                    <button
+                      onClick={() => setFiltreAssignation('mes-cibles')}
+                      className={`text-xs px-3 py-1.5 rounded-full border ${
+                        filtreAssignation === 'mes-cibles'
+                          ? 'bg-accent/10 text-accent border-accent/40'
+                          : 'bg-slate-900 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      Mes cibles ({targets.filter((tg) => tg.assigne_a === monClientUserId).length})
                     </button>
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
+                )}
 
-        {/* EQUIPE */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Équipe</h2>
+                <div className="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-lg p-3">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={
+                        targets.filter((tg) => tg.statut === 'nouveau').length > 0 &&
+                        targets
+                          .filter((tg) => tg.statut === 'nouveau')
+                          .every((tg) => ciblesSelectionnees.has(tg.id))
+                      }
+                      onChange={toggleTouteSelection}
+                      className="accent-accent"
+                    />
+                    {t('tout_selectionner')}
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => envoyerAuxSelectionnes('diagnostic')}
+                      disabled={ciblesSelectionnees.size === 0 || envoiMasseEnCours}
+                      className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+                    >
+                      {envoiMasseEnCours
+                        ? '...'
+                        : `📋 Diagnostic (${ciblesSelectionnees.size})`}
+                    </button>
+                    <button
+                      onClick={() => envoyerAuxSelectionnes('message')}
+                      disabled={ciblesSelectionnees.size === 0 || envoiMasseEnCours}
+                      className="text-sm px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 font-semibold disabled:opacity-40"
+                    >
+                      {envoiMasseEnCours
+                        ? '...'
+                        : `✉️ Message pro (${ciblesSelectionnees.size})`}
+                    </button>
+                  </div>
+                </div>
 
-          <div className="space-y-2">
-            {membresEquipe.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
-              >
-                <span>{m.nom_complet || '(nom non renseigné)'}</span>
-                <span className="text-accent text-xs uppercase">{m.role}</span>
-              </div>
-            ))}
-          </div>
+                <div className="space-y-2">
+                  {targets
+                    .filter((tg) => filtreAssignation === 'toutes' || tg.assigne_a === monClientUserId)
+                    .map((target) => {
+                      const estPriseParAutre = Boolean(
+                        target.assigne_a && target.assigne_a !== monClientUserId
+                      )
+                      const nomCollegue = estPriseParAutre
+                        ? membresEquipe.find((m) => m.id === target.assigne_a)?.nom_complet ||
+                          'un(e) collègue'
+                        : null
+                      return (
+                    <div
+                      key={target.id}
+                      className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-center justify-between flex-wrap gap-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={ciblesSelectionnees.has(target.id)}
+                          onChange={() => toggleCibleSelectionnee(target.id)}
+                          disabled={
+                            target.statut !== 'nouveau' || (estPriseParAutre && !peutSuperviser)
+                          }
+                          title={
+                            estPriseParAutre && !peutSuperviser
+                              ? `Déjà pris en charge par ${nomCollegue}`
+                              : undefined
+                          }
+                          className="accent-accent"
+                        />
+                        <div>
+                          <p className="font-semibold">
+                            {target.nom}{' '}
+                            {target.entreprise_ou_objectif && (
+                              <span className="text-slate-400 font-normal">
+                                — {target.entreprise_ou_objectif}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-slate-400 text-sm">
+                            {target.telephone ?? '—'} · {target.email ?? '—'} ·{' '}
+                            {target.country ?? '—'} ·{' '}
+                            <span className="text-accent">{target.statut}</span>
+                          </p>
+                          {estPriseParAutre && (
+                            <p className="text-amber-400 text-xs mt-1">
+                              🔒 Déjà pris en charge par {nomCollegue} — merci de ne pas le contacter
+                              de ton côté.
+                            </p>
+                          )}
+                          {(target.segment_categorie || typeof target.score_chaleur === 'number') && (
+                            <div className="flex gap-2 mt-1 flex-wrap">
+                              {target.segment_categorie && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                                  {target.segment_categorie}
+                                </span>
+                              )}
+                              {target.segment_urgence && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                                  {target.segment_urgence === 'haute'
+                                    ? '🔴 urgent'
+                                    : target.segment_urgence === 'basse'
+                                    ? '🟢 pas pressé'
+                                    : '🟠 moyen'}
+                                </span>
+                              )}
+                              {typeof target.score_chaleur === 'number' && (
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                    target.score_chaleur >= 70
+                                      ? 'bg-green-950 text-green-400'
+                                      : target.score_chaleur >= 40
+                                      ? 'bg-amber-950 text-amber-400'
+                                      : 'bg-red-950 text-red-400'
+                                  }`}
+                                >
+                                  🔥 {target.score_chaleur}/100
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {membresEquipe.length > 1 && (
+                            <select
+                              value={target.assigne_a ?? ''}
+                              onChange={(e) => assignerCible(target.id, e.target.value || null)}
+                              disabled={estPriseParAutre && !peutSuperviser}
+                              className="mt-2 text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1 disabled:opacity-50"
+                            >
+                              <option value="">Non assigné</option>
+                              {(peutSuperviser
+                                ? membresEquipe
+                                : membresEquipe.filter((m) => m.id === monClientUserId)
+                              ).map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  👤 {m.nom_complet || '(sans nom)'}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => envoyerDiagnostic(target.id)}
+                          disabled={
+                            target.statut !== 'nouveau' ||
+                            envoiEnCours === target.id ||
+                            (estPriseParAutre && !peutSuperviser)
+                          }
+                          className="text-sm px-3 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+                        >
+                          {envoiEnCours === target.id
+                            ? 'Envoi...'
+                            : target.statut === 'nouveau'
+                            ? '📋 Diagnostic'
+                            : 'Déjà envoyé'}
+                        </button>
+                        {target.statut === 'nouveau' && (
+                          <button
+                            onClick={() => envoyerMessage(target.id)}
+                            disabled={envoiEnCours === target.id}
+                            className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                          >
+                            {envoiEnCours === target.id ? 'Envoi...' : '✉️ Message pro'}
+                          </button>
+                        )}
+                        {target.statut === 'nouveau' && (
+                          <button
+                            onClick={() => preparerLinkedin(target.id)}
+                            disabled={envoiEnCours === target.id}
+                            className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                          >
+                            {envoiEnCours === target.id ? '...' : '🔗 LinkedIn'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                      )
+                    })}
+                </div>
+              </>
+            )}
+          </section>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
-            <input
-              value={inviteNom}
-              onChange={(e) => setInviteNom(e.target.value)}
-              placeholder="Nom du collègue"
-              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-            />
-            <input
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="Email du collègue"
-              type="email"
-              className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-            />
-            <button
-              onClick={inviterMembre}
-              disabled={inviteEnCours || !inviteEmail.trim()}
-              className="rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
-            >
-              {inviteEnCours ? 'Envoi...' : 'Inviter'}
-            </button>
-          </div>
-          {inviteMessage && <p className="text-sm">{inviteMessage}</p>}
-        </section>
+        {/* ===================== ONGLET VALIDATION ===================== */}
+        {ongletActif === 'validation' && (
+          <section className="space-y-6">
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">🔔 {t('validation_titre')}</h2>
+              {diagnosticsEnAttente.length === 0 ? (
+                <p className="text-slate-500 text-sm italic">Rien à valider pour le moment.</p>
+              ) : (
+                <div className="space-y-2">
+                  {diagnosticsEnAttente.map((d) => (
+                    <ValidationItem key={d.id} diagnostic={d} onValide={() => chargerTout(client.id)} />
+                  ))}
+                </div>
+              )}
+            </div>
 
-        {/* PACKS VENDUS */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Packs vendus</h2>
-          {packsVendus.length === 0 ? (
-            <p className="text-slate-500 text-sm italic">Aucun pack vendu pour le moment.</p>
-          ) : (
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold text-slate-400">📁 Déjà validés</h2>
+              {diagnosticsValides.length === 0 ? (
+                <p className="text-slate-600 text-sm italic">Aucun diagnostic validé pour le moment.</p>
+              ) : (
+                <div className="space-y-2">
+                  {diagnosticsValides.map((d) => {
+                    const nomCible = Array.isArray(d.targets) ? d.targets[0]?.nom : d.targets?.nom
+                    return (
+                      <div
+                        key={d.id}
+                        className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
+                      >
+                        <span>
+                          {nomCible ?? 'Prospect'}{' '}
+                          <span className="text-slate-500 text-xs">
+                            · {new Date(d.created_at).toLocaleDateString('fr-FR')}
+                          </span>
+                        </span>
+                        <a
+                          href={`/api/rapport/${d.token_acces}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-accent underline text-xs"
+                        >
+                          📄 Voir le rapport
+                        </a>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ===================== ONGLET EQUIPE ===================== */}
+        {ongletActif === 'equipe' && (
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold">{t('equipe_titre')}</h2>
+
             <div className="space-y-2">
-              {packsVendus.map((pack) => (
+              {membresEquipe.map((m) => (
                 <div
-                  key={pack.id}
-                  className="rounded-xl border border-accent/40 bg-slate-900 p-4 flex items-center justify-between"
+                  key={m.id}
+                  className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
                 >
-                  <p className="font-semibold">{pack.pack_propose_nom}</p>
-                  <p className="text-accent font-bold">{pack.prix_pack} TND/EUR</p>
+                  <span>{m.nom_complet || '(nom non renseigné)'}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-accent text-xs uppercase">
+                      {m.role === 'proprietaire' || m.role === 'admin'
+                        ? '👑 Propriétaire du cabinet'
+                        : m.role === 'directeur_commercial'
+                        ? '🧭 Directeur commercial'
+                        : '👤 Commercial'}
+                    </span>
+                    {peutSuperviser &&
+                      m.role !== 'proprietaire' &&
+                      m.role !== 'admin' &&
+                      m.id !== monClientUserId && (
+                        <button
+                          onClick={() => supprimerMembre(m.id, m.nom_complet)}
+                          className="text-xs text-red-400 hover:text-red-300 underline"
+                        >
+                          Retirer
+                        </button>
+                      )}
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </section>
+
+            {peutSuperviser && membresEquipe.length > 1 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-slate-300">📊 Suivi de l'équipe</h3>
+                <div className="space-y-2">
+                  {membresEquipe
+                    .filter((m) => m.role !== 'proprietaire' && m.role !== 'admin')
+                    .map((m) => {
+                      const ciblesDuMembre = targets.filter((tg) => tg.assigne_a === m.id)
+                      const ciblesContacteesDuMembre = ciblesDuMembre.filter(
+                        (tg) => tg.statut === 'contacte'
+                      )
+                      const diagnosticsValidesDuMembre = diagnosticsValides.filter(
+                        (d) => targets.find((tg) => tg.id === d.target_id)?.assigne_a === m.id
+                      )
+                      const packsDuMembre = packsVendus.filter((p) => {
+                        const diag = Array.isArray(p.diagnostics) ? p.diagnostics[0] : p.diagnostics
+                        const targetId = diag?.target_id
+                        return targetId && targets.find((tg) => tg.id === targetId)?.assigne_a === m.id
+                      })
+                      const montantDuMembre = packsDuMembre.reduce(
+                        (total, p) => total + (p.prix_pack ?? 0),
+                        0
+                      )
+                      return (
+                        <div
+                          key={m.id}
+                          className="rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm flex items-center justify-between flex-wrap gap-2"
+                        >
+                          <span>
+                            👤 {m.nom_complet || '(sans nom)'}{' '}
+                            {m.role === 'directeur_commercial' && (
+                              <span className="text-accent text-xs">— directeur commercial</span>
+                            )}
+                          </span>
+                          <span className="text-slate-400 text-xs">
+                            {ciblesDuMembre.length} cible(s) · {ciblesContacteesDuMembre.length}{' '}
+                            contactée(s) · {diagnosticsValidesDuMembre.length} diagnostic(s) validé(s) ·{' '}
+                            {packsDuMembre.length} pack(s) vendu(s) ({montantDuMembre} TND/EUR)
+                          </span>
+                        </div>
+                      )
+                    })}
+                  {targets.filter((tg) => !tg.assigne_a).length > 0 && (
+                    <p className="text-slate-500 text-xs italic">
+                      {targets.filter((tg) => !tg.assigne_a).length} cible(s) pas encore assignée(s)
+                      à un commercial.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2">
+              <a href="/admin" className="text-xs text-slate-600 hover:text-slate-400 underline">
+                Vous êtes Braise ? Accès administration plateforme →
+              </a>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
+              <input
+                value={inviteNom}
+                onChange={(e) => setInviteNom(e.target.value)}
+                placeholder="Nom du collègue"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="Email du collègue"
+                type="email"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <button
+                onClick={inviterMembre}
+                disabled={inviteEnCours || !inviteEmail.trim()}
+                className="rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
+              >
+                {inviteEnCours ? '...' : t('inviter')}
+              </button>
+              {(monRole === 'proprietaire' || monRole === 'admin') && (
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as 'membre' | 'directeur_commercial')}
+                  className="md:col-span-3 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                >
+                  <option value="membre">👤 Commercial</option>
+                  <option value="directeur_commercial">🧭 Directeur commercial</option>
+                </select>
+              )}
+            </div>
+            {inviteMessage && <p className="text-sm">{inviteMessage}</p>}
+          </section>
+        )}
+
+        {/* ===================== ONGLET MARKETING ===================== */}
+        {ongletActif === 'marketing' && (
+          <section className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Idées de contenu générées automatiquement à partir des diagnostics des prospects — à
+              copier-coller pour vos publications (LinkedIn, blog...). Rien n'est publié
+              automatiquement.
+            </p>
+            {(() => {
+              const tousLesDiagnostics = [...diagnosticsEnAttente, ...diagnosticsValides]
+              const suggestions = tousLesDiagnostics
+                .map((d) => {
+                  const reco = d.recommandations_json as {
+                    contenuMarketing?: { titre: string; accroche_linkedin: string; format_suggere: string }
+                    segment?: { categorie: string }
+                  } | null
+                  const nomCible = Array.isArray(d.targets) ? d.targets[0]?.nom : d.targets?.nom
+                  return reco?.contenuMarketing
+                    ? { id: d.id, nomCible, ...reco.contenuMarketing, categorie: reco.segment?.categorie }
+                    : null
+                })
+                .filter((s): s is NonNullable<typeof s> => s !== null)
+
+              if (suggestions.length === 0) {
+                return (
+                  <p className="text-slate-500 text-sm italic">
+                    Pas encore de suggestion — elles apparaissent dès qu'un prospect répond à un
+                    diagnostic.
+                  </p>
+                )
+              }
+
+              return (
+                <div className="space-y-3">
+                  {suggestions.map((s) => (
+                    <div
+                      key={s.id}
+                      className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-1"
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <p className="font-semibold">{s.titre}</p>
+                        {s.categorie && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-slate-800 text-slate-300">
+                            {s.categorie}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-300 text-sm">{s.accroche_linkedin}</p>
+                      <p className="text-slate-500 text-xs">
+                        Format suggéré : {s.format_suggere}
+                        {s.nomCible ? ` · inspiré par ${s.nomCible}` : ''}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+          </section>
+        )}
+
+        {/* ===================== ONGLET BOITE DE RECEPTION ===================== */}
+        {ongletActif === 'inbox' && (
+          <section className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Réponses des prospects par WhatsApp ou Email. Tu peux répondre directement d'ici.
+            </p>
+            {messagesRecus.length === 0 ? (
+              <p className="text-slate-500 text-sm italic">
+                Aucun message reçu pour le moment.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {messagesRecus.map((m) => {
+                  const nomCible = Array.isArray(m.targets) ? m.targets[0]?.nom : m.targets?.nom
+                  return (
+                    <div
+                      key={m.id}
+                      className={`rounded-xl border p-4 space-y-2 ${
+                        m.lu ? 'border-slate-700 bg-slate-900' : 'border-accent bg-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-1 rounded-full bg-slate-800">
+                            {m.canal === 'whatsapp' ? '💬 WhatsApp' : '✉️ Email'}
+                          </span>
+                          <span className="font-semibold text-sm">
+                            {nomCible ?? m.expediteur ?? 'Inconnu'}
+                          </span>
+                          {!m.lu && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-slate-950 font-semibold">
+                              Nouveau
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-slate-500 text-xs">
+                          {new Date(m.created_at).toLocaleString('fr-FR')}
+                        </span>
+                      </div>
+                      <p className="text-slate-300 text-sm whitespace-pre-wrap">{m.contenu}</p>
+
+                      {!m.lu && (
+                        <button
+                          onClick={() => marquerCommeLu(m.id)}
+                          className="text-xs text-slate-400 underline"
+                        >
+                          Marquer comme lu
+                        </button>
+                      )}
+
+                      {m.target_id && (
+                        <div className="flex gap-2 pt-1">
+                          <input
+                            value={reponseTexte[m.id] ?? ''}
+                            onChange={(e) =>
+                              setReponseTexte((prev) => ({ ...prev, [m.id]: e.target.value }))
+                            }
+                            onKeyDown={(e) =>
+                              e.key === 'Enter' && repondreMessage(m.id, m.target_id!, m.canal)
+                            }
+                            placeholder="Écrire une réponse..."
+                            className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                          />
+                          <button
+                            onClick={() => repondreMessage(m.id, m.target_id!, m.canal)}
+                            disabled={
+                              envoiReponseEnCours === m.id || !reponseTexte[m.id]?.trim()
+                            }
+                            className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
+                          >
+                            {envoiReponseEnCours === m.id ? '...' : 'Envoyer'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ===================== ONGLET STRATEGIE ===================== */}
+        {ongletActif === 'strategie' && (
+          <section className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Analyse tes propres chiffres (canal, segments) pour te dire où concentrer tes
+              efforts. Nécessite au moins quelques dizaines de cibles avec un résultat — importe
+              d'anciens clients (colonne "resultat" dans le CSV) si tu n'as pas encore assez
+              d'activité récente.
+            </p>
+            <button
+              onClick={genererStrategie}
+              disabled={strategieEnCours}
+              className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-50"
+            >
+              {strategieEnCours ? 'Analyse en cours...' : '🧭 Générer ma stratégie'}
+            </button>
+
+            {strategieResultat && (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-accent/40 bg-slate-900 p-4 space-y-2">
+                  <p className="text-xs text-accent font-semibold uppercase">📈 Commerciale</p>
+                  <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                    {strategieResultat.recommandationCommerciale}
+                  </p>
+                </div>
+
+                {strategieResultat.recommandationMarketing && (
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
+                    <p className="text-xs text-slate-400 font-semibold uppercase">📣 Marketing</p>
+                    <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                      {strategieResultat.recommandationMarketing}
+                    </p>
+                  </div>
+                )}
+
+                {strategieResultat.parCanal.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-slate-300">
+                      Taux de conversion par canal
+                    </h3>
+                    {strategieResultat.parCanal.map((a) => (
+                      <div
+                        key={a.canal}
+                        className="flex items-center justify-between text-sm bg-slate-900 border border-slate-700 rounded-lg p-2"
+                      >
+                        <span>{a.canal}</span>
+                        <span className="text-slate-400">
+                          {a.gagnes}/{a.total} · {a.taux}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {strategieResultat.parSegment.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-slate-300">
+                      Taux de conversion par segment
+                    </h3>
+                    {strategieResultat.parSegment.map((a) => (
+                      <div
+                        key={a.canal}
+                        className="flex items-center justify-between text-sm bg-slate-900 border border-slate-700 rounded-lg p-2"
+                      >
+                        <span>{a.canal}</span>
+                        <span className="text-slate-400">
+                          {a.gagnes}/{a.total} · {a.taux}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {strategieResultat.historique.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-800">
+                    <h3 className="text-sm font-semibold text-slate-300">🕓 Historique</h3>
+                    {strategieResultat.historique.map((h) => (
+                      <details key={h.id} className="bg-slate-900 border border-slate-700 rounded-lg p-2">
+                        <summary className="text-xs text-slate-400 cursor-pointer">
+                          {new Date(h.created_at).toLocaleString('fr-FR')}
+                        </summary>
+                        <div className="mt-2 space-y-1 text-sm">
+                          {h.recommandation_commerciale && (
+                            <p>
+                              <span className="text-accent">Commercial :</span>{' '}
+                              {h.recommandation_commerciale}
+                            </p>
+                          )}
+                          {h.recommandation_marketing && (
+                            <p>
+                              <span className="text-slate-400">Marketing :</span>{' '}
+                              {h.recommandation_marketing}
+                            </p>
+                          )}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ===================== ONGLET CATALOGUE ===================== */}
+        {ongletActif === 'catalogue' && (
+          <section className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Tes vraies formations/services. Tant que le catalogue est vide, l'IA continue de
+              proposer des packs génériques dans les diagnostics. Dès qu'il y a des offres ici,
+              elle pioche dedans en priorité.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
+              <input
+                value={nouvelleOffre.nom}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, nom: e.target.value })}
+                placeholder="Nom de la formation/service"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleOffre.prix}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, prix: e.target.value })}
+                placeholder="Prix (ex: 450)"
+                type="number"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleOffre.duree}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, duree: e.target.value })}
+                placeholder="Durée (ex: 3 jours)"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleOffre.public_cible}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, public_cible: e.target.value })}
+                placeholder="Public visé (optionnel)"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <textarea
+                value={nouvelleOffre.description}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, description: e.target.value })}
+                placeholder="Description courte"
+                className="md:col-span-2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
+              />
+              <button
+                onClick={ajouterOffre}
+                disabled={maj || !nouvelleOffre.nom.trim()}
+                className="md:col-span-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm py-2 disabled:opacity-40"
+              >
+                {t('ajouter')}
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {catalogue.length === 0 ? (
+                <p className="text-slate-500 text-sm italic">
+                  Aucune offre pour le moment — l'IA invente encore des packs génériques.
+                </p>
+              ) : (
+                catalogue.map((o) => (
+                  <div
+                    key={o.id}
+                    className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-start justify-between gap-3"
+                  >
+                    <div>
+                      <p className="font-semibold">
+                        {o.nom}
+                        {o.prix && <span className="text-accent"> — {o.prix}</span>}
+                        {o.duree && <span className="text-slate-400 text-sm"> · {o.duree}</span>}
+                      </p>
+                      {o.description && (
+                        <p className="text-slate-400 text-sm mt-1">{o.description}</p>
+                      )}
+                      {o.public_cible && (
+                        <p className="text-slate-500 text-xs mt-1">Public : {o.public_cible}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => supprimerOffre(o.id)}
+                      className="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap"
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ===================== ONGLET STATISTIQUES ===================== */}
+        {ongletActif === 'stats' && (
+          <>
+            <section className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                  <p className="text-slate-400 text-sm">{t('cibles_contactees')}</p>
+                  <p className="text-3xl font-bold mt-2">{ciblesContactees}</p>
+                </div>
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                  <p className="text-slate-400 text-sm">{t('en_attente_validation')}</p>
+                  <p className="text-3xl font-bold mt-2">{diagnosticsEnAttente.length}</p>
+                </div>
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                  <p className="text-slate-400 text-sm">{t('packs_vendus')}</p>
+                  <p className="text-3xl font-bold mt-2">{packsVendus.length}</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold">📈 Taux de performance</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                  <p className="text-slate-400 text-sm">Taux de réponse</p>
+                  <p className="text-3xl font-bold mt-2">
+                    {statsPerformance.nbMessagesEnvoyes > 0
+                      ? Math.round(
+                          (statsPerformance.nbReponses / statsPerformance.nbMessagesEnvoyes) * 100
+                        )
+                      : 0}
+                    %
+                  </p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {statsPerformance.nbReponses} réponses sur {statsPerformance.nbMessagesEnvoyes}{' '}
+                    messages envoyés
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                  <p className="text-slate-400 text-sm">Taux de conversion</p>
+                  <p className="text-3xl font-bold mt-2">
+                    {statsPerformance.nbDiagnosticsValides > 0
+                      ? Math.round(
+                          (statsPerformance.nbPacksAcceptes /
+                            statsPerformance.nbDiagnosticsValides) *
+                            100
+                        )
+                      : 0}
+                    %
+                  </p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {statsPerformance.nbPacksAcceptes} packs acceptés sur{' '}
+                    {statsPerformance.nbDiagnosticsValides} diagnostics validés
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {(() => {
+              const segments = new Map<string, { total: number; contactes: number }>()
+              for (const tg of targets) {
+                const key = tg.segment_categorie ?? 'non segmenté'
+                const entry = segments.get(key) ?? { total: 0, contactes: 0 }
+                entry.total++
+                if (tg.statut === 'contacte') entry.contactes++
+                segments.set(key, entry)
+              }
+              const lignes = Array.from(segments.entries())
+              if (lignes.length === 0) return null
+              return (
+                <section className="space-y-3">
+                  <h2 className="text-lg font-semibold">🧩 Répartition par segment</h2>
+                  <div className="space-y-2">
+                    {lignes.map(([categorie, stats]) => (
+                      <div
+                        key={categorie}
+                        className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
+                      >
+                        <span className="capitalize">{categorie}</span>
+                        <span className="text-slate-400">
+                          {stats.contactes}/{stats.total} contactées
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )
+            })()}
+
+            {(() => {
+              const MS_PAR_JOUR = 1000 * 60 * 60 * 24
+              const chauds = targets.filter((tg) => {
+                if ((tg.score_chaleur ?? 0) < 70) return false
+                if (tg.statut !== 'contacte') return false
+                const derniereActivite = tg.derniere_relance_at ?? tg.created_at
+                if (!derniereActivite) return false
+                const jours = (Date.now() - new Date(derniereActivite).getTime()) / MS_PAR_JOUR
+                return jours >= 3
+              })
+              if (chauds.length === 0) return null
+              return (
+                <section className="space-y-3">
+                  <h2 className="text-lg font-semibold text-amber-400">
+                    ⚠️ {chauds.length} prospect{chauds.length > 1 ? 's' : ''} chaud
+                    {chauds.length > 1 ? 's' : ''} sans relance récente
+                  </h2>
+                  <div className="space-y-2">
+                    {chauds.map((tg) => (
+                      <div
+                        key={tg.id}
+                        className="flex items-center justify-between rounded-lg bg-amber-950/20 border border-amber-900 px-3 py-2 text-sm"
+                      >
+                        <span>{tg.nom}</span>
+                        <span className="text-amber-400 font-semibold">
+                          🔥 {tg.score_chaleur}/100
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )
+            })()}
+
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold">📤 Export</h2>
+              <button
+                onClick={() => {
+                  const entetes = ['nom', 'entreprise', 'telephone', 'email', 'pays', 'statut', 'segment', 'urgence', 'score']
+                  const lignes = targets.map((tg) =>
+                    [
+                      tg.nom,
+                      tg.entreprise_ou_objectif ?? '',
+                      tg.telephone ?? '',
+                      tg.email ?? '',
+                      tg.country ?? '',
+                      tg.statut,
+                      tg.segment_categorie ?? '',
+                      tg.segment_urgence ?? '',
+                      String(tg.score_chaleur ?? ''),
+                    ]
+                      .map((valeur) => `"${String(valeur).replace(/"/g, '""')}"`)
+                      .join(',')
+                  )
+                  const csv = [entetes.join(','), ...lignes].join('\n')
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                  const url = URL.createObjectURL(blob)
+                  const lien = document.createElement('a')
+                  lien.href = url
+                  lien.download = `cibles-${new Date().toISOString().slice(0, 10)}.csv`
+                  lien.click()
+                  URL.revokeObjectURL(url)
+                }}
+                className="text-sm px-4 py-2 rounded-lg bg-slate-800 border border-slate-600"
+              >
+                📥 Exporter mes cibles en CSV
+              </button>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold">{t('packs_vendus')} — détail</h2>
+              {packsVendus.length === 0 ? (
+                <p className="text-slate-500 text-sm italic">Aucun pack vendu pour le moment.</p>
+              ) : (
+                <div className="space-y-2">
+                  {packsVendus.map((pack) => (
+                    <div
+                      key={pack.id}
+                      className="rounded-xl border border-accent/40 bg-slate-900 p-4 flex items-center justify-between"
+                    >
+                      <p className="font-semibold">{pack.pack_propose_nom}</p>
+                      <p className="text-accent font-bold">{pack.prix_pack} TND/EUR</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+        </div>
       </div>
     </main>
   )
