@@ -62,6 +62,15 @@ type DiagnosticValide = {
   targets: { nom: string } | { nom: string }[] | null
 }
 
+type OffreCatalogue = {
+  id: string
+  nom: string
+  description: string | null
+  prix: number | null
+  duree: string | null
+  public_cible: string | null
+}
+
 type MessageRecu = {
   id: string
   target_id: string | null
@@ -88,7 +97,7 @@ type PackVendu = {
   diagnostics?: { target_id: string } | { target_id: string }[] | null
 }
 
-type Onglet = 'ciblage' | 'cibles' | 'validation' | 'equipe' | 'marketing' | 'inbox' | 'stats'
+type Onglet = 'ciblage' | 'cibles' | 'validation' | 'equipe' | 'marketing' | 'inbox' | 'strategie' | 'catalogue' | 'stats'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -100,6 +109,28 @@ export default function DashboardPage() {
   const [targets, setTargets] = useState<Target[]>([])
   const [diagnosticsEnAttente, setDiagnosticsEnAttente] = useState<DiagnosticEnAttente[]>([])
   const [messagesRecus, setMessagesRecus] = useState<MessageRecu[]>([])
+  const [catalogue, setCatalogue] = useState<OffreCatalogue[]>([])
+  const [nouvelleOffre, setNouvelleOffre] = useState({
+    nom: '',
+    description: '',
+    prix: '',
+    duree: '',
+    public_cible: '',
+  })
+  const [strategieEnCours, setStrategieEnCours] = useState(false)
+  const [strategieResultat, setStrategieResultat] = useState<{
+    recommandationCommerciale: string
+    recommandationMarketing: string | null
+    parCanal: { canal: string; total: number; gagnes: number; taux: number }[]
+    parSegment: { canal: string; total: number; gagnes: number; taux: number }[]
+    parThemeMarketing: { canal: string; total: number }[]
+    historique: {
+      id: string
+      recommandation_commerciale: string | null
+      recommandation_marketing: string | null
+      created_at: string
+    }[]
+  } | null>(null)
   const [reponseTexte, setReponseTexte] = useState<Record<string, string>>({})
   const [envoiReponseEnCours, setEnvoiReponseEnCours] = useState<string | null>(null)
   const [diagnosticsValides, setDiagnosticsValides] = useState<DiagnosticValide[]>([])
@@ -203,6 +234,13 @@ export default function DashboardPage() {
       .order('created_at', { ascending: false })
       .limit(100)
     setMessagesRecus((messagesRecusData ?? []) as unknown as MessageRecu[])
+
+    const { data: catalogueData } = await supabase
+      .from('catalogue_offres')
+      .select('id, nom, description, prix, duree, public_cible')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+    setCatalogue((catalogueData ?? []) as OffreCatalogue[])
 
     const { data: packsData } = await supabase
       .from('leads_packs')
@@ -532,6 +570,8 @@ export default function DashboardPage() {
         email: l.email || l.mail || '',
         entreprise: l.entreprise || l.company || l.societe || l.objectif || '',
         pays: l.pays || l.country || '',
+        canal: l.canal || l.source || '',
+        resultat: l.resultat || l.result || l.statut_historique || '',
       }))
 
       const { data: sessionData } = await supabase.auth.getSession()
@@ -742,6 +782,49 @@ export default function DashboardPage() {
     setEnvoiReponseEnCours(null)
   }
 
+  const genererStrategie = async () => {
+    setStrategieEnCours(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/strategie/generer', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (res.ok) setStrategieResultat(data)
+    } catch {
+      // best-effort, pas critique
+    }
+    setStrategieEnCours(false)
+  }
+
+  const ajouterOffre = async () => {
+    if (!client || !nouvelleOffre.nom.trim()) return
+    setMaj(true)
+    const { data } = await supabase
+      .from('catalogue_offres')
+      .insert({
+        client_id: client.id,
+        nom: nouvelleOffre.nom.trim(),
+        description: nouvelleOffre.description.trim() || null,
+        prix: nouvelleOffre.prix ? Number(nouvelleOffre.prix) : null,
+        duree: nouvelleOffre.duree.trim() || null,
+        public_cible: nouvelleOffre.public_cible.trim() || null,
+      })
+      .select('id, nom, description, prix, duree, public_cible')
+      .single()
+    if (data) setCatalogue((prev) => [data as OffreCatalogue, ...prev])
+    setNouvelleOffre({ nom: '', description: '', prix: '', duree: '', public_cible: '' })
+    setMaj(false)
+  }
+
+  const supprimerOffre = async (id: string) => {
+    await supabase.from('catalogue_offres').delete().eq('id', id)
+    setCatalogue((prev) => prev.filter((o) => o.id !== id))
+  }
+
   const deconnexion = async () => {
     await supabase.auth.signOut()
     router.push('/auth')
@@ -777,6 +860,8 @@ export default function DashboardPage() {
       label: `Boîte de réception${messagesRecus.filter((m) => !m.lu).length > 0 ? ` (${messagesRecus.filter((m) => !m.lu).length})` : ''}`,
       icone: '📥',
     },
+    { id: 'strategie', label: '🧭 Stratégie', icone: '🧭' },
+    { id: 'catalogue', label: '📚 Catalogue', icone: '📚' },
     { id: 'stats', label: t('onglet_stats'), icone: '📊' },
   ]
 
@@ -1181,7 +1266,8 @@ export default function DashboardPage() {
                 {importCSVEnCours ? 'Import en cours...' : '📁 Importer une liste (CSV)'}
               </button>
               <span className="text-xs text-slate-500">
-                Colonnes attendues : nom, telephone, email, entreprise, pays
+                Colonnes : nom, telephone, email, entreprise, pays — et pour l'historique
+                (optionnel) : canal, resultat (gagné/perdu)
               </span>
             </div>
             {messageImportCSV && <p className="text-sm text-slate-300">{messageImportCSV}</p>}
@@ -1719,6 +1805,197 @@ export default function DashboardPage() {
                 })}
               </div>
             )}
+          </section>
+        )}
+
+        {/* ===================== ONGLET STRATEGIE ===================== */}
+        {ongletActif === 'strategie' && (
+          <section className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Analyse tes propres chiffres (canal, segments) pour te dire où concentrer tes
+              efforts. Nécessite au moins quelques dizaines de cibles avec un résultat — importe
+              d'anciens clients (colonne "resultat" dans le CSV) si tu n'as pas encore assez
+              d'activité récente.
+            </p>
+            <button
+              onClick={genererStrategie}
+              disabled={strategieEnCours}
+              className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-50"
+            >
+              {strategieEnCours ? 'Analyse en cours...' : '🧭 Générer ma stratégie'}
+            </button>
+
+            {strategieResultat && (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-accent/40 bg-slate-900 p-4 space-y-2">
+                  <p className="text-xs text-accent font-semibold uppercase">📈 Commerciale</p>
+                  <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                    {strategieResultat.recommandationCommerciale}
+                  </p>
+                </div>
+
+                {strategieResultat.recommandationMarketing && (
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
+                    <p className="text-xs text-slate-400 font-semibold uppercase">📣 Marketing</p>
+                    <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                      {strategieResultat.recommandationMarketing}
+                    </p>
+                  </div>
+                )}
+
+                {strategieResultat.parCanal.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-slate-300">
+                      Taux de conversion par canal
+                    </h3>
+                    {strategieResultat.parCanal.map((a) => (
+                      <div
+                        key={a.canal}
+                        className="flex items-center justify-between text-sm bg-slate-900 border border-slate-700 rounded-lg p-2"
+                      >
+                        <span>{a.canal}</span>
+                        <span className="text-slate-400">
+                          {a.gagnes}/{a.total} · {a.taux}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {strategieResultat.parSegment.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-slate-300">
+                      Taux de conversion par segment
+                    </h3>
+                    {strategieResultat.parSegment.map((a) => (
+                      <div
+                        key={a.canal}
+                        className="flex items-center justify-between text-sm bg-slate-900 border border-slate-700 rounded-lg p-2"
+                      >
+                        <span>{a.canal}</span>
+                        <span className="text-slate-400">
+                          {a.gagnes}/{a.total} · {a.taux}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {strategieResultat.historique.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-800">
+                    <h3 className="text-sm font-semibold text-slate-300">🕓 Historique</h3>
+                    {strategieResultat.historique.map((h) => (
+                      <details key={h.id} className="bg-slate-900 border border-slate-700 rounded-lg p-2">
+                        <summary className="text-xs text-slate-400 cursor-pointer">
+                          {new Date(h.created_at).toLocaleString('fr-FR')}
+                        </summary>
+                        <div className="mt-2 space-y-1 text-sm">
+                          {h.recommandation_commerciale && (
+                            <p>
+                              <span className="text-accent">Commercial :</span>{' '}
+                              {h.recommandation_commerciale}
+                            </p>
+                          )}
+                          {h.recommandation_marketing && (
+                            <p>
+                              <span className="text-slate-400">Marketing :</span>{' '}
+                              {h.recommandation_marketing}
+                            </p>
+                          )}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ===================== ONGLET CATALOGUE ===================== */}
+        {ongletActif === 'catalogue' && (
+          <section className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Tes vraies formations/services. Tant que le catalogue est vide, l'IA continue de
+              proposer des packs génériques dans les diagnostics. Dès qu'il y a des offres ici,
+              elle pioche dedans en priorité.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
+              <input
+                value={nouvelleOffre.nom}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, nom: e.target.value })}
+                placeholder="Nom de la formation/service"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleOffre.prix}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, prix: e.target.value })}
+                placeholder="Prix (ex: 450)"
+                type="number"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleOffre.duree}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, duree: e.target.value })}
+                placeholder="Durée (ex: 3 jours)"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleOffre.public_cible}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, public_cible: e.target.value })}
+                placeholder="Public visé (optionnel)"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <textarea
+                value={nouvelleOffre.description}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, description: e.target.value })}
+                placeholder="Description courte"
+                className="md:col-span-2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
+              />
+              <button
+                onClick={ajouterOffre}
+                disabled={maj || !nouvelleOffre.nom.trim()}
+                className="md:col-span-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm py-2 disabled:opacity-40"
+              >
+                {t('ajouter')}
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {catalogue.length === 0 ? (
+                <p className="text-slate-500 text-sm italic">
+                  Aucune offre pour le moment — l'IA invente encore des packs génériques.
+                </p>
+              ) : (
+                catalogue.map((o) => (
+                  <div
+                    key={o.id}
+                    className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-start justify-between gap-3"
+                  >
+                    <div>
+                      <p className="font-semibold">
+                        {o.nom}
+                        {o.prix && <span className="text-accent"> — {o.prix}</span>}
+                        {o.duree && <span className="text-slate-400 text-sm"> · {o.duree}</span>}
+                      </p>
+                      {o.description && (
+                        <p className="text-slate-400 text-sm mt-1">{o.description}</p>
+                      )}
+                      {o.public_cible && (
+                        <p className="text-slate-500 text-xs mt-1">Public : {o.public_cible}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => supprimerOffre(o.id)}
+                      className="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap"
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </section>
         )}
 

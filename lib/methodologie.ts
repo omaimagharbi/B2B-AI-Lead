@@ -34,12 +34,40 @@ decrit par la personne.
 
 ${FORMAT_JSON_ATTENDU}`
 
-export function construirePrompt(modeCiblage: ModeCiblage, promptVerticalPersonnalise?: string): string {
+export type OffreCatalogue = {
+  nom: string
+  description: string | null
+  prix: number | null
+  duree: string | null
+}
+
+export function construirePrompt(
+  modeCiblage: ModeCiblage,
+  promptVerticalPersonnalise?: string,
+  catalogueOffres?: OffreCatalogue[]
+): string {
   const base = modeCiblage === 'particulier' ? PROMPT_GROW : PROMPT_ADDIE
 
-  if (!promptVerticalPersonnalise) return base
+  let promptFinal = base
 
-  // On enrichit le prompt de methodologie avec le contexte metier propre au vertical
-  // (ex: audit technique pour Startup SaaS, organisationnel pour PME...)
-  return `${promptVerticalPersonnalise}\n\nUtilise neanmoins STRICTEMENT la structure de reponse suivante :\n\n${base}`
+  if (promptVerticalPersonnalise) {
+    // On enrichit le prompt de methodologie avec le contexte metier propre au vertical
+    // (ex: audit technique pour Startup SaaS, organisationnel pour PME...)
+    promptFinal = `${promptVerticalPersonnalise}\n\nUtilise neanmoins STRICTEMENT la structure de reponse suivante :\n\n${base}`
+  }
+
+  if (catalogueOffres && catalogueOffres.length > 0) {
+    const listeOffres = catalogueOffres
+      .map(
+        (o) =>
+          `- ${o.nom}${o.prix ? ` (${o.prix})` : ''}${o.duree ? ` — ${o.duree}` : ''}${
+            o.description ? ` : ${o.description}` : ''
+          }`
+      )
+      .join('\n')
+
+    promptFinal += `\n\nIMPORTANT : pour le champ "packs_proposes", tu DOIS choisir 2 a 3 offres PARMI CELLES-CI (les vraies offres de ce cabinet), en gardant leur nom et prix exacts. N'invente pas d'autre offre tant que celles-ci existent :\n${listeOffres}`
+  }
+
+  return promptFinal
 }

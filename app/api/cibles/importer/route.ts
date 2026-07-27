@@ -8,6 +8,8 @@ type ContactImporte = {
   email?: string | null
   entreprise?: string | null
   pays?: string | null
+  canal?: string | null
+  resultat?: string | null
 }
 
 export async function POST(req: NextRequest) {
@@ -77,15 +79,27 @@ export async function POST(req: NextRequest) {
         vus.add(cleUnicite)
         return true
       })
-      .map((c) => ({
-        client_id: clientUser.client_id,
-        nom: c.nom.trim(),
-        telephone: c.telephone?.trim() || null,
-        email: c.email?.trim() || null,
-        entreprise_ou_objectif: c.entreprise?.trim() || null,
-        country: c.pays?.trim() || null,
-        statut: 'nouveau',
-      }))
+      .map((c) => {
+        const resultatNorm = c.resultat?.trim().toLowerCase()
+        const resultatHistorique =
+          resultatNorm && ['gagne', 'gagné', 'won', 'oui', 'accepte', 'accepté'].includes(resultatNorm)
+            ? 'gagne'
+            : resultatNorm && ['perdu', 'lost', 'non', 'refuse', 'refusé'].includes(resultatNorm)
+            ? 'perdu'
+            : null
+
+        return {
+          client_id: clientUser.client_id,
+          nom: c.nom.trim(),
+          telephone: c.telephone?.trim() || null,
+          email: c.email?.trim() || null,
+          entreprise_ou_objectif: c.entreprise?.trim() || null,
+          country: c.pays?.trim() || null,
+          source_scraping: c.canal?.trim() || null,
+          resultat_historique: resultatHistorique,
+          statut: resultatHistorique ? 'contacte' : 'nouveau',
+        }
+      })
 
     if (lignes.length === 0) {
       return NextResponse.json({

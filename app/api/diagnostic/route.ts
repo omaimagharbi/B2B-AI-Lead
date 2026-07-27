@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { construirePrompt, type ModeCiblage } from '@/lib/methodologie'
+import { construirePrompt, type ModeCiblage, type OffreCatalogue } from '@/lib/methodologie'
 import { envoyerEmail } from '@/lib/notifications'
 import { logErreur } from '@/lib/erreurs'
 import { analyserProspect } from '@/lib/strategie'
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
     const { data: diagnostic, error: findError } = await supabaseAdmin
       .from('diagnostics')
       .select(
-        'id, target_id, clients(mode_ciblage, email, nom_entreprise), verticals(prompt_ia_config), targets(poste_ou_budget)'
+        'id, target_id, client_id, clients(mode_ciblage, email, nom_entreprise), verticals(prompt_ia_config), targets(poste_ou_budget)'
       )
       .eq('token_acces', token)
       .single()
@@ -145,7 +145,18 @@ export async function POST(req: NextRequest) {
       | string
       | undefined
 
-    const systemPrompt = construirePrompt(modeCiblage, promptVertical)
+    // Catalogue reel du cabinet (formations/services) : si non vide, l'IA doit
+    // piocher dedans plutot que d'inventer des packs generiques.
+    const { data: catalogueData } = await supabaseAdmin
+      .from('catalogue_offres')
+      .select('nom, description, prix, duree')
+      .eq('client_id', diagnostic.client_id)
+
+    const systemPrompt = construirePrompt(
+      modeCiblage,
+      promptVertical,
+      (catalogueData ?? []) as OffreCatalogue[]
+    )
 
     // 2. Generation du brouillon (reel ou simule en secours) - JAMAIS montre au prospect
     const brouillon = await genererBrouillon(probleme, systemPrompt, modeCiblage)
