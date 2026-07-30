@@ -122,6 +122,10 @@ export default function DashboardPage() {
   const [messagesRecus, setMessagesRecus] = useState<MessageRecu[]>([])
   const [catalogue, setCatalogue] = useState<OffreCatalogue[]>([])
   const [calendrier, setCalendrier] = useState<CalendrierEntree[]>([])
+  const [moisAffiche, setMoisAffiche] = useState(() => {
+    const d = new Date()
+    return new Date(d.getFullYear(), d.getMonth(), 1)
+  })
   const [nouvelleEntree, setNouvelleEntree] = useState({
     titre: '',
     description: '',
@@ -546,6 +550,32 @@ export default function DashboardPage() {
 
   // Parseur CSV minimal : gere les guillemets et les virgules a l'interieur
   // des champs. Suffisant pour des exports simples (Excel, Google Sheets).
+  // Genere la grille du mois (semaines de lundi a dimanche) pour l'affichage
+  // calendrier, avec les jours des mois adjacents grises pour completer la grille.
+  const genererGrilleMois = (mois: Date) => {
+    const annee = mois.getFullYear()
+    const moisIndex = mois.getMonth()
+    const premierJour = new Date(annee, moisIndex, 1)
+    // 0=dimanche -> on veut lundi en premiere colonne
+    const decalage = (premierJour.getDay() + 6) % 7
+    const debutGrille = new Date(annee, moisIndex, 1 - decalage)
+
+    const jours: { date: Date; dansLeMois: boolean }[] = []
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(debutGrille)
+      d.setDate(debutGrille.getDate() + i)
+      jours.push({ date: d, dansLeMois: d.getMonth() === moisIndex })
+    }
+    return jours
+  }
+
+  const formatDateLocale = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const j = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${j}`
+  }
+
   const parserCSV = (texte: string): Record<string, string>[] => {
     const lignes = texte.split(/\r?\n/).filter((l) => l.trim().length > 0)
     if (lignes.length < 2) return []
@@ -2228,7 +2258,80 @@ export default function DashboardPage() {
               </button>
             </div>
 
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  onClick={() =>
+                    setMoisAffiche(
+                      (m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)
+                    )
+                  }
+                  className="px-3 py-1 rounded-lg border border-slate-700 text-sm hover:border-accent"
+                >
+                  ← Précédent
+                </button>
+                <p className="font-semibold capitalize">
+                  {moisAffiche.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                </p>
+                <button
+                  onClick={() =>
+                    setMoisAffiche(
+                      (m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)
+                    )
+                  }
+                  className="px-3 py-1 rounded-lg border border-slate-700 text-sm hover:border-accent"
+                >
+                  Suivant →
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-1">
+                {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((j) => (
+                  <div key={j}>{j}</div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1">
+                {genererGrilleMois(moisAffiche).map(({ date, dansLeMois }) => {
+                  const dateStr = formatDateLocale(date)
+                  const entreesDuJour = calendrier.filter((c) => c.date_evenement === dateStr)
+                  const estAujourdhui = dateStr === formatDateLocale(new Date())
+                  return (
+                    <div
+                      key={dateStr}
+                      className={`min-h-[70px] rounded-lg border p-1 text-xs ${
+                        dansLeMois ? 'border-slate-700 bg-slate-950' : 'border-slate-800 bg-slate-900 opacity-40'
+                      } ${estAujourdhui ? 'ring-1 ring-accent' : ''}`}
+                    >
+                      <p className={`text-right ${estAujourdhui ? 'text-accent font-semibold' : 'text-slate-400'}`}>
+                        {date.getDate()}
+                      </p>
+                      <div className="space-y-0.5 mt-1">
+                        {entreesDuJour.map((c) => (
+                          <div
+                            key={c.id}
+                            title={c.titre}
+                            className="truncate rounded bg-slate-800 px-1 py-0.5 text-slate-200"
+                          >
+                            {c.type === 'rdv'
+                              ? '📞'
+                              : c.type === 'evenement'
+                              ? '🎪'
+                              : c.type === 'appel_offre'
+                              ? '📋'
+                              : '📌'}{' '}
+                            {c.titre}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
             <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-slate-300">📋 Liste détaillée</h3>
               {calendrier.length === 0 ? (
                 <p className="text-slate-500 text-sm italic">Aucune entrée pour le moment.</p>
               ) : (
