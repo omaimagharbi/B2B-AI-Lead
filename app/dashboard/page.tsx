@@ -23,7 +23,6 @@ type Client = {
   message_personnalise: string | null
   logo_url: string | null
   langue_preferee: Langue
-  instructions_paiement: string | null
 }
 
 type Target = {
@@ -180,7 +179,6 @@ export default function DashboardPage() {
   )
   const [messageInput, setMessageInput] = useState('')
   const [logoInput, setLogoInput] = useState('')
-  const [paiementInput, setPaiementInput] = useState('')
   const [ciblesSelectionnees, setCiblesSelectionnees] = useState<Set<string>>(new Set())
   const [envoiMasseEnCours, setEnvoiMasseEnCours] = useState(false)
   const [membresEquipe, setMembresEquipe] = useState<
@@ -357,7 +355,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, instructions_paiement, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -367,7 +365,6 @@ export default function DashboardPage() {
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
         setMessageInput((clientData as unknown as Client).message_personnalise ?? '')
         setLogoInput((clientData as unknown as Client).logo_url ?? '')
-        setPaiementInput((clientData as unknown as Client).instructions_paiement ?? '')
         // @ts-ignore - jointure Supabase typee dynamiquement
         const slug = clientData.verticals?.slug as string
         setVerticalSlug(slug ?? '')
@@ -519,16 +516,6 @@ export default function DashboardPage() {
     setMaj(false)
   }
 
-  const enregistrerInstructionsPaiement = async () => {
-    if (!client) return
-    setMaj(true)
-    await supabase
-      .from('clients')
-      .update({ instructions_paiement: paiementInput.trim() || null })
-      .eq('id', client.id)
-    setClient({ ...client, instructions_paiement: paiementInput.trim() || null })
-    setMaj(false)
-  }
 
   const ajouterCible = async () => {
     if (!client || !nouvelleCible.nom.trim()) return
@@ -1336,25 +1323,6 @@ export default function DashboardPage() {
                   />
                 )}
               </div>
-
-              {(monRole === 'proprietaire' || monRole === 'admin') && (
-                <div className="space-y-2">
-                  <p className="text-slate-400 text-sm">
-                    💳 Instructions de paiement
-                    <span className="text-slate-600">
-                      {' '}
-                      (RIB, D17, Flouci... affiché au prospect une fois le pack choisi)
-                    </span>
-                  </p>
-                  <textarea
-                    value={paiementInput}
-                    onChange={(e) => setPaiementInput(e.target.value)}
-                    onBlur={enregistrerInstructionsPaiement}
-                    placeholder={`Ex :\nVirement bancaire : RIB TN59 XX XXX XXXXXXXXXXX XX\nOu D17 : +216 XX XXX XXX\nMerci d'envoyer une capture de la transaction par WhatsApp.`}
-                    className="w-full h-24 rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
-                  />
-                </div>
-              )}
             </section>
           </>
         )}

@@ -10,13 +10,7 @@ type Pack = {
   pdf_url?: string | null
 }
 
-export default function PackChoisir({
-  pack,
-  instructionsPaiement,
-}: {
-  pack: Pack
-  instructionsPaiement: string | null
-}) {
+export default function PackChoisir({ pack }: { pack: Pack }) {
   const [statut, setStatut] = useState(pack.statut_vente)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -73,12 +67,6 @@ export default function PackChoisir({
           ? '...'
           : 'Choisir ce pack'}
       </button>
-      {statut === 'accepte' && instructionsPaiement && (
-        <div className="rounded-lg bg-slate-950 border border-accent/40 p-3 space-y-1">
-          <p className="text-xs text-accent font-semibold uppercase">💳 Comment payer</p>
-          <p className="text-sm text-slate-300 whitespace-pre-wrap">{instructionsPaiement}</p>
-        </div>
-      )}
     </div>
   )
 }

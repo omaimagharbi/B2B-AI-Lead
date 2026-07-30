@@ -20,7 +20,7 @@ type Pack = {
 async function getDonnees(token: string) {
   const { data: diagnostic, error } = await supabaseAdmin
     .from('diagnostics')
-    .select('id, client_id, json_expert_valide, statut_validation, clients(instructions_paiement)')
+    .select('id, client_id, json_expert_valide, statut_validation')
     .eq('token_acces', token)
     .single()
 
@@ -33,8 +33,6 @@ async function getDonnees(token: string) {
     .select('id, pack_propose_nom, prix_pack, statut_vente')
     .eq('diagnostic_id', diagnostic.id)
 
-  // On rattache le PDF de l'offre du catalogue au pack qui porte le meme nom
-  // (l'IA reprend le nom exact des offres reelles quand le catalogue existe).
   const { data: catalogueData } = await supabaseAdmin
     .from('catalogue_offres')
     .select('nom, pdf_url')
@@ -47,13 +45,9 @@ async function getDonnees(token: string) {
     return { ...p, pdf_url: offre?.pdf_url ?? null }
   }) as Pack[]
 
-  // @ts-ignore - jointure Supabase typee dynamiquement
-  const instructionsPaiement = (diagnostic.clients?.instructions_paiement as string | null) ?? null
-
   return {
     diagnostic: diagnostic.json_expert_valide as DiagnosticValide,
     packs,
-    instructionsPaiement,
   }
 }
 
@@ -62,7 +56,7 @@ export default async function PacksPage({ params }: { params: { token: string } 
 
   if (!donnees) notFound()
 
-  const { diagnostic, packs, instructionsPaiement } = donnees
+  const { diagnostic, packs } = donnees
 
   return (
     <main className="min-h-screen bg-slate-950 text-white px-6 py-12">
@@ -94,7 +88,7 @@ export default async function PacksPage({ params }: { params: { token: string } 
           <h2 className="text-lg font-semibold text-center">Choisissez votre pack</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {packs.map((pack) => (
-              <PackChoisir key={pack.id} pack={pack} instructionsPaiement={instructionsPaiement} />
+              <PackChoisir key={pack.id} pack={pack} />
             ))}
           </div>
         </section>
