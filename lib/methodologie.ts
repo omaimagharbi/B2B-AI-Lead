@@ -38,6 +38,7 @@ export type OffreCatalogue = {
   nom: string
   description: string | null
   prix: number | null
+  devise: string | null
   duree: string | null
 }
 
@@ -60,7 +61,7 @@ export function construirePrompt(
     const listeOffres = catalogueOffres
       .map(
         (o) =>
-          `- ${o.nom}${o.prix ? ` (${o.prix})` : ''}${o.duree ? ` — ${o.duree}` : ''}${
+          `- ${o.nom}${o.prix ? ` (${o.prix} ${o.devise ?? 'TND'})` : ''}${o.duree ? ` — ${o.duree}` : ''}${
             o.description ? ` : ${o.description}` : ''
           }`
       )

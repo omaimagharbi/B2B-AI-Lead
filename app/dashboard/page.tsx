@@ -23,6 +23,7 @@ type Client = {
   message_personnalise: string | null
   logo_url: string | null
   langue_preferee: Langue
+  instructions_paiement: string | null
 }
 
 type Target = {
@@ -67,8 +68,19 @@ type OffreCatalogue = {
   nom: string
   description: string | null
   prix: number | null
+  devise: string | null
   duree: string | null
   public_cible: string | null
+  pdf_url: string | null
+}
+
+type CalendrierEntree = {
+  id: string
+  titre: string
+  description: string | null
+  date_evenement: string
+  type: 'rdv' | 'evenement' | 'appel_offre' | 'autre'
+  lien: string | null
 }
 
 type MessageRecu = {
@@ -97,7 +109,7 @@ type PackVendu = {
   diagnostics?: { target_id: string } | { target_id: string }[] | null
 }
 
-type Onglet = 'ciblage' | 'cibles' | 'validation' | 'equipe' | 'marketing' | 'inbox' | 'strategie' | 'catalogue' | 'stats'
+type Onglet = 'ciblage' | 'cibles' | 'validation' | 'equipe' | 'marketing' | 'inbox' | 'strategie' | 'catalogue' | 'calendrier' | 'stats'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -110,13 +122,25 @@ export default function DashboardPage() {
   const [diagnosticsEnAttente, setDiagnosticsEnAttente] = useState<DiagnosticEnAttente[]>([])
   const [messagesRecus, setMessagesRecus] = useState<MessageRecu[]>([])
   const [catalogue, setCatalogue] = useState<OffreCatalogue[]>([])
+  const [calendrier, setCalendrier] = useState<CalendrierEntree[]>([])
+  const [nouvelleEntree, setNouvelleEntree] = useState({
+    titre: '',
+    description: '',
+    date_evenement: '',
+    type: 'rdv' as CalendrierEntree['type'],
+    lien: '',
+  })
   const [nouvelleOffre, setNouvelleOffre] = useState({
     nom: '',
     description: '',
     prix: '',
+    devise: 'TND',
     duree: '',
     public_cible: '',
   })
+  const [pdfUrlTemp, setPdfUrlTemp] = useState<string | null>(null)
+  const [pdfEnCours, setPdfEnCours] = useState(false)
+  const inputPdfCatalogue = useRef<HTMLInputElement>(null)
   const [strategieEnCours, setStrategieEnCours] = useState(false)
   const [strategieResultat, setStrategieResultat] = useState<{
     recommandationCommerciale: string
@@ -156,6 +180,7 @@ export default function DashboardPage() {
   )
   const [messageInput, setMessageInput] = useState('')
   const [logoInput, setLogoInput] = useState('')
+  const [paiementInput, setPaiementInput] = useState('')
   const [ciblesSelectionnees, setCiblesSelectionnees] = useState<Set<string>>(new Set())
   const [envoiMasseEnCours, setEnvoiMasseEnCours] = useState(false)
   const [membresEquipe, setMembresEquipe] = useState<
@@ -237,10 +262,17 @@ export default function DashboardPage() {
 
     const { data: catalogueData } = await supabase
       .from('catalogue_offres')
-      .select('id, nom, description, prix, duree, public_cible')
+      .select('id, nom, description, prix, devise, duree, public_cible, pdf_url')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
     setCatalogue((catalogueData ?? []) as OffreCatalogue[])
+
+    const { data: calendrierData } = await supabase
+      .from('calendrier_entrees')
+      .select('id, titre, description, date_evenement, type, lien')
+      .eq('client_id', clientId)
+      .order('date_evenement', { ascending: true })
+    setCalendrier((calendrierData ?? []) as CalendrierEntree[])
 
     const { data: packsData } = await supabase
       .from('leads_packs')
@@ -325,7 +357,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, instructions_paiement, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -335,6 +367,7 @@ export default function DashboardPage() {
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
         setMessageInput((clientData as unknown as Client).message_personnalise ?? '')
         setLogoInput((clientData as unknown as Client).logo_url ?? '')
+        setPaiementInput((clientData as unknown as Client).instructions_paiement ?? '')
         // @ts-ignore - jointure Supabase typee dynamiquement
         const slug = clientData.verticals?.slug as string
         setVerticalSlug(slug ?? '')
@@ -486,6 +519,16 @@ export default function DashboardPage() {
     setMaj(false)
   }
 
+  const enregistrerInstructionsPaiement = async () => {
+    if (!client) return
+    setMaj(true)
+    await supabase
+      .from('clients')
+      .update({ instructions_paiement: paiementInput.trim() || null })
+      .eq('id', client.id)
+    setClient({ ...client, instructions_paiement: paiementInput.trim() || null })
+    setMaj(false)
+  }
 
   const ajouterCible = async () => {
     if (!client || !nouvelleCible.nom.trim()) return
@@ -800,6 +843,68 @@ export default function DashboardPage() {
     setStrategieEnCours(false)
   }
 
+  const importerPdfOffre = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fichier = e.target.files?.[0]
+    if (!fichier || !client) return
+
+    setPdfEnCours(true)
+    try {
+      // 1. Upload dans Supabase Storage
+      const chemin = `${client.id}/${Date.now()}-${fichier.name}`
+      const { error: uploadError } = await supabase.storage
+        .from('catalogue-pdfs')
+        .upload(chemin, fichier)
+
+      if (uploadError) {
+        alert("Échec de l'upload du PDF")
+        setPdfEnCours(false)
+        return
+      }
+
+      const { data: urlData } = supabase.storage.from('catalogue-pdfs').getPublicUrl(chemin)
+      setPdfUrlTemp(urlData.publicUrl)
+
+      // 2. Extraction IA pour pré-remplir le formulaire
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(fichier)
+      })
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/catalogue/extraire-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ pdf_base64: base64 }),
+      })
+      const data = await res.json()
+
+      if (res.ok && data.champs) {
+        setNouvelleOffre({
+          nom: data.champs.nom ?? '',
+          description: data.champs.description ?? '',
+          prix: data.champs.prix ? String(data.champs.prix) : '',
+          devise: 'TND',
+          duree: data.champs.duree ?? '',
+          public_cible: data.champs.public_cible ?? '',
+        })
+      } else {
+        alert(
+          "PDF importé mais pré-remplissage impossible (" +
+            (data.error ?? 'erreur inconnue') +
+            ') — remplis le formulaire manuellement, le PDF reste attaché.'
+        )
+      }
+    } catch {
+      alert("Erreur lors de l'import du PDF")
+    }
+    setPdfEnCours(false)
+    if (inputPdfCatalogue.current) inputPdfCatalogue.current.value = ''
+  }
+
   const ajouterOffre = async () => {
     if (!client || !nouvelleOffre.nom.trim()) return
     setMaj(true)
@@ -810,19 +915,53 @@ export default function DashboardPage() {
         nom: nouvelleOffre.nom.trim(),
         description: nouvelleOffre.description.trim() || null,
         prix: nouvelleOffre.prix ? Number(nouvelleOffre.prix) : null,
+        devise: nouvelleOffre.devise,
         duree: nouvelleOffre.duree.trim() || null,
         public_cible: nouvelleOffre.public_cible.trim() || null,
+        pdf_url: pdfUrlTemp,
       })
-      .select('id, nom, description, prix, duree, public_cible')
+      .select('id, nom, description, prix, devise, duree, public_cible, pdf_url')
       .single()
     if (data) setCatalogue((prev) => [data as OffreCatalogue, ...prev])
-    setNouvelleOffre({ nom: '', description: '', prix: '', duree: '', public_cible: '' })
+    setNouvelleOffre({ nom: '', description: '', prix: '', devise: 'TND', duree: '', public_cible: '' })
+    setPdfUrlTemp(null)
     setMaj(false)
   }
 
   const supprimerOffre = async (id: string) => {
     await supabase.from('catalogue_offres').delete().eq('id', id)
     setCatalogue((prev) => prev.filter((o) => o.id !== id))
+  }
+
+  const ajouterEntreeCalendrier = async () => {
+    if (!client || !nouvelleEntree.titre.trim() || !nouvelleEntree.date_evenement) return
+    setMaj(true)
+    const { data } = await supabase
+      .from('calendrier_entrees')
+      .insert({
+        client_id: client.id,
+        titre: nouvelleEntree.titre.trim(),
+        description: nouvelleEntree.description.trim() || null,
+        date_evenement: nouvelleEntree.date_evenement,
+        type: nouvelleEntree.type,
+        lien: nouvelleEntree.lien.trim() || null,
+      })
+      .select('id, titre, description, date_evenement, type, lien')
+      .single()
+    if (data) {
+      setCalendrier((prev) =>
+        [...prev, data as CalendrierEntree].sort((a, b) =>
+          a.date_evenement.localeCompare(b.date_evenement)
+        )
+      )
+    }
+    setNouvelleEntree({ titre: '', description: '', date_evenement: '', type: 'rdv', lien: '' })
+    setMaj(false)
+  }
+
+  const supprimerEntreeCalendrier = async (id: string) => {
+    await supabase.from('calendrier_entrees').delete().eq('id', id)
+    setCalendrier((prev) => prev.filter((c) => c.id !== id))
   }
 
   const deconnexion = async () => {
@@ -862,6 +1001,7 @@ export default function DashboardPage() {
     },
     { id: 'strategie', label: '🧭 Stratégie', icone: '🧭' },
     { id: 'catalogue', label: '📚 Catalogue', icone: '📚' },
+    { id: 'calendrier', label: '📅 Calendrier', icone: '📅' },
     { id: 'stats', label: t('onglet_stats'), icone: '📊' },
   ]
 
@@ -1196,6 +1336,25 @@ export default function DashboardPage() {
                   />
                 )}
               </div>
+
+              {(monRole === 'proprietaire' || monRole === 'admin') && (
+                <div className="space-y-2">
+                  <p className="text-slate-400 text-sm">
+                    💳 Instructions de paiement
+                    <span className="text-slate-600">
+                      {' '}
+                      (RIB, D17, Flouci... affiché au prospect une fois le pack choisi)
+                    </span>
+                  </p>
+                  <textarea
+                    value={paiementInput}
+                    onChange={(e) => setPaiementInput(e.target.value)}
+                    onBlur={enregistrerInstructionsPaiement}
+                    placeholder={`Ex :\nVirement bancaire : RIB TN59 XX XXX XXXXXXXXXXX XX\nOu D17 : +216 XX XXX XXX\nMerci d'envoyer une capture de la transaction par WhatsApp.`}
+                    className="w-full h-24 rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
+                  />
+                </div>
+              )}
             </section>
           </>
         )}
@@ -1921,6 +2080,26 @@ export default function DashboardPage() {
               elle pioche dedans en priorité.
             </p>
 
+            <div className="flex items-center gap-3">
+              <input
+                ref={inputPdfCatalogue}
+                type="file"
+                accept=".pdf"
+                onChange={importerPdfOffre}
+                className="hidden"
+              />
+              <button
+                onClick={() => inputPdfCatalogue.current?.click()}
+                disabled={pdfEnCours}
+                className="text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-accent disabled:opacity-50"
+              >
+                {pdfEnCours ? 'Analyse du PDF...' : '📄 Importer un PDF (pré-remplit le formulaire)'}
+              </button>
+              {pdfUrlTemp && (
+                <span className="text-xs text-accent">✓ PDF prêt à être attaché à cette offre</span>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
               <input
                 value={nouvelleOffre.nom}
@@ -1928,13 +2107,24 @@ export default function DashboardPage() {
                 placeholder="Nom de la formation/service"
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
-              <input
-                value={nouvelleOffre.prix}
-                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, prix: e.target.value })}
-                placeholder="Prix (ex: 450)"
-                type="number"
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-              />
+              <div className="flex gap-2">
+                <input
+                  value={nouvelleOffre.prix}
+                  onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, prix: e.target.value })}
+                  placeholder="Prix (ex: 450)"
+                  type="number"
+                  className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <select
+                  value={nouvelleOffre.devise}
+                  onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, devise: e.target.value })}
+                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                >
+                  <option value="TND">TND</option>
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
               <input
                 value={nouvelleOffre.duree}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, duree: e.target.value })}
@@ -1976,7 +2166,7 @@ export default function DashboardPage() {
                     <div>
                       <p className="font-semibold">
                         {o.nom}
-                        {o.prix && <span className="text-accent"> — {o.prix}</span>}
+                        {o.prix && <span className="text-accent"> — {o.prix} {o.devise ?? 'TND'}</span>}
                         {o.duree && <span className="text-slate-400 text-sm"> · {o.duree}</span>}
                       </p>
                       {o.description && (
@@ -1985,9 +2175,130 @@ export default function DashboardPage() {
                       {o.public_cible && (
                         <p className="text-slate-500 text-xs mt-1">Public : {o.public_cible}</p>
                       )}
+                      {o.pdf_url && (
+                        <a
+                          href={o.pdf_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-accent underline mt-1 inline-block"
+                        >
+                          📄 Voir le PDF attaché
+                        </a>
+                      )}
                     </div>
                     <button
                       onClick={() => supprimerOffre(o.id)}
+                      className="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap"
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ===================== ONGLET CALENDRIER ===================== */}
+        {ongletActif === 'calendrier' && (
+          <section className="space-y-4">
+            <p className="text-slate-400 text-sm">
+              Rendez-vous clients, événements repérés, appels d'offres — ajoutés manuellement.
+              Rien ici n'est lié automatiquement à tes cibles.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
+              <input
+                value={nouvelleEntree.titre}
+                onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, titre: e.target.value })}
+                placeholder="Titre (ex: RDV client X)"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleEntree.date_evenement}
+                onChange={(e) =>
+                  setNouvelleEntree({ ...nouvelleEntree, date_evenement: e.target.value })
+                }
+                type="date"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <select
+                value={nouvelleEntree.type}
+                onChange={(e) =>
+                  setNouvelleEntree({
+                    ...nouvelleEntree,
+                    type: e.target.value as CalendrierEntree['type'],
+                  })
+                }
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              >
+                <option value="rdv">📞 Rendez-vous client</option>
+                <option value="evenement">🎪 Événement</option>
+                <option value="appel_offre">📋 Appel d'offres</option>
+                <option value="autre">📌 Autre</option>
+              </select>
+              <input
+                value={nouvelleEntree.lien}
+                onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, lien: e.target.value })}
+                placeholder="Lien (optionnel)"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <textarea
+                value={nouvelleEntree.description}
+                onChange={(e) =>
+                  setNouvelleEntree({ ...nouvelleEntree, description: e.target.value })
+                }
+                placeholder="Notes (optionnel)"
+                className="md:col-span-2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
+              />
+              <button
+                onClick={ajouterEntreeCalendrier}
+                disabled={maj || !nouvelleEntree.titre.trim() || !nouvelleEntree.date_evenement}
+                className="md:col-span-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm py-2 disabled:opacity-40"
+              >
+                {t('ajouter')}
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {calendrier.length === 0 ? (
+                <p className="text-slate-500 text-sm italic">Aucune entrée pour le moment.</p>
+              ) : (
+                calendrier.map((c) => (
+                  <div
+                    key={c.id}
+                    className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-start justify-between gap-3"
+                  >
+                    <div>
+                      <p className="font-semibold">
+                        {c.type === 'rdv'
+                          ? '📞'
+                          : c.type === 'evenement'
+                          ? '🎪'
+                          : c.type === 'appel_offre'
+                          ? '📋'
+                          : '📌'}{' '}
+                        {c.titre}
+                        <span className="text-accent text-sm ml-2">
+                          {new Date(c.date_evenement).toLocaleDateString('fr-FR')}
+                        </span>
+                      </p>
+                      {c.description && (
+                        <p className="text-slate-400 text-sm mt-1">{c.description}</p>
+                      )}
+                      {c.lien && (
+                        <a
+                          href={c.lien}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-accent underline mt-1 inline-block"
+                        >
+                          🔗 Voir le lien
+                        </a>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => supprimerEntreeCalendrier(c.id)}
                       className="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap"
                     >
                       Supprimer

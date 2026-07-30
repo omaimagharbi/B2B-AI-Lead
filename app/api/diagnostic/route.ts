@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     // piocher dedans plutot que d'inventer des packs generiques.
     const { data: catalogueData } = await supabaseAdmin
       .from('catalogue_offres')
-      .select('nom, description, prix, duree')
+      .select('nom, description, prix, devise, duree')
       .eq('client_id', diagnostic.client_id)
 
     const systemPrompt = construirePrompt(

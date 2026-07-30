@@ -14,12 +14,13 @@ type Pack = {
   pack_propose_nom: string | null
   prix_pack: number | null
   statut_vente: string
+  pdf_url?: string | null
 }
 
 async function getDonnees(token: string) {
   const { data: diagnostic, error } = await supabaseAdmin
     .from('diagnostics')
-    .select('id, json_expert_valide, statut_validation')
+    .select('id, client_id, json_expert_valide, statut_validation, clients(instructions_paiement)')
     .eq('token_acces', token)
     .single()
 
@@ -27,14 +28,32 @@ async function getDonnees(token: string) {
     return null
   }
 
-  const { data: packs } = await supabaseAdmin
+  const { data: packsData } = await supabaseAdmin
     .from('leads_packs')
     .select('id, pack_propose_nom, prix_pack, statut_vente')
     .eq('diagnostic_id', diagnostic.id)
 
+  // On rattache le PDF de l'offre du catalogue au pack qui porte le meme nom
+  // (l'IA reprend le nom exact des offres reelles quand le catalogue existe).
+  const { data: catalogueData } = await supabaseAdmin
+    .from('catalogue_offres')
+    .select('nom, pdf_url')
+    .eq('client_id', diagnostic.client_id)
+
+  const packs = (packsData ?? []).map((p) => {
+    const offre = (catalogueData ?? []).find(
+      (o) => o.nom.trim().toLowerCase() === (p.pack_propose_nom ?? '').trim().toLowerCase()
+    )
+    return { ...p, pdf_url: offre?.pdf_url ?? null }
+  }) as Pack[]
+
+  // @ts-ignore - jointure Supabase typee dynamiquement
+  const instructionsPaiement = (diagnostic.clients?.instructions_paiement as string | null) ?? null
+
   return {
     diagnostic: diagnostic.json_expert_valide as DiagnosticValide,
-    packs: (packs ?? []) as Pack[],
+    packs,
+    instructionsPaiement,
   }
 }
 
@@ -43,7 +62,7 @@ export default async function PacksPage({ params }: { params: { token: string } 
 
   if (!donnees) notFound()
 
-  const { diagnostic, packs } = donnees
+  const { diagnostic, packs, instructionsPaiement } = donnees
 
   return (
     <main className="min-h-screen bg-slate-950 text-white px-6 py-12">
@@ -75,7 +94,7 @@ export default async function PacksPage({ params }: { params: { token: string } 
           <h2 className="text-lg font-semibold text-center">Choisissez votre pack</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {packs.map((pack) => (
-              <PackChoisir key={pack.id} pack={pack} />
+              <PackChoisir key={pack.id} pack={pack} instructionsPaiement={instructionsPaiement} />
             ))}
           </div>
         </section>

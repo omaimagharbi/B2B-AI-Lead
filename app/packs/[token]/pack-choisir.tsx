@@ -7,9 +7,16 @@ type Pack = {
   pack_propose_nom: string | null
   prix_pack: number | null
   statut_vente: string
+  pdf_url?: string | null
 }
 
-export default function PackChoisir({ pack }: { pack: Pack }) {
+export default function PackChoisir({
+  pack,
+  instructionsPaiement,
+}: {
+  pack: Pack
+  instructionsPaiement: string | null
+}) {
   const [statut, setStatut] = useState(pack.statut_vente)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -42,6 +49,16 @@ export default function PackChoisir({ pack }: { pack: Pack }) {
         {pack.prix_pack ? `${pack.prix_pack} ` : 'Sur devis'}
         {pack.prix_pack ? <span className="text-sm text-slate-400">TND/EUR</span> : null}
       </p>
+      {pack.pdf_url && (
+        <a
+          href={pack.pdf_url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm text-accent underline inline-block"
+        >
+          📄 Télécharger la brochure
+        </a>
+      )}
       {erreur && <p className="text-red-400 text-sm">{erreur}</p>}
       <button
         onClick={choisir}
@@ -56,6 +73,12 @@ export default function PackChoisir({ pack }: { pack: Pack }) {
           ? '...'
           : 'Choisir ce pack'}
       </button>
+      {statut === 'accepte' && instructionsPaiement && (
+        <div className="rounded-lg bg-slate-950 border border-accent/40 p-3 space-y-1">
+          <p className="text-xs text-accent font-semibold uppercase">💳 Comment payer</p>
+          <p className="text-sm text-slate-300 whitespace-pre-wrap">{instructionsPaiement}</p>
+        </div>
+      )}
     </div>
   )
 }
