@@ -34,6 +34,7 @@ type Target = {
   email: string | null
   country: string | null
   statut: string
+  etape_pipeline: string
   segment_categorie?: string | null
   segment_urgence?: string | null
   score_chaleur?: number | null
@@ -82,6 +83,14 @@ type CalendrierEntree = {
   lien: string | null
 }
 
+type NoteCible = {
+  id: string
+  target_id: string
+  contenu: string
+  created_at: string
+  auteur_id: string | null
+}
+
 type MessageRecu = {
   id: string
   target_id: string | null
@@ -122,6 +131,9 @@ export default function DashboardPage() {
   const [messagesRecus, setMessagesRecus] = useState<MessageRecu[]>([])
   const [catalogue, setCatalogue] = useState<OffreCatalogue[]>([])
   const [calendrier, setCalendrier] = useState<CalendrierEntree[]>([])
+  const [notesCibles, setNotesCibles] = useState<Record<string, NoteCible[]>>({})
+  const [cibleNotesOuverte, setCibleNotesOuverte] = useState<string | null>(null)
+  const [nouvelleNoteTexte, setNouvelleNoteTexte] = useState('')
   const [moisAffiche, setMoisAffiche] = useState(() => {
     const d = new Date()
     return new Date(d.getFullYear(), d.getMonth(), 1)
@@ -229,7 +241,7 @@ export default function DashboardPage() {
     const { data: targetsData } = await supabase
       .from('targets')
       .select(
-        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a'
+        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, etape_pipeline, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a'
       )
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
@@ -275,6 +287,18 @@ export default function DashboardPage() {
       .eq('client_id', clientId)
       .order('date_evenement', { ascending: true })
     setCalendrier((calendrierData ?? []) as CalendrierEntree[])
+
+    const { data: notesData } = await supabase
+      .from('notes_cibles')
+      .select('id, target_id, contenu, created_at, auteur_id')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+    const notesParCible: Record<string, NoteCible[]> = {}
+    for (const n of notesData ?? []) {
+      if (!notesParCible[n.target_id]) notesParCible[n.target_id] = []
+      notesParCible[n.target_id].push(n as NoteCible)
+    }
+    setNotesCibles(notesParCible)
 
     const { data: packsData } = await supabase
       .from('leads_packs')
@@ -660,6 +684,42 @@ export default function DashboardPage() {
 
     setImportCSVEnCours(false)
     if (inputFichierCSV.current) inputFichierCSV.current.value = ''
+  }
+
+  const changerEtapePipeline = async (targetId: string, etape: string) => {
+    await supabase.from('targets').update({ etape_pipeline: etape }).eq('id', targetId)
+    setTargets((prev) =>
+      prev.map((tg) => (tg.id === targetId ? { ...tg, etape_pipeline: etape } : tg))
+    )
+  }
+
+  const ajouterNote = async (targetId: string) => {
+    if (!client || !nouvelleNoteTexte.trim()) return
+    const { data } = await supabase
+      .from('notes_cibles')
+      .insert({
+        target_id: targetId,
+        client_id: client.id,
+        auteur_id: monClientUserId,
+        contenu: nouvelleNoteTexte.trim(),
+      })
+      .select('id, target_id, contenu, created_at, auteur_id')
+      .single()
+    if (data) {
+      setNotesCibles((prev) => ({
+        ...prev,
+        [targetId]: [data as NoteCible, ...(prev[targetId] ?? [])],
+      }))
+    }
+    setNouvelleNoteTexte('')
+  }
+
+  const supprimerNote = async (targetId: string, noteId: string) => {
+    await supabase.from('notes_cibles').delete().eq('id', noteId)
+    setNotesCibles((prev) => ({
+      ...prev,
+      [targetId]: (prev[targetId] ?? []).filter((n) => n.id !== noteId),
+    }))
   }
 
   const assignerCible = async (targetId: string, clientUserId: string | null) => {
@@ -1594,6 +1654,77 @@ export default function DashboardPage() {
                                 </option>
                               ))}
                             </select>
+                          )}
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <select
+                              value={target.etape_pipeline || 'nouveau'}
+                              onChange={(e) => changerEtapePipeline(target.id, e.target.value)}
+                              className="text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                            >
+                              <option value="nouveau">🆕 Nouveau</option>
+                              <option value="contacte">📨 Contacté</option>
+                              <option value="qualifie">✅ Qualifié</option>
+                              <option value="proposition">📄 Proposition envoyée</option>
+                              <option value="negociation">🤝 Négociation</option>
+                              <option value="gagne">🏆 Gagné</option>
+                              <option value="perdu">❌ Perdu</option>
+                            </select>
+                            <button
+                              onClick={() =>
+                                setCibleNotesOuverte(
+                                  cibleNotesOuverte === target.id ? null : target.id
+                                )
+                              }
+                              className="text-xs text-slate-400 underline"
+                            >
+                              📝 Notes ({(notesCibles[target.id] ?? []).length})
+                            </button>
+                          </div>
+
+                          {cibleNotesOuverte === target.id && (
+                            <div className="mt-2 space-y-2 bg-slate-950 border border-slate-800 rounded-lg p-3">
+                              <div className="flex gap-2">
+                                <input
+                                  value={nouvelleNoteTexte}
+                                  onChange={(e) => setNouvelleNoteTexte(e.target.value)}
+                                  onKeyDown={(e) =>
+                                    e.key === 'Enter' && ajouterNote(target.id)
+                                  }
+                                  placeholder="Ex: l'ai appelé, veut réfléchir, rappeler mardi"
+                                  className="flex-1 text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
+                                />
+                                <button
+                                  onClick={() => ajouterNote(target.id)}
+                                  disabled={!nouvelleNoteTexte.trim()}
+                                  className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+                                >
+                                  Ajouter
+                                </button>
+                              </div>
+                              {(notesCibles[target.id] ?? []).length === 0 ? (
+                                <p className="text-xs text-slate-500 italic">Aucune note.</p>
+                              ) : (
+                                (notesCibles[target.id] ?? []).map((n) => (
+                                  <div
+                                    key={n.id}
+                                    className="flex items-start justify-between gap-2 text-xs border-t border-slate-800 pt-2"
+                                  >
+                                    <div>
+                                      <p className="text-slate-300">{n.contenu}</p>
+                                      <p className="text-slate-600">
+                                        {new Date(n.created_at).toLocaleString('fr-FR')}
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => supprimerNote(target.id, n.id)}
+                                      className="text-red-400 hover:text-red-300 underline whitespace-nowrap"
+                                    >
+                                      Suppr.
+                                    </button>
+                                  </div>
+                                ))
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
