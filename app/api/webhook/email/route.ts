@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { traiterReponseEntrante } from '@/lib/traiter-reponse'
 
 // Recoit les emails entrants via la fonction "Inbound" de Resend (evenement
 // email.received). A configurer dans Resend : Webhooks > nouvelle URL =
@@ -36,9 +37,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ succes: true, ignore: true })
     }
 
-    await supabaseAdmin.from('messages_recus').insert({
-      client_id: cible.client_id,
-      target_id: cible.id,
+    await traiterReponseEntrante({
+      clientId: cible.client_id,
+      targetId: cible.id,
       canal: 'email',
       contenu: texte,
       expediteur,

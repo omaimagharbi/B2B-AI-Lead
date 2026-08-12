@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { genererSignalIA } from '@/lib/classification'
+import { quotaCiblesDisponible } from '@/lib/quotas'
 
 type ContactImporte = {
   nom: string
@@ -98,6 +100,12 @@ export async function POST(req: NextRequest) {
           source_scraping: c.canal?.trim() || null,
           resultat_historique: resultatHistorique,
           statut: resultatHistorique ? 'contacte' : 'nouveau',
+          signal_ia: genererSignalIA({
+            poste: null,
+            entreprise: c.entreprise?.trim() || null,
+            segmentCategorie: null,
+            segmentUrgence: null,
+          }),
         }
       })
 
@@ -108,6 +116,16 @@ export async function POST(req: NextRequest) {
         doublons_ignores: contacts.length - ignoresSansNom,
         sans_nom_ignores: ignoresSansNom,
       })
+    }
+
+    const quota = await quotaCiblesDisponible(clientUser.client_id, lignes.length)
+    if (!quota.autorise) {
+      return NextResponse.json(
+        {
+          error: `Quota mensuel atteint (${quota.consomme}/${quota.quota} cibles ce mois-ci). Contacte l'administrateur pour l'augmenter.`,
+        },
+        { status: 403 }
+      )
     }
 
     const { error: insertError } = await supabaseAdmin.from('targets').insert(lignes)

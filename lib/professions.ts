@@ -20,6 +20,12 @@ export const PROFESSIONS_PAR_VERTICAL: Record<string, string[]> = {
     'Fondateur',
     'Responsable Administratif et Financier',
   ],
+  'investisseur-incubateur': [
+    'Fondateur',
+    'Co-fondateur',
+    'CEO de startup',
+    'Directeur Général de startup',
+  ],
 }
 
 // Profils cibles en mode "Particulier" (vertical Cabinet de Formation uniquement)

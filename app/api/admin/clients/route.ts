@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const { data: clients, error } = await supabaseAdmin
     .from('clients')
-    .select('id, nom_entreprise, email, statut_abonnement, plan_tarifaire, commission_pourcentage, created_at')
+    .select('id, nom_entreprise, email, statut_abonnement, plan_tarifaire, commission_pourcentage, acces_active, montant_abonnement, devise_abonnement, statut_paiement, date_echeance_paiement, mode_paiement, quota_cibles_mensuel, created_at')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -49,11 +49,23 @@ export async function GET(req: NextRequest) {
     montantParClient.set(clientId, (montantParClient.get(clientId) ?? 0) + (p.prix_pack ?? 0))
   }
 
-  // Nombre total de cibles par client (activite de sourcing/prospection)
-  const { data: toutesLesCibles } = await supabaseAdmin.from('targets').select('client_id')
+  // Nombre total de cibles par client (activite de sourcing/prospection),
+  // et consommation du mois en cours (pour la jauge de quota, Sprint 5).
+  const { data: toutesLesCibles } = await supabaseAdmin.from('targets').select('client_id, created_at')
   const nbCiblesParClient = new Map<string, number>()
+  const nbCiblesMoisEnCoursParClient = new Map<string, number>()
+  const debutMois = new Date()
+  debutMois.setDate(1)
+  debutMois.setHours(0, 0, 0, 0)
+
   for (const c of toutesLesCibles ?? []) {
     nbCiblesParClient.set(c.client_id, (nbCiblesParClient.get(c.client_id) ?? 0) + 1)
+    if (c.created_at && new Date(c.created_at) >= debutMois) {
+      nbCiblesMoisEnCoursParClient.set(
+        c.client_id,
+        (nbCiblesMoisEnCoursParClient.get(c.client_id) ?? 0) + 1
+      )
+    }
   }
 
   // Diagnostics en attente de validation par client (charge de travail en cours)
@@ -75,6 +87,7 @@ export async function GET(req: NextRequest) {
       montant_vendu: montantVendu,
       commission_due: Math.round(montantVendu * (commissionPourcentage / 100) * 100) / 100,
       nb_cibles: nbCiblesParClient.get(c.id) ?? 0,
+      nb_cibles_mois_en_cours: nbCiblesMoisEnCoursParClient.get(c.id) ?? 0,
       nb_diagnostics_attente: nbAttenteParClient.get(c.id) ?? 0,
     }
   })
@@ -87,7 +100,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Non autorise' }, { status: 403 })
   }
 
-  const { client_id, statut_abonnement, plan_tarifaire, commission_pourcentage } = await req.json()
+  const {
+    client_id,
+    statut_abonnement,
+    plan_tarifaire,
+    commission_pourcentage,
+    acces_active,
+    montant_abonnement,
+    devise_abonnement,
+    statut_paiement,
+    date_echeance_paiement,
+    mode_paiement,
+    quota_cibles_mensuel,
+  } = await req.json()
 
   if (!client_id) {
     return NextResponse.json({ error: 'client_id manquant' }, { status: 400 })
@@ -97,6 +122,13 @@ export async function POST(req: NextRequest) {
   if (statut_abonnement !== undefined) misAJour.statut_abonnement = statut_abonnement
   if (plan_tarifaire !== undefined) misAJour.plan_tarifaire = plan_tarifaire
   if (commission_pourcentage !== undefined) misAJour.commission_pourcentage = commission_pourcentage
+  if (acces_active !== undefined) misAJour.acces_active = acces_active
+  if (montant_abonnement !== undefined) misAJour.montant_abonnement = montant_abonnement
+  if (devise_abonnement !== undefined) misAJour.devise_abonnement = devise_abonnement
+  if (statut_paiement !== undefined) misAJour.statut_paiement = statut_paiement
+  if (date_echeance_paiement !== undefined) misAJour.date_echeance_paiement = date_echeance_paiement
+  if (mode_paiement !== undefined) misAJour.mode_paiement = mode_paiement
+  if (quota_cibles_mensuel !== undefined) misAJour.quota_cibles_mensuel = quota_cibles_mensuel
 
   const { error } = await supabaseAdmin.from('clients').update(misAJour).eq('id', client_id)
 

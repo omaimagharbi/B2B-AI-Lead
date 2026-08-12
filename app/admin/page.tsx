@@ -8,6 +8,14 @@ type ClientAdmin = {
   nom_entreprise: string
   email: string
   statut_abonnement: string
+  acces_active: boolean
+  montant_abonnement: number | null
+  devise_abonnement: string | null
+  statut_paiement: string | null
+  date_echeance_paiement: string | null
+  mode_paiement: string | null
+  quota_cibles_mensuel: number | null
+  nb_cibles_mois_en_cours?: number
   plan_tarifaire: string | null
   created_at: string
   packs_vendus: number
@@ -20,6 +28,32 @@ type ClientAdmin = {
 
 export default function AdminPage() {
   const [clients, setClients] = useState<ClientAdmin[]>([])
+  const [monitoring, setMonitoring] = useState<{
+    sante: Record<
+      string,
+      {
+        statut: 'ok' | 'ko' | 'inconnu'
+        derniere_verif: string | null
+        details: string | null
+        taux_succes_recent: number | null
+      }
+    >
+    cout_ia_mois_en_cours: {
+      client_id: string
+      nom: string
+      cout_usd: number
+      appels: number
+      abonnement: number | null
+      devise: string | null
+    }[]
+  } | null>(null)
+  const [statsGlobales, setStatsGlobales] = useState<{
+    total_entreprises: number
+    entreprises_actives: number
+    total_diagnostics: number
+    total_cibles: number
+    mrr_par_devise: Record<string, number>
+  } | null>(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState<string | null>(null)
   const [majEnCours, setMajEnCours] = useState<string | null>(null)
@@ -33,6 +67,16 @@ export default function AdminPage() {
     email: string
     motDePasseTemporaire: string
   } | null>(null)
+  const [demandesBeta, setDemandesBeta] = useState<
+    {
+      id: string
+      email: string
+      carte_slug: string
+      sous_secteur: string | null
+      traite: boolean
+      created_at: string
+    }[]
+  >([])
   const [erreurCreation, setErreurCreation] = useState<string | null>(null)
 
   const charger = async () => {
@@ -58,6 +102,28 @@ export default function AdminPage() {
     }
 
     setClients(data.clients)
+
+    const resStats = await fetch('/api/admin/stats', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (resStats.ok) {
+      setStatsGlobales(await resStats.json())
+    }
+
+    const resMonitoring = await fetch('/api/admin/monitoring', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (resMonitoring.ok) {
+      setMonitoring(await resMonitoring.json())
+    }
+
+    const resBeta = await fetch('/api/admin/beta-demandes', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (resBeta.ok) {
+      setDemandesBeta((await resBeta.json()).demandes)
+    }
+
     setChargement(false)
   }
 
@@ -87,6 +153,114 @@ export default function AdminPage() {
 
     await charger()
     setMajEnCours(null)
+  }
+
+  const basculerAcces = async (clientId: string, accesActuel: boolean) => {
+    setMajEnCours(clientId)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    await fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        acces_active: !accesActuel,
+      }),
+    })
+
+    await charger()
+    setMajEnCours(null)
+  }
+
+  const forcerStatutPaye = async (clientId: string) => {
+    setMajEnCours(clientId)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    // Echeance repoussee d'un mois a partir d'aujourd'hui - simple
+    // renouvellement manuel pour les paiements hors Stripe (cheque,
+    // especes, virement en Tunisie).
+    const nouvelleEcheance = new Date()
+    nouvelleEcheance.setMonth(nouvelleEcheance.getMonth() + 1)
+
+    await fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        statut_paiement: 'paye',
+        date_echeance_paiement: nouvelleEcheance.toISOString().slice(0, 10),
+      }),
+    })
+
+    await charger()
+    setMajEnCours(null)
+  }
+
+  const modifierMontantAbonnement = async (
+    clientId: string,
+    montant: number,
+    devise: string,
+    modePaiement: string
+  ) => {
+    setMajEnCours(clientId)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    await fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        montant_abonnement: montant,
+        devise_abonnement: devise,
+        mode_paiement: modePaiement,
+      }),
+    })
+
+    await charger()
+    setMajEnCours(null)
+  }
+
+  const modifierQuota = async (clientId: string, quota: number | null) => {
+    setMajEnCours(clientId)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    await fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ client_id: clientId, quota_cibles_mensuel: quota }),
+    })
+
+    await charger()
+    setMajEnCours(null)
+  }
+
+  const basculerDemandeTraitee = async (id: string, traiteActuel: boolean) => {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    await fetch('/api/admin/beta-demandes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id, traite: !traiteActuel }),
+    })
+
+    await charger()
   }
 
   const modifierCommission = async (clientId: string, pourcentage: number) => {
@@ -166,6 +340,146 @@ export default function AdminPage() {
           </a>
         </div>
 
+        {statsGlobales && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+              <p className="text-xs text-slate-500 uppercase">Entreprises actives</p>
+              <p className="text-2xl font-bold text-accent">
+                {statsGlobales.entreprises_actives}
+                <span className="text-sm text-slate-500 font-normal">
+                  {' '}
+                  / {statsGlobales.total_entreprises}
+                </span>
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+              <p className="text-xs text-slate-500 uppercase">Diagnostics générés</p>
+              <p className="text-2xl font-bold">{statsGlobales.total_diagnostics}</p>
+            </div>
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+              <p className="text-xs text-slate-500 uppercase">Cibles sourcées</p>
+              <p className="text-2xl font-bold">{statsGlobales.total_cibles}</p>
+            </div>
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+              <p className="text-xs text-slate-500 uppercase">MRR</p>
+              <p className="text-lg font-bold">
+                {Object.keys(statsGlobales.mrr_par_devise).length === 0
+                  ? '—'
+                  : Object.entries(statsGlobales.mrr_par_devise)
+                      .map(([devise, montant]) => `${montant} ${devise}`)
+                      .join(' · ')}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {monitoring && (
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+            <h2 className="font-semibold">⚙️ Console santé des intégrations</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {Object.entries(monitoring.sante).map(([service, info]) => (
+                <div key={service} className="rounded-lg bg-slate-950 border border-slate-800 p-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        info.statut === 'ok'
+                          ? 'bg-emerald-500'
+                          : info.statut === 'ko'
+                          ? 'bg-red-500'
+                          : 'bg-slate-600'
+                      }`}
+                    />
+                    <span className="text-sm font-medium capitalize">
+                      {service.replace('_', ' ')}
+                    </span>
+                  </div>
+                  {info.taux_succes_recent !== null ? (
+                    <p className="text-xs text-slate-500 mt-1">
+                      {info.taux_succes_recent}% succès (20 derniers appels)
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-600 mt-1">Aucun appel encore enregistré</p>
+                  )}
+                  {info.details && (
+                    <p className="text-xs text-red-400 mt-1 truncate" title={info.details}>
+                      {info.details}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {monitoring && monitoring.cout_ia_mois_en_cours.length > 0 && (
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+            <h2 className="font-semibold">🧮 Coût IA réel — mois en cours</h2>
+            <p className="text-xs text-slate-500">
+              Estimation basée sur les tarifs publics des fournisseurs — à titre indicatif, pas
+              une facture exacte.
+            </p>
+            <div className="space-y-2">
+              {monitoring.cout_ia_mois_en_cours.map((c) => (
+                <div
+                  key={c.client_id}
+                  className="flex items-center justify-between rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm"
+                >
+                  <span>{c.nom}</span>
+                  <span className="text-slate-400">
+                    {c.appels} appel{c.appels > 1 ? 's' : ''} · ~${c.cout_usd.toFixed(3)}
+                    {c.abonnement != null && (
+                      <>
+                        {' '}
+                        · abonnement {c.abonnement} {c.devise}
+                      </>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {demandesBeta.length > 0 && (
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+            <h2 className="font-semibold">
+              🔒 Demandes Bêta Privée{' '}
+              <span className="text-xs text-slate-500 font-normal">
+                ({demandesBeta.filter((d) => !d.traite).length} non traitée
+                {demandesBeta.filter((d) => !d.traite).length > 1 ? 's' : ''})
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {demandesBeta.map((d) => (
+                <div
+                  key={d.id}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
+                    d.traite
+                      ? 'bg-slate-950 border-slate-800 opacity-50'
+                      : 'bg-slate-950 border-amber-900'
+                  }`}
+                >
+                  <div>
+                    <span className="font-medium">{d.email}</span>
+                    <span className="text-slate-500">
+                      {' '}
+                      · {d.carte_slug}
+                      {d.sous_secteur ? ` · ${d.sous_secteur}` : ''} ·{' '}
+                      {new Date(d.created_at).toLocaleDateString('fr-FR')}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => basculerDemandeTraitee(d.id, d.traite)}
+                    className="text-xs px-3 py-1 rounded-lg bg-slate-800 border border-slate-700"
+                  >
+                    {d.traite ? 'Marquer non traitée' : '✅ Marquer traitée'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
           <h2 className="font-semibold">➕ Créer un nouveau cabinet</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -225,17 +539,34 @@ export default function AdminPage() {
                     <p className="font-semibold">{client.nom_entreprise || '(sans nom)'}</p>
                     <p className="text-slate-400 text-sm">{client.email || '—'}</p>
                   </div>
-                  <button
-                    onClick={() => basculerPayant(client.id, client.statut_abonnement)}
-                    disabled={majEnCours === client.id}
-                    className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 transition disabled:opacity-40 shrink-0"
-                  >
-                    {majEnCours === client.id
-                      ? '...'
-                      : client.statut_abonnement === 'payant'
-                      ? 'Repasser en essai'
-                      : 'Passer en payant'}
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => basculerAcces(client.id, client.acces_active)}
+                      disabled={majEnCours === client.id}
+                      className={`text-sm px-3 py-2 rounded-lg border transition disabled:opacity-40 ${
+                        client.acces_active
+                          ? 'bg-slate-800 border-slate-600 hover:bg-slate-700'
+                          : 'bg-accent text-slate-950 border-accent font-semibold hover:bg-accent/90'
+                      }`}
+                    >
+                      {majEnCours === client.id
+                        ? '...'
+                        : client.acces_active
+                        ? '🔓 Accès actif'
+                        : '🔒 Activer l\'accès'}
+                    </button>
+                    <button
+                      onClick={() => basculerPayant(client.id, client.statut_abonnement)}
+                      disabled={majEnCours === client.id}
+                      className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 transition disabled:opacity-40 shrink-0"
+                    >
+                      {majEnCours === client.id
+                        ? '...'
+                        : client.statut_abonnement === 'payant'
+                        ? 'Repasser en essai'
+                        : 'Passer en payant'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -277,6 +608,118 @@ export default function AdminPage() {
                   {(client.commission_pourcentage ?? 0) > 0 && (
                     <span className="text-accent font-semibold ml-2">
                       → {client.commission_due} dû (sur {client.montant_vendu} vendu)
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-xs pt-1 border-t border-slate-800 flex-wrap">
+                  <label className="text-slate-400">Abonnement :</label>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Montant"
+                    defaultValue={client.montant_abonnement ?? ''}
+                    onBlur={(e) =>
+                      modifierMontantAbonnement(
+                        client.id,
+                        Number(e.target.value),
+                        client.devise_abonnement ?? 'TND',
+                        client.mode_paiement ?? ''
+                      )
+                    }
+                    className="w-20 rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                  />
+                  <select
+                    defaultValue={client.devise_abonnement ?? 'TND'}
+                    onChange={(e) =>
+                      modifierMontantAbonnement(
+                        client.id,
+                        client.montant_abonnement ?? 0,
+                        e.target.value,
+                        client.mode_paiement ?? ''
+                      )
+                    }
+                    className="rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                  >
+                    <option value="TND">TND</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                  <select
+                    defaultValue={client.mode_paiement ?? ''}
+                    onChange={(e) =>
+                      modifierMontantAbonnement(
+                        client.id,
+                        client.montant_abonnement ?? 0,
+                        client.devise_abonnement ?? 'TND',
+                        e.target.value
+                      )
+                    }
+                    className="rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                  >
+                    <option value="">Mode de paiement</option>
+                    <option value="cheque">Chèque</option>
+                    <option value="especes">Espèces</option>
+                    <option value="virement">Virement</option>
+                    <option value="stripe">Stripe</option>
+                  </select>
+                  <span
+                    className={`px-2 py-1 rounded-full ${
+                      client.statut_paiement === 'paye'
+                        ? 'bg-green-950 text-accent'
+                        : client.statut_paiement === 'en_retard'
+                        ? 'bg-red-950 text-red-400'
+                        : 'bg-amber-950 text-amber-400'
+                    }`}
+                  >
+                    {client.statut_paiement === 'paye'
+                      ? '✅ Payé'
+                      : client.statut_paiement === 'en_retard'
+                      ? '⚠️ En retard'
+                      : '⏳ En attente'}
+                  </span>
+                  {client.date_echeance_paiement && (
+                    <span className="text-slate-500">
+                      Échéance : {new Date(client.date_echeance_paiement).toLocaleDateString('fr-FR')}
+                    </span>
+                  )}
+                  {client.statut_paiement !== 'paye' && (
+                    <button
+                      onClick={() => forcerStatutPaye(client.id)}
+                      disabled={majEnCours === client.id}
+                      className="px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+                    >
+                      Forcer le statut payé
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  <label className="text-slate-400">Quota cibles/mois :</label>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Illimité"
+                    defaultValue={client.quota_cibles_mensuel ?? ''}
+                    onBlur={(e) =>
+                      modifierQuota(client.id, e.target.value ? Number(e.target.value) : null)
+                    }
+                    className="w-24 rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                  />
+                  {client.quota_cibles_mensuel != null ? (
+                    <span
+                      className={
+                        (client.nb_cibles_mois_en_cours ?? 0) >= client.quota_cibles_mensuel
+                          ? 'text-red-400 font-semibold'
+                          : 'text-slate-400'
+                      }
+                    >
+                      {client.nb_cibles_mois_en_cours ?? 0} / {client.quota_cibles_mensuel} ce
+                      mois-ci
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">
+                      {client.nb_cibles_mois_en_cours ?? 0} ce mois-ci · illimité
                     </span>
                   )}
                 </div>

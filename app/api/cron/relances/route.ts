@@ -6,31 +6,22 @@ import { logErreur } from '@/lib/erreurs'
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 const LIMITE_PAR_EXECUTION = 30
-const JOURS_AVANT_RELANCE_1 = 3
-const JOURS_AVANT_RELANCE_2 = 7
+// Regle validee : une seule relance automatique, envoyee si le prospect n'a
+// pas repondu 1 semaine apres le premier message.
+const JOURS_AVANT_RELANCE = 7
 
 function joursEcoules(date: string): number {
   return (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24)
 }
 
-// Message differencie selon le nombre de relances deja envoyees et l'urgence
-// detectee (regles simples, pas d'IA generative).
-function construireMessageRelance(params: {
-  nom: string
-  cabinet: string
-  nbRelances: number
-  urgence: string | null
-}) {
-  const { nom, cabinet, nbRelances, urgence } = params
+// Une seule relance : ton plus direct si l'urgence detectee au moment du
+// premier contact etait haute, sinon un ton neutre et sans pression.
+function construireMessageRelance(params: { nom: string; cabinet: string; urgence: string | null }) {
+  const { nom, cabinet, urgence } = params
 
-  if (nbRelances === 0) {
-    return `Bonjour ${nom},\n\n${cabinet} souhaitait juste s'assurer que vous avez bien reçu notre message. N'hésitez pas à répondre si vous avez des questions.`
-  }
-
-  // 2e relance : ton plus direct si l'urgence detectee etait haute
   return urgence === 'haute'
     ? `Bonjour ${nom},\n\n${cabinet} revient vers vous : votre demande semblait urgente, nous restons disponibles pour en discuter rapidement si besoin.`
-    : `Bonjour ${nom},\n\n${cabinet} reste à votre disposition si vous souhaitez échanger, sans engagement de votre part.`
+    : `Bonjour ${nom},\n\n${cabinet} souhaitait juste s'assurer que vous avez bien reçu notre message. N'hésitez pas à répondre si vous avez des questions.`
 }
 
 export async function GET(req: NextRequest) {
@@ -50,12 +41,16 @@ export async function GET(req: NextRequest) {
       .from('targets')
       .select(
         `id, nom, telephone, email, country, client_id, ne_plus_contacter, token_desinscription,
-         nb_relances, derniere_relance_at, segment_urgence,
+         nb_relances, segment_urgence,
          clients(nom_entreprise, logo_url, message_personnalise)`
       )
       .eq('statut', 'contacte')
       .eq('ne_plus_contacter', false)
-      .lt('nb_relances', 2)
+      // Une seule relance possible, et jamais si le prospect a deja repondu
+      // (traiterReponseEntrante met nb_relances a 2 des qu'une reponse arrive,
+      // quel que soit son sentiment).
+      .lt('nb_relances', 1)
+      .is('reponse_sentiment', null)
       .limit(LIMITE_PAR_EXECUTION)
 
     if (targetsError) {
@@ -95,27 +90,25 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // On determine la date du dernier contact (derniere relance, ou premier envoi)
-      let dateDernierContact = target.derniere_relance_at as string | null
-      if (!dateDernierContact) {
-        const { data: dernierEnvoi } = await supabaseAdmin
-          .from('outreach_campaigns')
-          .select('date_envoi')
-          .eq('target_id', target.id)
-          .eq('statut', 'envoye')
-          .order('date_envoi', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        dateDernierContact = dernierEnvoi?.date_envoi ?? null
-      }
+      // Une seule relance possible (filtree plus haut), donc la reference est
+      // toujours le tout premier envoi.
+      const { data: premierEnvoi } = await supabaseAdmin
+        .from('outreach_campaigns')
+        .select('date_envoi')
+        .eq('target_id', target.id)
+        .eq('statut', 'envoye')
+        .order('date_envoi', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      const dateDernierContact = premierEnvoi?.date_envoi ?? null
 
       if (!dateDernierContact) {
         resultats.ignores++
         continue
       }
 
-      const seuilJours = target.nb_relances === 0 ? JOURS_AVANT_RELANCE_1 : JOURS_AVANT_RELANCE_2
-      if (joursEcoules(dateDernierContact) < seuilJours) {
+      if (joursEcoules(dateDernierContact) < JOURS_AVANT_RELANCE) {
         resultats.ignores++
         continue
       }
@@ -135,7 +128,6 @@ export async function GET(req: NextRequest) {
         const messageParDefaut = construireMessageRelance({
           nom: target.nom,
           cabinet: client.nom_entreprise,
-          nbRelances: target.nb_relances,
           urgence: target.segment_urgence,
         })
         // Le message personnalise du cabinet reste utilisable (variables {nom}/{cabinet}/{lien})

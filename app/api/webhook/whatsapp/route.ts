@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { traiterReponseEntrante } from '@/lib/traiter-reponse'
 
 // Recoit les notifications GreenAPI ("incomingMessageReceived") quand un
 // prospect repond par WhatsApp. A configurer dans les parametres de
@@ -55,9 +56,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ succes: true, ignore: true })
     }
 
-    await supabaseAdmin.from('messages_recus').insert({
-      client_id: cible.client_id,
-      target_id: cible.id,
+    await traiterReponseEntrante({
+      clientId: cible.client_id,
+      targetId: cible.id,
       canal: 'whatsapp',
       contenu: texte,
       expediteur: telephoneBrut,

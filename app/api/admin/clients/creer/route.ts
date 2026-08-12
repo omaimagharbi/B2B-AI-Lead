@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
         nom_entreprise: nom_entreprise.trim(),
         nom_complet: nom_complet?.trim() ?? '',
         vertical_slug: vertical_slug?.trim() || 'cabinet-formation',
+        cree_par_admin: true,
       },
     })
 

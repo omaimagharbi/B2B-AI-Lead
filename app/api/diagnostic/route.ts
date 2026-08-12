@@ -4,7 +4,11 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { construirePrompt, type ModeCiblage, type OffreCatalogue } from '@/lib/methodologie'
 import { envoyerEmail } from '@/lib/notifications'
 import { logErreur } from '@/lib/erreurs'
-import { analyserProspect } from '@/lib/strategie'
+import { analyserProspect, genererExplicationScore, genererBesoinSousJacent } from '@/lib/strategie'
+import { zonePourPays, argumentVenteParZone, deviseParZone } from '@/lib/pays'
+import { genererSignalIA } from '@/lib/classification'
+import { enregistrerSanteApi } from '@/lib/sante-api'
+import { enregistrerUsageIA } from '@/lib/usage-ia'
 
 function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
   const etapesAddie = [
@@ -57,7 +61,11 @@ async function genererBrouillonGemini(probleme: string, systemPrompt: string, ap
   const data = await res.json()
   const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'
   const cleanText = rawText.replace(/```json|```/g, '').trim()
-  return JSON.parse(cleanText)
+  return {
+    brouillon: JSON.parse(cleanText),
+    tokensEntree: data.usageMetadata?.promptTokenCount ?? 0,
+    tokensSortie: data.usageMetadata?.candidatesTokenCount ?? 0,
+  }
 }
 
 async function genererBrouillonAnthropic(probleme: string, systemPrompt: string, apiKey: string) {
@@ -72,7 +80,11 @@ async function genererBrouillonAnthropic(probleme: string, systemPrompt: string,
   const textBlock = message.content.find((block) => block.type === 'text')
   const rawText = textBlock && 'text' in textBlock ? textBlock.text : '{}'
   const cleanText = rawText.replace(/```json|```/g, '').trim()
-  return JSON.parse(cleanText)
+  return {
+    brouillon: JSON.parse(cleanText),
+    tokensEntree: message.usage?.input_tokens ?? 0,
+    tokensSortie: message.usage?.output_tokens ?? 0,
+  }
 }
 
 // Ordre d'essai : Gemini (palier gratuit, ideal pour tester) -> Anthropic (payant, meilleure
@@ -85,21 +97,32 @@ async function genererBrouillon(probleme: string, systemPrompt: string, modeCibl
 
   if (geminiKey) {
     try {
-      return await genererBrouillonGemini(probleme, systemPrompt, geminiKey)
+      const resultat = await genererBrouillonGemini(probleme, systemPrompt, geminiKey)
+      await enregistrerSanteApi('ia_diagnostic', true, 'gemini')
+      return { ...resultat, fournisseur: 'gemini' as const }
     } catch (err) {
       console.error('Gemini indisponible, on essaie la suite:', err)
+      await enregistrerSanteApi('ia_diagnostic', false, `gemini: ${String(err)}`)
     }
   }
 
   if (anthropicKey) {
     try {
-      return await genererBrouillonAnthropic(probleme, systemPrompt, anthropicKey)
+      const resultat = await genererBrouillonAnthropic(probleme, systemPrompt, anthropicKey)
+      await enregistrerSanteApi('ia_diagnostic', true, 'anthropic')
+      return { ...resultat, fournisseur: 'anthropic' as const }
     } catch (err) {
       console.error('Anthropic indisponible, bascule en mode simule:', err)
+      await enregistrerSanteApi('ia_diagnostic', false, `anthropic: ${String(err)}`)
     }
   }
 
-  return genererBrouillonSimule(probleme, modeCiblage)
+  return {
+    brouillon: genererBrouillonSimule(probleme, modeCiblage),
+    tokensEntree: 0,
+    tokensSortie: 0,
+    fournisseur: null,
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -129,7 +152,7 @@ export async function POST(req: NextRequest) {
     const { data: diagnostic, error: findError } = await supabaseAdmin
       .from('diagnostics')
       .select(
-        'id, target_id, client_id, clients(mode_ciblage, email, nom_entreprise), verticals(prompt_ia_config), targets(poste_ou_budget)'
+        'id, target_id, client_id, clients(mode_ciblage, email, nom_entreprise), verticals(prompt_ia_config), targets(poste_ou_budget, entreprise_ou_objectif, country)'
       )
       .eq('token_acces', token)
       .single()
@@ -152,14 +175,35 @@ export async function POST(req: NextRequest) {
       .select('nom, description, prix, devise, duree')
       .eq('client_id', diagnostic.client_id)
 
+    // @ts-ignore - jointures Supabase typees dynamiquement
+    const countryCible = diagnostic.targets?.country as string | null | undefined
+    const zone = zonePourPays(countryCible)
+    const devise = deviseParZone(zone)
+    const contexteZone =
+      `${argumentVenteParZone(zone)} Devise a utiliser pour tout montant chiffre dans ce ` +
+      `diagnostic (packs, tarifs) : ${devise}.`
+    const promptVerticalAvecZone = promptVertical
+      ? `${promptVertical}\n\n${contexteZone}`
+      : contexteZone
+
     const systemPrompt = construirePrompt(
       modeCiblage,
-      promptVertical,
+      promptVerticalAvecZone,
       (catalogueData ?? []) as OffreCatalogue[]
     )
 
     // 2. Generation du brouillon (reel ou simule en secours) - JAMAIS montre au prospect
-    const brouillon = await genererBrouillon(probleme, systemPrompt, modeCiblage)
+    const resultatGeneration = await genererBrouillon(probleme, systemPrompt, modeCiblage)
+    const brouillon = resultatGeneration.brouillon
+
+    if (resultatGeneration.fournisseur) {
+      await enregistrerUsageIA({
+        clientId: diagnostic.client_id ?? null,
+        fournisseur: resultatGeneration.fournisseur,
+        tokensEntree: resultatGeneration.tokensEntree,
+        tokensSortie: resultatGeneration.tokensSortie,
+      })
+    }
 
     // 3. On sauvegarde et on passe le diagnostic en attente de validation humaine
     await supabaseAdmin
@@ -176,10 +220,20 @@ export async function POST(req: NextRequest) {
     // moteur de regles a partir du texte brut du prospect.
     // @ts-ignore - jointure Supabase typee dynamiquement
     const posteOuBudget = diagnostic.targets?.poste_ou_budget as string | null | undefined
+    // @ts-ignore - jointure Supabase typee dynamiquement
+    const entrepriseOuObjectif = diagnostic.targets?.entreprise_ou_objectif as
+      | string
+      | null
+      | undefined
     const { segment, score, recommandations, contenuMarketing } = analyserProspect({
       phraseProspect: probleme,
       posteOuBudget,
     })
+    const explicationScore = genererExplicationScore({
+      segment,
+      phraseProspect: probleme,
+    })
+    const besoinSousJacent = genererBesoinSousJacent(segment.categorie)
 
     if (diagnostic.target_id) {
       await supabaseAdmin
@@ -188,13 +242,28 @@ export async function POST(req: NextRequest) {
           segment_categorie: segment.categorie,
           segment_urgence: segment.urgence,
           score_chaleur: score,
+          signal_ia: genererSignalIA({
+            poste: posteOuBudget ?? null,
+            entreprise: entrepriseOuObjectif ?? null,
+            segmentCategorie: segment.categorie,
+            segmentUrgence: segment.urgence,
+          }),
         })
         .eq('id', diagnostic.target_id)
     }
 
     await supabaseAdmin
       .from('diagnostics')
-      .update({ recommandations_json: { segment, score, recommandations, contenuMarketing } })
+      .update({
+        recommandations_json: {
+          segment,
+          score,
+          recommandations,
+          contenuMarketing,
+          explicationScore,
+          besoinSousJacent,
+        },
+      })
       .eq('id', diagnostic.id)
 
     // 3bis. On notifie le cabinet par email qu'un nouveau diagnostic attend sa validation

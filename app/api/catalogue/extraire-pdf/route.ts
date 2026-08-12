@@ -77,13 +77,31 @@ export async function POST(req: NextRequest) {
 
     const geminiKey = process.env.GEMINI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
-    let texteBrut = '{}'
+    let texteBrut: string | null = null
 
-    if (geminiKey) texteBrut = await extraireAvecGemini(pdf_base64, geminiKey)
-    else if (anthropicKey) texteBrut = await extraireAvecAnthropic(pdf_base64, anthropicKey)
-    else {
+    if (geminiKey) {
+      try {
+        texteBrut = await extraireAvecGemini(pdf_base64, geminiKey)
+      } catch (err) {
+        console.error('Gemini indisponible pour extraction PDF, on essaie la suite:', err)
+      }
+    }
+
+    if (texteBrut === null && anthropicKey) {
+      try {
+        texteBrut = await extraireAvecAnthropic(pdf_base64, anthropicKey)
+      } catch (err) {
+        console.error('Anthropic indisponible pour extraction PDF:', err)
+      }
+    }
+
+    if (texteBrut === null) {
       return NextResponse.json(
-        { error: "Aucune cle IA configuree (GEMINI_API_KEY ou ANTHROPIC_API_KEY), impossible d'extraire" },
+        {
+          error: geminiKey || anthropicKey
+            ? "Le service IA est momentanément indisponible, reessaie dans quelques instants"
+            : "Aucune cle IA configuree (GEMINI_API_KEY ou ANTHROPIC_API_KEY), impossible d'extraire",
+        },
         { status: 500 }
       )
     }

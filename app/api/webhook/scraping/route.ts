@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { genererSignalIA } from '@/lib/classification'
+import { quotaCiblesDisponible } from '@/lib/quotas'
 
 // Ce webhook est fait pour etre appele par Apify, PhantomBuster, ou tout autre
 // outil de scraping, une fois le scraping termine (via leur systeme de "webhook"
@@ -63,9 +65,33 @@ export async function POST(req: NextRequest) {
       country: c.country ?? null,
       source_scraping: 'apify_phantombuster',
       statut: 'nouveau',
+      signal_ia: genererSignalIA({
+        poste: c.poste_ou_budget ?? null,
+        entreprise: c.entreprise_ou_objectif ?? null,
+        segmentCategorie: null,
+        segmentUrgence: null,
+      }),
     }))
 
-    const { error } = await supabaseAdmin.from('targets').insert(lignes)
+    // Le scraping est un process automatise (cron) : plutot que de tout
+    // rejeter si le quota est depasse, on tronque a ce qu'il reste de
+    // disponible ce mois-ci - le client garde au moins ce qui rentre dans
+    // son forfait au lieu de tout perdre.
+    const quota = await quotaCiblesDisponible(client_id, lignes.length)
+    const lignesRetenues = quota.autorise
+      ? lignes
+      : lignes.slice(0, Math.max(0, (quota.quota ?? 0) - quota.consomme))
+
+    if (lignesRetenues.length === 0) {
+      return NextResponse.json({
+        succes: true,
+        nombre_ajoute: 0,
+        doublons_ignores: nombreDoublons,
+        quota_atteint: true,
+      })
+    }
+
+    const { error } = await supabaseAdmin.from('targets').insert(lignesRetenues)
 
     if (error) {
       console.error('Erreur insertion cibles scrapees:', error)
@@ -74,8 +100,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       succes: true,
-      nombre_ajoute: lignes.length,
+      nombre_ajoute: lignesRetenues.length,
       doublons_ignores: nombreDoublons,
+      quota_atteint: lignesRetenues.length < lignes.length,
     })
   } catch (err) {
     console.error('Erreur webhook scraping:', err)
