@@ -8,6 +8,8 @@ import { SECTEURS_DISPONIBLES } from '@/lib/secteurs'
 import { professionsDisponibles, PROFILS_PARTICULIER } from '@/lib/professions'
 import { traduire, type Langue } from '@/lib/i18n'
 import { templatesPourVertical } from '@/lib/templates'
+import { vocabulairePourVertical, etapesPipelinePourVertical } from '@/lib/vocabulaire'
+import { zonePourPays, drapeauPays } from '@/lib/pays'
 import ValidationItem from './validation-item'
 import DropdownMultiSelect from './dropdown-multiselect'
 
@@ -23,6 +25,22 @@ type Client = {
   message_personnalise: string | null
   logo_url: string | null
   langue_preferee: Langue
+  imap_host?: string | null
+  imap_port?: number | null
+  imap_utilisateur?: string | null
+  imap_secure?: boolean
+  imap_actif?: boolean
+  imap_derniere_sync_at?: string | null
+  imap_derniere_erreur?: string | null
+  acces_active?: boolean
+  onboarding_complete?: boolean
+  whatsapp_directeur?: string | null
+  whatsapp_equipe?: string[]
+  facebook_url?: string | null
+  instagram_url?: string | null
+  linkedin_url?: string | null
+  site_web?: string | null
+  onglets_masques_equipe?: string[]
 }
 
 type Target = {
@@ -42,6 +60,9 @@ type Target = {
   derniere_relance_at?: string | null
   created_at?: string
   assigne_a?: string | null
+  signal_ia?: string | null
+  reponse_sentiment?: 'positive' | 'negative' | 'neutre' | null
+  reponse_a_traiter?: boolean
 }
 
 type DiagnosticEnAttente = {
@@ -72,6 +93,7 @@ type OffreCatalogue = {
   duree: string | null
   public_cible: string | null
   pdf_url: string | null
+  mode_facturation: string | null
 }
 
 type CalendrierEntree = {
@@ -117,7 +139,7 @@ type PackVendu = {
   diagnostics?: { target_id: string } | { target_id: string }[] | null
 }
 
-type Onglet = 'ciblage' | 'cibles' | 'validation' | 'equipe' | 'marketing' | 'inbox' | 'strategie' | 'catalogue' | 'calendrier' | 'stats'
+type Onglet = 'ciblage' | 'cibles' | 'pipeline' | 'validation' | 'equipe' | 'marketing' | 'inbox' | 'strategie' | 'catalogue' | 'calendrier' | 'stats'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -133,6 +155,36 @@ export default function DashboardPage() {
   const [calendrier, setCalendrier] = useState<CalendrierEntree[]>([])
   const [notesCibles, setNotesCibles] = useState<Record<string, NoteCible[]>>({})
   const [cibleNotesOuverte, setCibleNotesOuverte] = useState<string | null>(null)
+  const [carteEnCoursDeGlissement, setCarteEnCoursDeGlissement] = useState<string | null>(null)
+  const [imapForm, setImapForm] = useState({
+    imap_host: '',
+    imap_port: 993,
+    imap_utilisateur: '',
+    imap_mot_de_passe: '',
+    imap_secure: true,
+    imap_actif: false,
+  })
+  const [imapEnregistrement, setImapEnregistrement] = useState(false)
+  const [imapMessage, setImapMessage] = useState<string | null>(null)
+  const [onboardingForm, setOnboardingForm] = useState({
+    whatsapp_directeur: '',
+    facebook_url: '',
+    instagram_url: '',
+    linkedin_url: '',
+    site_web: '',
+  })
+  const [onboardingMembres, setOnboardingMembres] = useState([
+    { email: '', nom_complet: '', role: 'membre' as 'membre' | 'directeur_commercial' },
+  ])
+  const [onboardingEnCours, setOnboardingEnCours] = useState(false)
+  const [nouveauNumeroWhatsapp, setNouveauNumeroWhatsapp] = useState('')
+  const [sousOngletStrategie, setSousOngletStrategie] = useState<
+    'donnees' | 'commercial' | 'marketing'
+  >('donnees')
+  const [jourSelectionne, setJourSelectionne] = useState<string | null>(null)
+  const [filtrePaysStats, setFiltrePaysStats] = useState<'tous' | 'tunisie' | 'golfe' | 'reste'>(
+    'tous'
+  )
   const [nouvelleNoteTexte, setNouvelleNoteTexte] = useState('')
   const [moisAffiche, setMoisAffiche] = useState(() => {
     const d = new Date()
@@ -152,6 +204,7 @@ export default function DashboardPage() {
     devise: 'TND',
     duree: '',
     public_cible: '',
+    mode_facturation: '',
   })
   const [pdfUrlTemp, setPdfUrlTemp] = useState<string | null>(null)
   const [pdfEnCours, setPdfEnCours] = useState(false)
@@ -241,7 +294,7 @@ export default function DashboardPage() {
     const { data: targetsData } = await supabase
       .from('targets')
       .select(
-        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, etape_pipeline, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a'
+        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, etape_pipeline, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a, signal_ia, reponse_sentiment, reponse_a_traiter'
       )
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
@@ -276,7 +329,7 @@ export default function DashboardPage() {
 
     const { data: catalogueData } = await supabase
       .from('catalogue_offres')
-      .select('id, nom, description, prix, devise, duree, public_cible, pdf_url')
+      .select('id, nom, description, prix, devise, duree, public_cible, pdf_url, mode_facturation')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
     setCatalogue((catalogueData ?? []) as OffreCatalogue[])
@@ -383,7 +436,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -393,6 +446,14 @@ export default function DashboardPage() {
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
         setMessageInput((clientData as unknown as Client).message_personnalise ?? '')
         setLogoInput((clientData as unknown as Client).logo_url ?? '')
+        setImapForm((prev) => ({
+          ...prev,
+          imap_host: (clientData as unknown as Client).imap_host ?? '',
+          imap_port: (clientData as unknown as Client).imap_port ?? 993,
+          imap_utilisateur: (clientData as unknown as Client).imap_utilisateur ?? '',
+          imap_secure: (clientData as unknown as Client).imap_secure ?? true,
+          imap_actif: (clientData as unknown as Client).imap_actif ?? false,
+        }))
         // @ts-ignore - jointure Supabase typee dynamiquement
         const slug = clientData.verticals?.slug as string
         setVerticalSlug(slug ?? '')
@@ -686,6 +747,103 @@ export default function DashboardPage() {
     if (inputFichierCSV.current) inputFichierCSV.current.value = ''
   }
 
+  const enregistrerConfigImap = async () => {
+    setImapEnregistrement(true)
+    setImapMessage(null)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/parametres/imap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(imapForm),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setImapMessage(`❌ ${data.error ?? 'Erreur lors de la sauvegarde'}`)
+      } else {
+        setImapMessage('✅ Configuration enregistrée')
+        // On vide le champ mot de passe une fois envoye, il ne sera plus jamais rechargé.
+        setImapForm((prev) => ({ ...prev, imap_mot_de_passe: '' }))
+      }
+    } catch {
+      setImapMessage('❌ Erreur réseau')
+    } finally {
+      setImapEnregistrement(false)
+    }
+  }
+
+  const ajouterWhatsappEquipe = async (numero: string) => {
+    if (!client || !numero.trim()) return
+    const nouveaux = [...(client.whatsapp_equipe ?? []), numero.trim()]
+    await supabase.from('clients').update({ whatsapp_equipe: nouveaux }).eq('id', client.id)
+    setClient({ ...client, whatsapp_equipe: nouveaux })
+  }
+
+  const retirerWhatsappEquipe = async (numero: string) => {
+    if (!client) return
+    const nouveaux = (client.whatsapp_equipe ?? []).filter((n) => n !== numero)
+    await supabase.from('clients').update({ whatsapp_equipe: nouveaux }).eq('id', client.id)
+    setClient({ ...client, whatsapp_equipe: nouveaux })
+  }
+
+  const basculerOngletMasque = async (ongletId: string) => {
+    if (!client) return
+    const actuel = client.onglets_masques_equipe ?? []
+    const nouveau = actuel.includes(ongletId)
+      ? actuel.filter((id) => id !== ongletId)
+      : [...actuel, ongletId]
+
+    await supabase.from('clients').update({ onglets_masques_equipe: nouveau }).eq('id', client.id)
+    setClient({ ...client, onglets_masques_equipe: nouveau })
+  }
+
+  const soumettreOnboarding = async () => {
+    if (!client) return
+    setOnboardingEnCours(true)
+
+    try {
+      // 1. Reseaux et canaux de l'entreprise (RLS deja en place, meme pattern
+      // que les autres champs client comme taille_entreprise plus haut).
+      await supabase
+        .from('clients')
+        .update({
+          whatsapp_directeur: onboardingForm.whatsapp_directeur.trim() || null,
+          facebook_url: onboardingForm.facebook_url.trim() || null,
+          instagram_url: onboardingForm.instagram_url.trim() || null,
+          linkedin_url: onboardingForm.linkedin_url.trim() || null,
+          site_web: onboardingForm.site_web.trim() || null,
+          onboarding_complete: true,
+        })
+        .eq('id', client.id)
+
+      // 2. Invitation de chaque membre d'equipe renseigne (meme route que
+      // l'invitation classique, reutilisee ici pour tout faire en une fois).
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      for (const membre of onboardingMembres) {
+        if (!membre.email.trim()) continue
+        await fetch('/api/team/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            email: membre.email,
+            nom_complet: membre.nom_complet,
+            role: membre.role,
+          }),
+        })
+      }
+
+      setClient({ ...client, ...onboardingForm, onboarding_complete: true })
+      await chargerTout(client.id)
+    } finally {
+      setOnboardingEnCours(false)
+    }
+  }
+
   const changerEtapePipeline = async (targetId: string, etape: string) => {
     await supabase.from('targets').update({ etape_pipeline: etape }).eq('id', targetId)
     setTargets((prev) =>
@@ -967,6 +1125,7 @@ export default function DashboardPage() {
           devise: 'TND',
           duree: data.champs.duree ?? '',
           public_cible: data.champs.public_cible ?? '',
+          mode_facturation: '',
         })
       } else {
         alert(
@@ -995,12 +1154,21 @@ export default function DashboardPage() {
         devise: nouvelleOffre.devise,
         duree: nouvelleOffre.duree.trim() || null,
         public_cible: nouvelleOffre.public_cible.trim() || null,
+        mode_facturation: nouvelleOffre.mode_facturation || null,
         pdf_url: pdfUrlTemp,
       })
-      .select('id, nom, description, prix, devise, duree, public_cible, pdf_url')
+      .select('id, nom, description, prix, devise, duree, public_cible, pdf_url, mode_facturation')
       .single()
     if (data) setCatalogue((prev) => [data as OffreCatalogue, ...prev])
-    setNouvelleOffre({ nom: '', description: '', prix: '', devise: 'TND', duree: '', public_cible: '' })
+    setNouvelleOffre({
+      nom: '',
+      description: '',
+      prix: '',
+      devise: 'TND',
+      duree: '',
+      public_cible: '',
+      mode_facturation: '',
+    })
     setPdfUrlTemp(null)
     setMaj(false)
   }
@@ -1062,12 +1230,145 @@ export default function DashboardPage() {
     )
   }
 
+  if (!client.acces_active) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
+        <div className="max-w-md text-center space-y-4">
+          <div className="text-4xl">🔒</div>
+          <h1 className="text-xl font-semibold">Compte en attente d'activation</h1>
+          <p className="text-slate-400 text-sm">
+            Merci pour ton inscription, <strong>{client.nom_entreprise}</strong> ! Ton accès au
+            tableau de bord sera débloqué dès validation par notre équipe. Tu recevras un email
+            dès que c'est fait.
+          </p>
+        </div>
+      </main>
+    )
+  }
+
+  if (client.acces_active && !client.onboarding_complete && monRole === 'proprietaire') {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-12">
+        <div className="max-w-xl w-full space-y-6">
+          <div className="text-center space-y-2">
+            <div className="text-3xl">👋</div>
+            <h1 className="text-xl font-semibold">
+              Bienvenue, {client.nom_entreprise} !
+            </h1>
+            <p className="text-slate-400 text-sm">
+              Quelques infos avant de commencer — ça ne prend qu'une minute, et tu pourras tout
+              modifier plus tard.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-slate-300">📱 Réseaux &amp; canaux</h2>
+            <input
+              placeholder="WhatsApp du directeur commercial"
+              value={onboardingForm.whatsapp_directeur}
+              onChange={(e) =>
+                setOnboardingForm({ ...onboardingForm, whatsapp_directeur: e.target.value })
+              }
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              placeholder="Page Facebook (URL)"
+              value={onboardingForm.facebook_url}
+              onChange={(e) => setOnboardingForm({ ...onboardingForm, facebook_url: e.target.value })}
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              placeholder="Page Instagram (URL)"
+              value={onboardingForm.instagram_url}
+              onChange={(e) =>
+                setOnboardingForm({ ...onboardingForm, instagram_url: e.target.value })
+              }
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              placeholder="Page LinkedIn (URL)"
+              value={onboardingForm.linkedin_url}
+              onChange={(e) => setOnboardingForm({ ...onboardingForm, linkedin_url: e.target.value })}
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            />
+            <input
+              placeholder="Site web"
+              value={onboardingForm.site_web}
+              onChange={(e) => setOnboardingForm({ ...onboardingForm, site_web: e.target.value })}
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-slate-300">👥 Ton équipe (facultatif)</h2>
+            {onboardingMembres.map((membre, i) => (
+              <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input
+                  placeholder="Email"
+                  value={membre.email}
+                  onChange={(e) => {
+                    const copie = [...onboardingMembres]
+                    copie[i] = { ...copie[i], email: e.target.value }
+                    setOnboardingMembres(copie)
+                  }}
+                  className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                />
+                <input
+                  placeholder="Nom complet"
+                  value={membre.nom_complet}
+                  onChange={(e) => {
+                    const copie = [...onboardingMembres]
+                    copie[i] = { ...copie[i], nom_complet: e.target.value }
+                    setOnboardingMembres(copie)
+                  }}
+                  className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                />
+                <select
+                  value={membre.role}
+                  onChange={(e) => {
+                    const copie = [...onboardingMembres]
+                    copie[i] = { ...copie[i], role: e.target.value as 'membre' | 'directeur_commercial' }
+                    setOnboardingMembres(copie)
+                  }}
+                  className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                >
+                  <option value="membre">👤 Commercial</option>
+                  <option value="directeur_commercial">🧭 Directeur commercial</option>
+                </select>
+              </div>
+            ))}
+            <button
+              onClick={() =>
+                setOnboardingMembres([
+                  ...onboardingMembres,
+                  { email: '', nom_complet: '', role: 'membre' },
+                ])
+              }
+              className="text-xs text-accent underline"
+            >
+              + Ajouter un membre
+            </button>
+          </div>
+
+          <button
+            onClick={soumettreOnboarding}
+            disabled={onboardingEnCours}
+            className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
+          >
+            {onboardingEnCours ? 'Enregistrement...' : "C'est parti →"}
+          </button>
+        </div>
+      </main>
+    )
+  }
+
   const ciblesContactees = targets.filter((tg) => tg.statut === 'contacte').length
   const dir = langue === 'ar' ? 'rtl' : 'ltr'
 
   const ONGLETS: { id: Onglet; label: string; icone: string }[] = [
     { id: 'ciblage', label: t('onglet_ciblage'), icone: '🎯' },
     { id: 'cibles', label: t('onglet_cibles'), icone: '📋' },
+    { id: 'pipeline', label: 'Pipeline', icone: '📈' },
     { id: 'validation', label: t('onglet_validation'), icone: '🔔' },
     { id: 'equipe', label: t('onglet_equipe'), icone: '👥' },
     { id: 'marketing', label: 'Marketing', icone: '📣' },
@@ -1077,10 +1378,13 @@ export default function DashboardPage() {
       icone: '📥',
     },
     { id: 'strategie', label: '🧭 Stratégie', icone: '🧭' },
-    { id: 'catalogue', label: '📚 Catalogue', icone: '📚' },
+    { id: 'catalogue', label: `📚 ${vocabulairePourVertical(verticalSlug).labelCatalogue}`, icone: '📚' },
     { id: 'calendrier', label: '📅 Calendrier', icone: '📅' },
     { id: 'stats', label: t('onglet_stats'), icone: '📊' },
-  ]
+  ].filter((onglet): onglet is { id: Onglet; label: string; icone: string } => {
+    if (monRole === 'proprietaire' || monRole === 'admin') return true
+    return !(client.onglets_masques_equipe ?? []).includes(onglet.id)
+  })
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col md:flex-row" dir={dir}>
@@ -1489,8 +1793,11 @@ export default function DashboardPage() {
             </div>
             {messageImportCSV && <p className="text-sm text-slate-300">{messageImportCSV}</p>}
 
-            {targets.length === 0 ? (
-              <p className="text-slate-500 text-sm italic">Aucune cible pour le moment.</p>
+            {targets.filter((tg) => tg.statut === 'nouveau').length === 0 ? (
+              <p className="text-slate-500 text-sm italic">
+                Aucune cible non contactée pour le moment. Les prospects déjà contactés se
+                trouvent dans l'onglet Pipeline.
+              </p>
             ) : (
               <>
                 {membresEquipe.length > 1 && (
@@ -1503,7 +1810,7 @@ export default function DashboardPage() {
                           : 'bg-slate-900 text-slate-400 border-slate-700'
                       }`}
                     >
-                      Toutes les cibles ({targets.length})
+                      Toutes les cibles ({targets.filter((tg) => tg.statut === 'nouveau').length})
                     </button>
                     <button
                       onClick={() => setFiltreAssignation('mes-cibles')}
@@ -1513,7 +1820,13 @@ export default function DashboardPage() {
                           : 'bg-slate-900 text-slate-400 border-slate-700'
                       }`}
                     >
-                      Mes cibles ({targets.filter((tg) => tg.assigne_a === monClientUserId).length})
+                      Mes cibles (
+                      {
+                        targets.filter(
+                          (tg) => tg.statut === 'nouveau' && tg.assigne_a === monClientUserId
+                        ).length
+                      }
+                      )
                     </button>
                   </div>
                 )}
@@ -1557,6 +1870,7 @@ export default function DashboardPage() {
 
                 <div className="space-y-2">
                   {targets
+                    .filter((tg) => tg.statut === 'nouveau')
                     .filter((tg) => filtreAssignation === 'toutes' || tg.assigne_a === monClientUserId)
                     .map((target) => {
                       const estPriseParAutre = Boolean(
@@ -1597,9 +1911,18 @@ export default function DashboardPage() {
                           </p>
                           <p className="text-slate-400 text-sm">
                             {target.telephone ?? '—'} · {target.email ?? '—'} ·{' '}
-                            {target.country ?? '—'} ·{' '}
+                            {target.country ? `${drapeauPays(target.country)} ${target.country}` : '—'}{' '}
+                            ·{' '}
                             <span className="text-accent">{target.statut}</span>
                           </p>
+                          {target.signal_ia && (
+                            <p className="text-xs text-sky-400 mt-1">{target.signal_ia}</p>
+                          )}
+                          {target.reponse_a_traiter && (
+                            <p className="text-xs font-semibold text-emerald-400 mt-1">
+                              🎯 Réponse positive détectée — passez à l'envoi du diagnostic
+                            </p>
+                          )}
                           {estPriseParAutre && (
                             <p className="text-amber-400 text-xs mt-1">
                               🔒 Déjà pris en charge par {nomCollegue} — merci de ne pas le contacter
@@ -1772,6 +2095,92 @@ export default function DashboardPage() {
           </section>
         )}
 
+        {/* ===================== ONGLET PIPELINE (KANBAN) ===================== */}
+        {ongletActif === 'pipeline' && (
+          <section className="space-y-4">
+            {(() => {
+              const cibleEnCours = targets.filter((tg) => tg.statut !== 'nouveau')
+              const colonnes = etapesPipelinePourVertical(verticalSlug)
+
+              if (cibleEnCours.length === 0) {
+                return (
+                  <p className="text-slate-500 text-sm italic">
+                    Aucun prospect en cours pour le moment. Les prospects contactés depuis
+                    l'onglet Cibles apparaîtront ici.
+                  </p>
+                )
+              }
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                  {colonnes.map((colonne) => {
+                    const cartes = cibleEnCours.filter(
+                      (tg) => (tg.etape_pipeline || 'contacte') === colonne.etape
+                    )
+                    return (
+                      <div
+                        key={colonne.etape}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault()
+                          if (carteEnCoursDeGlissement) {
+                            changerEtapePipeline(carteEnCoursDeGlissement, colonne.etape)
+                          }
+                          setCarteEnCoursDeGlissement(null)
+                        }}
+                        className="rounded-xl border border-slate-700 bg-slate-900/60 p-2 min-h-[200px] space-y-2"
+                      >
+                        <p className="text-xs font-semibold text-slate-300 px-1 pb-1 border-b border-slate-800">
+                          {colonne.label} ({cartes.length})
+                        </p>
+                        {cartes.map((carte) => (
+                          <div
+                            key={carte.id}
+                            draggable
+                            onDragStart={() => setCarteEnCoursDeGlissement(carte.id)}
+                            onDragEnd={() => setCarteEnCoursDeGlissement(null)}
+                            className="rounded-lg border border-slate-700 bg-slate-950 p-2 cursor-grab active:cursor-grabbing space-y-1"
+                          >
+                            <p className="text-sm font-semibold">{carte.nom}</p>
+                            {carte.entreprise_ou_objectif && (
+                              <p className="text-xs text-slate-400">
+                                {carte.entreprise_ou_objectif}
+                              </p>
+                            )}
+                            {carte.reponse_a_traiter && (
+                              <p className="text-xs font-semibold text-emerald-400">
+                                🎯 Réponse positive à traiter
+                              </p>
+                            )}
+                            {typeof carte.score_chaleur === 'number' && (
+                              <span
+                                className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                  carte.score_chaleur >= 70
+                                    ? 'bg-green-950 text-green-400'
+                                    : carte.score_chaleur >= 40
+                                    ? 'bg-amber-950 text-amber-400'
+                                    : 'bg-red-950 text-red-400'
+                                }`}
+                              >
+                                🔥 {carte.score_chaleur}/100
+                              </span>
+                            )}
+                            {carte.country && (
+                              <p className="text-xs text-slate-500">
+                                {drapeauPays(carte.country)} {carte.country}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </section>
+        )}
+
         {/* ===================== ONGLET VALIDATION ===================== */}
         {ongletActif === 'validation' && (
           <section className="space-y-6">
@@ -1828,6 +2237,76 @@ export default function DashboardPage() {
         {ongletActif === 'equipe' && (
           <section className="space-y-4">
             <h2 className="text-lg font-semibold">{t('equipe_titre')}</h2>
+
+            {(monRole === 'proprietaire' || monRole === 'admin') && (
+              <details className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+                <summary className="cursor-pointer text-sm font-semibold">
+                  👑 Droits d'accès — choisir ce que l'équipe peut voir
+                </summary>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {ONGLETS.filter((o) => o.id !== 'equipe').map((onglet) => {
+                    const masque = (client.onglets_masques_equipe ?? []).includes(onglet.id)
+                    return (
+                      <button
+                        key={onglet.id}
+                        onClick={() => basculerOngletMasque(onglet.id)}
+                        className={`text-xs px-3 py-1.5 rounded-full border ${
+                          masque
+                            ? 'bg-slate-800 border-slate-600 text-slate-500 line-through'
+                            : 'bg-accent/10 border-accent/40 text-accent'
+                        }`}
+                      >
+                        {onglet.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  Les onglets barrés sont masqués pour les commerciaux et directeurs commerciaux
+                  (toi, propriétaire, vois toujours tout).
+                </p>
+              </details>
+            )}
+
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+              <h3 className="text-sm font-semibold">📱 Numéros WhatsApp de l'équipe</h3>
+              <div className="flex flex-wrap gap-2">
+                {(client.whatsapp_equipe ?? []).map((numero) => (
+                  <span
+                    key={numero}
+                    className="text-xs px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 flex items-center gap-2"
+                  >
+                    {numero}
+                    <button
+                      onClick={() => retirerWhatsappEquipe(numero)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+                {(client.whatsapp_equipe ?? []).length === 0 && (
+                  <span className="text-xs text-slate-500 italic">Aucun numéro ajouté.</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  placeholder="+216 XX XXX XXX"
+                  value={nouveauNumeroWhatsapp}
+                  onChange={(e) => setNouveauNumeroWhatsapp(e.target.value)}
+                  className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <button
+                  onClick={async () => {
+                    await ajouterWhatsappEquipe(nouveauNumeroWhatsapp)
+                    setNouveauNumeroWhatsapp('')
+                  }}
+                  className="text-sm px-4 rounded-lg bg-accent text-slate-950 font-semibold"
+                >
+                  Ajouter
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-2">
               {membresEquipe.map((m) => (
@@ -2020,6 +2499,86 @@ export default function DashboardPage() {
             <p className="text-slate-400 text-sm">
               Réponses des prospects par WhatsApp ou Email. Tu peux répondre directement d'ici.
             </p>
+
+            <details className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+              <summary className="cursor-pointer text-sm font-semibold">
+                ⚙️ Synchroniser ma boîte mail pro (IMAP){' '}
+                {client?.imap_actif && (
+                  <span className="text-xs text-emerald-400 font-normal">— activée</span>
+                )}
+              </summary>
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-slate-500">
+                  En plus de la réception automatique déjà active, tu peux brancher directement
+                  ta boîte mail professionnelle (Gmail, Outlook, etc.) pour que les réponses
+                  arrivées là-bas soient importées ici aussi, toutes les heures.
+                </p>
+                {client?.imap_derniere_erreur && (
+                  <p className="text-xs text-red-400">
+                    ⚠️ Dernière erreur de synchro : {client.imap_derniere_erreur}
+                  </p>
+                )}
+                {client?.imap_derniere_sync_at && (
+                  <p className="text-xs text-slate-500">
+                    Dernière synchro réussie :{' '}
+                    {new Date(client.imap_derniere_sync_at).toLocaleString('fr-FR')}
+                  </p>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    placeholder="Serveur IMAP (ex: imap.gmail.com)"
+                    value={imapForm.imap_host}
+                    onChange={(e) => setImapForm({ ...imapForm, imap_host: e.target.value })}
+                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Port (993 par défaut)"
+                    value={imapForm.imap_port}
+                    onChange={(e) =>
+                      setImapForm({ ...imapForm, imap_port: Number(e.target.value) })
+                    }
+                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  />
+                  <input
+                    placeholder="Adresse email"
+                    value={imapForm.imap_utilisateur}
+                    onChange={(e) =>
+                      setImapForm({ ...imapForm, imap_utilisateur: e.target.value })
+                    }
+                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Mot de passe (laisser vide pour ne pas changer)"
+                    value={imapForm.imap_mot_de_passe}
+                    onChange={(e) =>
+                      setImapForm({ ...imapForm, imap_mot_de_passe: e.target.value })
+                    }
+                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={imapForm.imap_actif}
+                    onChange={(e) => setImapForm({ ...imapForm, imap_actif: e.target.checked })}
+                  />
+                  Activer la synchronisation automatique
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={enregistrerConfigImap}
+                    disabled={imapEnregistrement}
+                    className="text-xs px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
+                  >
+                    {imapEnregistrement ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                  {imapMessage && <span className="text-xs">{imapMessage}</span>}
+                </div>
+              </div>
+            </details>
+
             {messagesRecus.length === 0 ? (
               <p className="text-slate-500 text-sm italic">
                 Aucun message reçu pour le moment.
@@ -2099,100 +2658,164 @@ export default function DashboardPage() {
         {/* ===================== ONGLET STRATEGIE ===================== */}
         {ongletActif === 'strategie' && (
           <section className="space-y-4">
-            <p className="text-slate-400 text-sm">
-              Analyse tes propres chiffres (canal, segments) pour te dire où concentrer tes
-              efforts. Nécessite au moins quelques dizaines de cibles avec un résultat — importe
-              d'anciens clients (colonne "resultat" dans le CSV) si tu n'as pas encore assez
-              d'activité récente.
-            </p>
-            <button
-              onClick={genererStrategie}
-              disabled={strategieEnCours}
-              className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-50"
-            >
-              {strategieEnCours ? 'Analyse en cours...' : '🧭 Générer ma stratégie'}
-            </button>
+            <div className="flex gap-2 border-b border-slate-800 pb-2">
+              {[
+                { id: 'donnees' as const, label: '📝 Remplir les données' },
+                { id: 'commercial' as const, label: '📈 Stratégie commerciale' },
+                { id: 'marketing' as const, label: '📣 Stratégie marketing' },
+              ].map((so) => (
+                <button
+                  key={so.id}
+                  onClick={() => setSousOngletStrategie(so.id)}
+                  className={`text-sm px-3 py-1.5 rounded-t-lg ${
+                    sousOngletStrategie === so.id
+                      ? 'bg-slate-900 text-accent border-b-2 border-accent'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {so.label}
+                </button>
+              ))}
+            </div>
 
-            {strategieResultat && (
-              <div className="space-y-4">
-                <div className="rounded-xl border border-accent/40 bg-slate-900 p-4 space-y-2">
-                  <p className="text-xs text-accent font-semibold uppercase">📈 Commerciale</p>
-                  <p className="text-sm text-slate-200 whitespace-pre-wrap">
-                    {strategieResultat.recommandationCommerciale}
-                  </p>
+            {sousOngletStrategie === 'donnees' && (
+              <div className="space-y-3">
+                <p className="text-slate-400 text-sm">
+                  L'IA se base sur deux sources déjà remplies ailleurs dans la plateforme :
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-1">
+                    <p className="text-sm font-semibold">
+                      📚 {vocabulairePourVertical(verticalSlug).labelCatalogue}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {catalogue.length} offre{catalogue.length > 1 ? 's' : ''} renseignée
+                      {catalogue.length > 1 ? 's' : ''} — importable en PDF ou saisie manuelle.
+                    </p>
+                    <button
+                      onClick={() => setOngletActif('catalogue')}
+                      className="text-xs text-accent underline"
+                    >
+                      Aller au catalogue →
+                    </button>
+                  </div>
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-1">
+                    <p className="text-sm font-semibold">🎯 Historique de cibles</p>
+                    <p className="text-xs text-slate-500">
+                      {targets.length} cible{targets.length > 1 ? 's' : ''} au total — plus il y a
+                      de résultats connus (gagné/perdu), plus l'analyse est fiable.
+                    </p>
+                    <button
+                      onClick={() => setOngletActif('cibles')}
+                      className="text-xs text-accent underline"
+                    >
+                      Aller aux cibles →
+                    </button>
+                  </div>
                 </div>
+                <button
+                  onClick={genererStrategie}
+                  disabled={strategieEnCours}
+                  className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-50"
+                >
+                  {strategieEnCours ? 'Analyse en cours...' : '🧭 Générer ma stratégie'}
+                </button>
+              </div>
+            )}
 
-                {strategieResultat.recommandationMarketing && (
+            {sousOngletStrategie === 'commercial' && (
+              <div className="space-y-4">
+                {!strategieResultat ? (
+                  <p className="text-slate-500 text-sm italic">
+                    Génère d'abord ta stratégie depuis l'onglet "Remplir les données".
+                  </p>
+                ) : (
+                  <>
+                    <div className="rounded-xl border border-accent/40 bg-slate-900 p-4 space-y-2">
+                      <p className="text-xs text-accent font-semibold uppercase">📈 Commerciale</p>
+                      <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                        {strategieResultat.recommandationCommerciale}
+                      </p>
+                    </div>
+
+                    {strategieResultat.parCanal.length > 0 && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-slate-300">
+                          Taux de conversion par canal
+                        </h3>
+                        {strategieResultat.parCanal.map((a) => (
+                          <div
+                            key={a.canal}
+                            className="flex items-center justify-between text-sm bg-slate-900 border border-slate-700 rounded-lg p-2"
+                          >
+                            <span>{a.canal}</span>
+                            <span className="text-slate-400">
+                              {a.gagnes}/{a.total} · {a.taux}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {strategieResultat.parSegment.length > 0 && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-slate-300">
+                          Taux de conversion par segment
+                        </h3>
+                        {strategieResultat.parSegment.map((a) => (
+                          <div
+                            key={a.canal}
+                            className="flex items-center justify-between text-sm bg-slate-900 border border-slate-700 rounded-lg p-2"
+                          >
+                            <span>{a.canal}</span>
+                            <span className="text-slate-400">
+                              {a.gagnes}/{a.total} · {a.taux}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {strategieResultat.historique.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-slate-800">
+                        <h3 className="text-sm font-semibold text-slate-300">🕓 Historique</h3>
+                        {strategieResultat.historique.map((h) => (
+                          <details
+                            key={h.id}
+                            className="bg-slate-900 border border-slate-700 rounded-lg p-2"
+                          >
+                            <summary className="text-xs text-slate-400 cursor-pointer">
+                              {new Date(h.created_at).toLocaleString('fr-FR')}
+                            </summary>
+                            <div className="mt-2 space-y-1 text-sm">
+                              {h.recommandation_commerciale && (
+                                <p>
+                                  <span className="text-accent">Commercial :</span>{' '}
+                                  {h.recommandation_commerciale}
+                                </p>
+                              )}
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {sousOngletStrategie === 'marketing' && (
+              <div className="space-y-4">
+                {!strategieResultat?.recommandationMarketing ? (
+                  <p className="text-slate-500 text-sm italic">
+                    Génère d'abord ta stratégie depuis l'onglet "Remplir les données".
+                  </p>
+                ) : (
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
                     <p className="text-xs text-slate-400 font-semibold uppercase">📣 Marketing</p>
                     <p className="text-sm text-slate-200 whitespace-pre-wrap">
                       {strategieResultat.recommandationMarketing}
                     </p>
-                  </div>
-                )}
-
-                {strategieResultat.parCanal.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-slate-300">
-                      Taux de conversion par canal
-                    </h3>
-                    {strategieResultat.parCanal.map((a) => (
-                      <div
-                        key={a.canal}
-                        className="flex items-center justify-between text-sm bg-slate-900 border border-slate-700 rounded-lg p-2"
-                      >
-                        <span>{a.canal}</span>
-                        <span className="text-slate-400">
-                          {a.gagnes}/{a.total} · {a.taux}%
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {strategieResultat.parSegment.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-slate-300">
-                      Taux de conversion par segment
-                    </h3>
-                    {strategieResultat.parSegment.map((a) => (
-                      <div
-                        key={a.canal}
-                        className="flex items-center justify-between text-sm bg-slate-900 border border-slate-700 rounded-lg p-2"
-                      >
-                        <span>{a.canal}</span>
-                        <span className="text-slate-400">
-                          {a.gagnes}/{a.total} · {a.taux}%
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {strategieResultat.historique.length > 0 && (
-                  <div className="space-y-2 pt-2 border-t border-slate-800">
-                    <h3 className="text-sm font-semibold text-slate-300">🕓 Historique</h3>
-                    {strategieResultat.historique.map((h) => (
-                      <details key={h.id} className="bg-slate-900 border border-slate-700 rounded-lg p-2">
-                        <summary className="text-xs text-slate-400 cursor-pointer">
-                          {new Date(h.created_at).toLocaleString('fr-FR')}
-                        </summary>
-                        <div className="mt-2 space-y-1 text-sm">
-                          {h.recommandation_commerciale && (
-                            <p>
-                              <span className="text-accent">Commercial :</span>{' '}
-                              {h.recommandation_commerciale}
-                            </p>
-                          )}
-                          {h.recommandation_marketing && (
-                            <p>
-                              <span className="text-slate-400">Marketing :</span>{' '}
-                              {h.recommandation_marketing}
-                            </p>
-                          )}
-                        </div>
-                      </details>
-                    ))}
                   </div>
                 )}
               </div>
@@ -2204,9 +2827,7 @@ export default function DashboardPage() {
         {ongletActif === 'catalogue' && (
           <section className="space-y-4">
             <p className="text-slate-400 text-sm">
-              Tes vraies formations/services. Tant que le catalogue est vide, l'IA continue de
-              proposer des packs génériques dans les diagnostics. Dès qu'il y a des offres ici,
-              elle pioche dedans en priorité.
+              {vocabulairePourVertical(verticalSlug).introCatalogue}
             </p>
 
             <div className="flex items-center gap-3">
@@ -2233,7 +2854,7 @@ export default function DashboardPage() {
               <input
                 value={nouvelleOffre.nom}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, nom: e.target.value })}
-                placeholder="Nom de la formation/service"
+                placeholder={vocabulairePourVertical(verticalSlug).placeholderNomOffre}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <div className="flex gap-2">
@@ -2260,6 +2881,18 @@ export default function DashboardPage() {
                 placeholder="Durée (ex: 3 jours)"
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
+              <select
+                value={nouvelleOffre.mode_facturation}
+                onChange={(e) =>
+                  setNouvelleOffre({ ...nouvelleOffre, mode_facturation: e.target.value })
+                }
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              >
+                <option value="">Mode de facturation (optionnel)</option>
+                <option value="journee">Tarif journalier (TJM)</option>
+                <option value="forfait">Forfait global</option>
+                <option value="abonnement_mensuel">Abonnement mensuel</option>
+              </select>
               <input
                 value={nouvelleOffre.public_cible}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, public_cible: e.target.value })}
@@ -2335,6 +2968,40 @@ export default function DashboardPage() {
               Rendez-vous clients, événements repérés, appels d'offres — ajoutés manuellement.
               Rien ici n'est lié automatiquement à tes cibles.
             </p>
+
+            {jourSelectionne && (
+              <div className="rounded-xl border border-accent/40 bg-slate-900 p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-accent">
+                    📅 {new Date(jourSelectionne).toLocaleDateString('fr-FR', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                    })}
+                  </p>
+                  <button
+                    onClick={() => setJourSelectionne(null)}
+                    className="text-xs text-slate-500 hover:text-slate-300"
+                  >
+                    ✕ Désélectionner
+                  </button>
+                </div>
+                {calendrier.filter((c) => c.date_evenement === jourSelectionne).length === 0 ? (
+                  <p className="text-xs text-slate-500 italic">
+                    Rien de prévu ce jour-là — remplis le formulaire ci-dessous pour ajouter.
+                  </p>
+                ) : (
+                  calendrier
+                    .filter((c) => c.date_evenement === jourSelectionne)
+                    .map((c) => (
+                      <p key={c.id} className="text-xs text-slate-300">
+                        {c.type === 'rdv' ? '📞' : c.type === 'evenement' ? '🎪' : c.type === 'appel_offre' ? '📋' : '📌'}{' '}
+                        {c.titre}
+                      </p>
+                    ))
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
               <input
@@ -2430,9 +3097,15 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={dateStr}
-                      className={`min-h-[70px] rounded-lg border p-1 text-xs ${
-                        dansLeMois ? 'border-slate-700 bg-slate-950' : 'border-slate-800 bg-slate-900 opacity-40'
-                      } ${estAujourdhui ? 'ring-1 ring-accent' : ''}`}
+                      onClick={() => {
+                        setJourSelectionne(dateStr)
+                        setNouvelleEntree((prev) => ({ ...prev, date_evenement: dateStr }))
+                      }}
+                      className={`min-h-[70px] rounded-lg border p-1 text-xs cursor-pointer transition ${
+                        dansLeMois ? 'border-slate-700 bg-slate-950 hover:border-accent/60' : 'border-slate-800 bg-slate-900 opacity-40'
+                      } ${estAujourdhui ? 'ring-1 ring-accent' : ''} ${
+                        jourSelectionne === dateStr ? 'border-accent ring-1 ring-accent' : ''
+                      }`}
                     >
                       <p className={`text-right ${estAujourdhui ? 'text-accent font-semibold' : 'text-slate-400'}`}>
                         {date.getDate()}
@@ -2515,6 +3188,28 @@ export default function DashboardPage() {
         {/* ===================== ONGLET STATISTIQUES ===================== */}
         {ongletActif === 'stats' && (
           <>
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="text-xs text-slate-400">🌍 Filtrer par zone :</label>
+              {[
+                { id: 'tous' as const, label: 'Tous les pays' },
+                { id: 'tunisie' as const, label: '🇹🇳 Tunisie' },
+                { id: 'golfe' as const, label: '🇸🇦 Golfe' },
+                { id: 'reste' as const, label: '🌍 Reste du monde' },
+              ].map((z) => (
+                <button
+                  key={z.id}
+                  onClick={() => setFiltrePaysStats(z.id)}
+                  className={`text-xs px-3 py-1.5 rounded-full border ${
+                    filtrePaysStats === z.id
+                      ? 'bg-accent/10 border-accent/40 text-accent'
+                      : 'bg-slate-900 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  {z.label}
+                </button>
+              ))}
+            </div>
+
             <section className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
@@ -2627,6 +3322,136 @@ export default function DashboardPage() {
                         <span>{tg.nom}</span>
                         <span className="text-amber-400 font-semibold">
                           🔥 {tg.score_chaleur}/100
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )
+            })()}
+
+            {membresEquipe.length > 1 &&
+              (() => {
+                const parCommercial = new Map<
+                  string,
+                  { total: number; contactes: number; gagnes: number }
+                >()
+                const targetsPourStats =
+                  filtrePaysStats === 'tous'
+                    ? targets
+                    : targets.filter((tg) => zonePourPays(tg.country) === filtrePaysStats)
+                for (const tg of targetsPourStats) {
+                  const key = tg.assigne_a ?? '__non_assigne__'
+                  const entry = parCommercial.get(key) ?? { total: 0, contactes: 0, gagnes: 0 }
+                  entry.total++
+                  if (tg.statut !== 'nouveau') entry.contactes++
+                  if (tg.etape_pipeline === 'gagne') entry.gagnes++
+                  parCommercial.set(key, entry)
+                }
+                const lignes = Array.from(parCommercial.entries())
+                if (lignes.length === 0) return null
+                return (
+                  <section className="space-y-3">
+                    <h2 className="text-lg font-semibold">👤 Stats par commercial</h2>
+                    <div className="space-y-2">
+                      {lignes.map(([id, stats]) => {
+                        const nom =
+                          id === '__non_assigne__'
+                            ? 'Non assigné'
+                            : membresEquipe.find((m) => m.id === id)?.nom_complet || '(sans nom)'
+                        return (
+                          <div
+                            key={id}
+                            className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
+                          >
+                            <span>👤 {nom}</span>
+                            <span className="text-slate-400">
+                              {stats.contactes}/{stats.total} contactées · 🏆 {stats.gagnes} gagné
+                              {stats.gagnes > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )
+              })()}
+
+            {(() => {
+              const parMois = new Map<string, { total: number; contactes: number }>()
+              const targetsPourStats =
+                filtrePaysStats === 'tous'
+                  ? targets
+                  : targets.filter((tg) => zonePourPays(tg.country) === filtrePaysStats)
+              for (const tg of targetsPourStats) {
+                if (!tg.created_at) continue
+                const date = new Date(tg.created_at)
+                const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+                const entry = parMois.get(key) ?? { total: 0, contactes: 0 }
+                entry.total++
+                if (tg.statut !== 'nouveau') entry.contactes++
+                parMois.set(key, entry)
+              }
+              const lignes = Array.from(parMois.entries()).sort(([a], [b]) => (a < b ? 1 : -1))
+              if (lignes.length === 0) return null
+              const nomsMois = [
+                'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun',
+                'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc',
+              ]
+              return (
+                <section className="space-y-3">
+                  <h2 className="text-lg font-semibold">📅 Stats par mois</h2>
+                  <div className="space-y-2">
+                    {lignes.map(([cle, stats]) => {
+                      const [annee, mois] = cle.split('-')
+                      const label = `${nomsMois[Number(mois) - 1]} ${annee}`
+                      return (
+                        <div
+                          key={cle}
+                          className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
+                        >
+                          <span>{label}</span>
+                          <span className="text-slate-400">
+                            {stats.contactes}/{stats.total} contactées
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
+              )
+            })()}
+
+            {(() => {
+              const parZone = new Map<string, { total: number; contactes: number; gagnes: number }>()
+              for (const tg of targets) {
+                const zone = zonePourPays(tg.country)
+                const entry = parZone.get(zone) ?? { total: 0, contactes: 0, gagnes: 0 }
+                entry.total++
+                if (tg.statut !== 'nouveau') entry.contactes++
+                if (tg.etape_pipeline === 'gagne') entry.gagnes++
+                parZone.set(zone, entry)
+              }
+              const labels: Record<string, string> = {
+                tunisie: '🇹🇳 Tunisie',
+                golfe: '🇸🇦 Golfe',
+                reste: '🌍 Reste du monde',
+              }
+              const lignes = Array.from(parZone.entries())
+              if (lignes.length === 0) return null
+              return (
+                <section className="space-y-3">
+                  <h2 className="text-lg font-semibold">📍 Stats par zone</h2>
+                  <div className="space-y-2">
+                    {lignes.map(([zone, stats]) => (
+                      <div
+                        key={zone}
+                        className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
+                      >
+                        <span>{labels[zone] ?? zone}</span>
+                        <span className="text-slate-400">
+                          {stats.contactes}/{stats.total} contactées · 🏆 {stats.gagnes} gagné
+                          {stats.gagnes > 1 ? 's' : ''}
                         </span>
                       </div>
                     ))}

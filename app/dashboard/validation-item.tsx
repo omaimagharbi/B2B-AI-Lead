@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import RichTextEditor from '@/components/RichTextEditor'
 
 type Etape = { nom: string; description: string }
 type Pack = { nom: string; prix_indicatif: number; description: string }
@@ -24,6 +25,8 @@ type DiagnosticEnAttente = {
     score: number
     recommandations: { titre: string; action: string; priorite: string; questions?: string[] }[]
     contenuMarketing: { titre: string; accroche_linkedin: string; format_suggere: string }
+    explicationScore?: string
+    besoinSousJacent?: string
   } | null
   targets: { nom: string } | { nom: string }[] | null
 }
@@ -171,6 +174,18 @@ export default function ValidationItem({
                 </a>
               </div>
 
+              {diagnostic.recommandations_json.explicationScore && (
+                <p className="text-xs text-slate-500 italic">
+                  {diagnostic.recommandations_json.explicationScore}
+                </p>
+              )}
+
+              {diagnostic.recommandations_json.besoinSousJacent && (
+                <p className="text-sm text-sky-400 font-medium">
+                  {diagnostic.recommandations_json.besoinSousJacent}
+                </p>
+              )}
+
               <div className="space-y-2">
                 <p className="text-xs text-slate-400 uppercase">Stratégie commerciale suggérée</p>
                 {diagnostic.recommandations_json.recommandations.map((r, i) => (
@@ -216,11 +231,7 @@ export default function ValidationItem({
 
           <div className="space-y-2">
             <label className="text-xs text-slate-400 uppercase">Synthèse</label>
-            <textarea
-              value={synthese}
-              onChange={(e) => setSynthese(e.target.value)}
-              className="w-full h-20 rounded-lg bg-slate-950 border border-slate-700 p-2"
-            />
+            <RichTextEditor value={synthese} onChange={setSynthese} />
           </div>
 
           <div className="space-y-2">

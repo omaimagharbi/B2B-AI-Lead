@@ -66,7 +66,10 @@ export default async function PacksPage({ params }: { params: { token: string } 
             Votre solution personnalisée
           </span>
           <h1 className="text-3xl font-bold">{diagnostic.titre}</h1>
-          <p className="text-slate-400">{diagnostic.synthese}</p>
+          <div
+            className="text-slate-400 [&_strong]:text-white [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h3]:text-white [&_h3]:font-semibold [&_h3]:mt-2"
+            dangerouslySetInnerHTML={{ __html: diagnostic.synthese }}
+          />
         </header>
 
         <section className="space-y-4">
