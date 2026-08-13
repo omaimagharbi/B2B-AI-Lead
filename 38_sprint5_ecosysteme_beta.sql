@@ -11,10 +11,9 @@
 do $$
 begin
   if not exists (select 1 from verticals where slug = 'investisseur-incubateur') then
-    insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
+    insert into verticals (slug, statut, prompt_ia_config, canaux_actifs)
     values (
       'investisseur-incubateur',
-      'Écosystème Entrepreneurial',
       'active',
       jsonb_build_object(
         'system_prompt',
@@ -32,7 +31,6 @@ jamais de jargon pedagogique ou comptable.'
     update verticals
     set
       statut = 'active',
-      nom_affiche = coalesce(nom_affiche, 'Écosystème Entrepreneurial'),
       prompt_ia_config = jsonb_build_object(
         'system_prompt',
         'Tu es un analyste senior specialise dans l''evaluation de startups pour des investisseurs

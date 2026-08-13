@@ -139,7 +139,7 @@ type PackVendu = {
   diagnostics?: { target_id: string } | { target_id: string }[] | null
 }
 
-type Onglet = 'ciblage' | 'cibles' | 'pipeline' | 'validation' | 'equipe' | 'marketing' | 'inbox' | 'strategie' | 'catalogue' | 'calendrier' | 'stats'
+type Onglet = 'ciblage' | 'cibles' | 'validation' | 'inbox' | 'pipeline' | 'catalogue_strategie' | 'collaboration' | 'equipe' | 'calendrier' | 'stats'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -181,6 +181,9 @@ export default function DashboardPage() {
   const [sousOngletStrategie, setSousOngletStrategie] = useState<
     'donnees' | 'commercial' | 'marketing'
   >('donnees')
+  const [sousOngletGroupe, setSousOngletGroupe] = useState<'catalogue' | 'strategie' | 'idees'>(
+    'catalogue'
+  )
   const [jourSelectionne, setJourSelectionne] = useState<string | null>(null)
   const [filtrePaysStats, setFiltrePaysStats] = useState<'tous' | 'tunisie' | 'golfe' | 'reste'>(
     'tous'
@@ -259,6 +262,26 @@ export default function DashboardPage() {
   const [inviteEnCours, setInviteEnCours] = useState(false)
   const [inviteMessage, setInviteMessage] = useState<string | null>(null)
   const [ongletActif, setOngletActif] = useState<Onglet>('ciblage')
+
+  const [messagesEquipe, setMessagesEquipe] = useState<
+    { id: string; contenu: string; created_at: string; auteur_id: string | null; client_users: { nom_complet: string | null } | null }[]
+  >([])
+  const [nouveauMessageEquipe, setNouveauMessageEquipe] = useState('')
+  const [envoiMessageEquipeEnCours, setEnvoiMessageEquipeEnCours] = useState(false)
+  const [taches, setTaches] = useState<
+    {
+      id: string
+      titre: string
+      description: string | null
+      statut: 'a_faire' | 'en_cours' | 'terminee'
+      echeance: string | null
+      assigne_a: string | null
+      membre: { nom_complet: string | null } | null
+    }[]
+  >([])
+  const [nouvelleTache, setNouvelleTache] = useState({ titre: '', description: '', assigne_a: '', echeance: '' })
+  const [creationTacheEnCours, setCreationTacheEnCours] = useState(false)
+  const [collaborationChargee, setCollaborationChargee] = useState(false)
 
   const [nouvelleCible, setNouvelleCible] = useState({
     nom: '',
@@ -774,6 +797,82 @@ export default function DashboardPage() {
       setImapEnregistrement(false)
     }
   }
+
+  const chargerCollaboration = async () => {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const headers = { Authorization: `Bearer ${token}` }
+
+    const [resMessages, resTaches] = await Promise.all([
+      fetch('/api/collaboration/messages', { headers }),
+      fetch('/api/collaboration/taches', { headers }),
+    ])
+    const [dataMessages, dataTaches] = await Promise.all([resMessages.json(), resTaches.json()])
+
+    if (resMessages.ok) setMessagesEquipe(dataMessages.messages ?? [])
+    if (resTaches.ok) setTaches(dataTaches.taches ?? [])
+    setCollaborationChargee(true)
+  }
+
+  const envoyerMessageEquipe = async () => {
+    if (!nouveauMessageEquipe.trim()) return
+    setEnvoiMessageEquipeEnCours(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch('/api/collaboration/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ contenu: nouveauMessageEquipe }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMessagesEquipe((prev) => [...prev, data.message])
+        setNouveauMessageEquipe('')
+      }
+    } finally {
+      setEnvoiMessageEquipeEnCours(false)
+    }
+  }
+
+  const creerTache = async () => {
+    if (!nouvelleTache.titre.trim()) return
+    setCreationTacheEnCours(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch('/api/collaboration/taches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(nouvelleTache),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setTaches((prev) => [data.tache, ...prev])
+        setNouvelleTache({ titre: '', description: '', assigne_a: '', echeance: '' })
+      }
+    } finally {
+      setCreationTacheEnCours(false)
+    }
+  }
+
+  const majTache = async (id: string, changements: { statut?: string; assigne_a?: string | null }) => {
+    setTaches((prev) => prev.map((t) => (t.id === id ? { ...t, ...changements } as typeof t : t)))
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    await fetch('/api/collaboration/taches', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id, ...changements }),
+    })
+  }
+
+  useEffect(() => {
+    if (ongletActif === 'collaboration' && !collaborationChargee) {
+      chargerCollaboration()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ongletActif])
 
   const ajouterWhatsappEquipe = async (numero: string) => {
     if (!client || !numero.trim()) return
@@ -1366,21 +1465,24 @@ export default function DashboardPage() {
   const dir = langue === 'ar' ? 'rtl' : 'ltr'
 
   const ONGLETS: { id: Onglet; label: string; icone: string }[] = [
-    { id: 'ciblage', label: t('onglet_ciblage'), icone: '🎯' },
+    { id: 'ciblage', label: t('onglet_ciblage'), icone: '🔍' },
     { id: 'cibles', label: t('onglet_cibles'), icone: '📋' },
-    { id: 'pipeline', label: 'Pipeline', icone: '📈' },
-    { id: 'validation', label: t('onglet_validation'), icone: '🔔' },
-    { id: 'equipe', label: t('onglet_equipe'), icone: '👥' },
-    { id: 'marketing', label: 'Marketing', icone: '📣' },
+    { id: 'validation', label: t('onglet_validation'), icone: '🛠️' },
     {
       id: 'inbox',
       label: `Boîte de réception${messagesRecus.filter((m) => !m.lu).length > 0 ? ` (${messagesRecus.filter((m) => !m.lu).length})` : ''}`,
-      icone: '📥',
+      icone: '📬',
     },
-    { id: 'strategie', label: '🧭 Stratégie', icone: '🧭' },
-    { id: 'catalogue', label: `📚 ${vocabulairePourVertical(verticalSlug).labelCatalogue}`, icone: '📚' },
-    { id: 'calendrier', label: '📅 Calendrier', icone: '📅' },
-    { id: 'stats', label: t('onglet_stats'), icone: '📊' },
+    { id: 'pipeline', label: 'Pipeline', icone: '📊' },
+    {
+      id: 'catalogue_strategie',
+      label: `📦 ${vocabulairePourVertical(verticalSlug).labelCatalogue} / Stratégie`,
+      icone: '📦',
+    },
+    { id: 'collaboration', label: '💬 Collaboration & Tâches', icone: '💬' },
+    { id: 'calendrier', label: '📅 Mon Calendrier', icone: '📅' },
+    { id: 'stats', label: t('onglet_stats'), icone: '📈' },
+    { id: 'equipe', label: t('onglet_equipe'), icone: '👥' },
   ].filter((onglet): onglet is { id: Onglet; label: string; icone: string } => {
     if (monRole === 'proprietaire' || monRole === 'admin') return true
     return !(client.onglets_masques_equipe ?? []).includes(onglet.id)
@@ -1473,6 +1575,27 @@ export default function DashboardPage() {
         </div>
 
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
+        {ongletActif === 'catalogue_strategie' && (
+          <div className="flex gap-2 border-b border-slate-800 pb-2 -mb-6 flex-wrap">
+            {[
+              { id: 'catalogue' as const, label: `📦 ${vocabulairePourVertical(verticalSlug).labelCatalogue}` },
+              { id: 'strategie' as const, label: '🧭 Stratégie' },
+              { id: 'idees' as const, label: '📣 Idées marketing' },
+            ].map((so) => (
+              <button
+                key={so.id}
+                onClick={() => setSousOngletGroupe(so.id)}
+                className={`text-sm px-3 py-1.5 rounded-t-lg ${
+                  sousOngletGroupe === so.id
+                    ? 'bg-accent/10 text-accent border-b-2 border-accent'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {so.label}
+              </button>
+            ))}
+          </div>
+        )}
         {/* ===================== ONGLET CIBLAGE ===================== */}
         {ongletActif === 'ciblage' && (
           <>
@@ -2434,7 +2557,7 @@ export default function DashboardPage() {
         )}
 
         {/* ===================== ONGLET MARKETING ===================== */}
-        {ongletActif === 'marketing' && (
+        {ongletActif === 'catalogue_strategie' && sousOngletGroupe === 'idees' && (
           <section className="space-y-4">
             <p className="text-slate-400 text-sm">
               Idées de contenu générées automatiquement à partir des diagnostics des prospects — à
@@ -2656,7 +2779,7 @@ export default function DashboardPage() {
         )}
 
         {/* ===================== ONGLET STRATEGIE ===================== */}
-        {ongletActif === 'strategie' && (
+        {ongletActif === 'catalogue_strategie' && sousOngletGroupe === 'strategie' && (
           <section className="space-y-4">
             <div className="flex gap-2 border-b border-slate-800 pb-2">
               {[
@@ -2693,7 +2816,10 @@ export default function DashboardPage() {
                       {catalogue.length > 1 ? 's' : ''} — importable en PDF ou saisie manuelle.
                     </p>
                     <button
-                      onClick={() => setOngletActif('catalogue')}
+                      onClick={() => {
+                        setSousOngletGroupe('catalogue')
+                        setOngletActif('catalogue_strategie')
+                      }}
                       className="text-xs text-accent underline"
                     >
                       Aller au catalogue →
@@ -2824,7 +2950,7 @@ export default function DashboardPage() {
         )}
 
         {/* ===================== ONGLET CATALOGUE ===================== */}
-        {ongletActif === 'catalogue' && (
+        {ongletActif === 'catalogue_strategie' && sousOngletGroupe === 'catalogue' && (
           <section className="space-y-4">
             <p className="text-slate-400 text-sm">
               {vocabulairePourVertical(verticalSlug).introCatalogue}
@@ -2957,6 +3083,135 @@ export default function DashboardPage() {
                   </div>
                 ))
               )}
+            </div>
+          </section>
+        )}
+
+        {/* ===================== ONGLET COLLABORATION & TACHES ===================== */}
+        {ongletActif === 'collaboration' && (
+          <section className="grid md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <h2 className="font-semibold text-lg">💬 Messages d'équipe</h2>
+              <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3 max-h-[420px] overflow-y-auto">
+                {messagesEquipe.length === 0 && (
+                  <p className="text-slate-500 text-sm italic">
+                    Pas encore de message — écrivez le premier ci-dessous.
+                  </p>
+                )}
+                {messagesEquipe.map((m) => (
+                  <div key={m.id} className="text-sm">
+                    <span className="font-semibold text-accent">
+                      {m.client_users?.nom_complet ?? 'Membre'}
+                    </span>{' '}
+                    <span className="text-slate-500 text-xs">
+                      {new Date(m.created_at).toLocaleString('fr-FR')}
+                    </span>
+                    <p className="text-slate-300">{m.contenu}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={nouveauMessageEquipe}
+                  onChange={(e) => setNouveauMessageEquipe(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && envoyerMessageEquipe()}
+                  placeholder="Écrire un message à l'équipe..."
+                  className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <button
+                  onClick={envoyerMessageEquipe}
+                  disabled={envoiMessageEquipeEnCours || !nouveauMessageEquipe.trim()}
+                  className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+                >
+                  Envoyer
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h2 className="font-semibold text-lg">✅ Tâches</h2>
+              <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+                <input
+                  value={nouvelleTache.titre}
+                  onChange={(e) => setNouvelleTache({ ...nouvelleTache, titre: e.target.value })}
+                  placeholder="Titre de la tâche"
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <textarea
+                  value={nouvelleTache.description}
+                  onChange={(e) => setNouvelleTache({ ...nouvelleTache, description: e.target.value })}
+                  placeholder="Description (optionnel)"
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  rows={2}
+                />
+                <div className="flex gap-2 flex-wrap">
+                  <select
+                    value={nouvelleTache.assigne_a}
+                    onChange={(e) => setNouvelleTache({ ...nouvelleTache, assigne_a: e.target.value })}
+                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  >
+                    <option value="">Assigner à...</option>
+                    {membresEquipe.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.nom_complet ?? 'Membre'}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="date"
+                    value={nouvelleTache.echeance}
+                    onChange={(e) => setNouvelleTache({ ...nouvelleTache, echeance: e.target.value })}
+                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  />
+                  <button
+                    onClick={creerTache}
+                    disabled={creationTacheEnCours || !nouvelleTache.titre.trim()}
+                    className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+                  >
+                    Ajouter
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { id: 'a_faire' as const, label: 'À faire' },
+                    { id: 'en_cours' as const, label: 'En cours' },
+                    { id: 'terminee' as const, label: 'Terminée' },
+                  ]
+                ).map((colonne) => (
+                  <div key={colonne.id} className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase">{colonne.label}</p>
+                    {taches
+                      .filter((t) => t.statut === colonne.id)
+                      .map((t) => (
+                        <div
+                          key={t.id}
+                          className="rounded-lg border border-slate-700 bg-slate-900 p-2 space-y-1"
+                        >
+                          <p className="text-sm font-medium">{t.titre}</p>
+                          {t.description && (
+                            <p className="text-xs text-slate-400">{t.description}</p>
+                          )}
+                          <p className="text-xs text-slate-500">
+                            {t.membre?.nom_complet ?? 'Non assignée'}
+                            {t.echeance ? ` · ${new Date(t.echeance).toLocaleDateString('fr-FR')}` : ''}
+                          </p>
+                          <select
+                            value={t.statut}
+                            onChange={(e) => majTache(t.id, { statut: e.target.value })}
+                            className="w-full text-xs rounded bg-slate-950 border border-slate-700 p-1"
+                          >
+                            <option value="a_faire">À faire</option>
+                            <option value="en_cours">En cours</option>
+                            <option value="terminee">Terminée</option>
+                          </select>
+                        </div>
+                      ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
         )}

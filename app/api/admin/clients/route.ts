@@ -95,6 +95,57 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ clients: clientsAvecComptage })
 }
 
+// Supprime definitivement un cabinet (utilise pour nettoyer les comptes de
+// test crees pendant les demos). Supprime aussi les comptes Supabase Auth
+// de tous les membres du cabinet (proprietaire + equipe invitee), car
+// supprimer uniquement la ligne "clients" ne supprime pas les comptes
+// auth.users lies - ils resteraient utilisables pour se connecter (avec un
+// dashboard vide). Toutes les tables filles (targets, diagnostics, cibles,
+// etc.) sont en "on delete cascade" sur clients.id, donc un seul delete
+// suffit cote donnees metier.
+export async function DELETE(req: NextRequest) {
+  if (!(await estAdmin(req))) {
+    return NextResponse.json({ error: 'Non autorise' }, { status: 403 })
+  }
+
+  const { client_id } = await req.json()
+
+  if (!client_id) {
+    return NextResponse.json({ error: 'client_id manquant' }, { status: 400 })
+  }
+
+  // 1. Recuperer tous les comptes auth lies a ce cabinet (proprietaire + equipe)
+  const { data: membres, error: erreurMembres } = await supabaseAdmin
+    .from('client_users')
+    .select('auth_user_id')
+    .eq('client_id', client_id)
+
+  if (erreurMembres) {
+    return NextResponse.json({ error: 'Erreur de lecture des membres' }, { status: 500 })
+  }
+
+  // 2. Supprimer la ligne clients (cascade sur targets/diagnostics/client_users/...)
+  const { error: erreurSuppression } = await supabaseAdmin
+    .from('clients')
+    .delete()
+    .eq('id', client_id)
+
+  if (erreurSuppression) {
+    return NextResponse.json({ error: 'Erreur lors de la suppression du cabinet' }, { status: 500 })
+  }
+
+  // 3. Supprimer chaque compte Supabase Auth associe (best-effort : si l'un
+  // echoue on continue les autres et on le signale dans la reponse)
+  const echecsAuth: string[] = []
+  for (const m of membres ?? []) {
+    if (!m.auth_user_id) continue
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(m.auth_user_id)
+    if (error) echecsAuth.push(m.auth_user_id)
+  }
+
+  return NextResponse.json({ succes: true, comptes_auth_non_supprimes: echecsAuth })
+}
+
 export async function POST(req: NextRequest) {
   if (!(await estAdmin(req))) {
     return NextResponse.json({ error: 'Non autorise' }, { status: 403 })

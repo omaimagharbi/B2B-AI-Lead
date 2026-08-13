@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from('beta_demandes')
-    .select('id, email, carte_slug, sous_secteur, traite, created_at')
+    .select('id, email, nom_entreprise, telephone, carte_slug, sous_secteur, traite, created_at')
     .order('created_at', { ascending: false })
 
   if (error) {

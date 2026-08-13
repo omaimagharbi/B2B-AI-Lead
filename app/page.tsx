@@ -45,12 +45,16 @@ const cartes = [
 export default function Home() {
   const [carteBeta, setCarteBeta] = useState<{ slug: string; titre: string } | null>(null)
   const [email, setEmail] = useState('')
+  const [nomEntreprise, setNomEntreprise] = useState('')
+  const [telephone, setTelephone] = useState('')
   const [sousSecteur, setSousSecteur] = useState('')
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
   const [confirme, setConfirme] = useState(false)
 
+  const formulaireValide = email.trim() && nomEntreprise.trim() && telephone.trim()
+
   const envoyerDemandeBeta = async () => {
-    if (!carteBeta || !email.trim()) return
+    if (!carteBeta || !formulaireValide) return
     setEnvoiEnCours(true)
     try {
       await fetch('/api/beta/demande', {
@@ -58,6 +62,8 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email,
+          nom_entreprise: nomEntreprise,
+          telephone,
           carte_slug: carteBeta.slug,
           sous_secteur: sousSecteur || null,
         }),
@@ -71,6 +77,8 @@ export default function Home() {
   const fermerModal = () => {
     setCarteBeta(null)
     setEmail('')
+    setNomEntreprise('')
+    setTelephone('')
     setSousSecteur('')
     setConfirme(false)
   }
@@ -133,10 +141,23 @@ export default function Home() {
                   accès sur-mesure.
                 </p>
                 <input
+                  placeholder="Nom de votre entreprise"
+                  value={nomEntreprise}
+                  onChange={(e) => setNomEntreprise(e.target.value)}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <input
                   type="email"
                   placeholder="Votre email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <input
+                  type="tel"
+                  placeholder="Votre numéro de téléphone"
+                  value={telephone}
+                  onChange={(e) => setTelephone(e.target.value)}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 />
                 <input
@@ -148,7 +169,7 @@ export default function Home() {
                 <div className="flex gap-2">
                   <button
                     onClick={envoyerDemandeBeta}
-                    disabled={envoiEnCours || !email.trim()}
+                    disabled={envoiEnCours || !formulaireValide}
                     className="flex-1 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
                   >
                     {envoiEnCours ? 'Envoi...' : 'Demander un accès'}

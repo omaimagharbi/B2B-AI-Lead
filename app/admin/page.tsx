@@ -71,6 +71,8 @@ export default function AdminPage() {
     {
       id: string
       email: string
+      nom_entreprise: string | null
+      telephone: string | null
       carte_slug: string
       sous_secteur: string | null
       traite: boolean
@@ -171,6 +173,35 @@ export default function AdminPage() {
         acces_active: !accesActuel,
       }),
     })
+
+    await charger()
+    setMajEnCours(null)
+  }
+
+  const supprimerClient = async (clientId: string, nomEntreprise: string) => {
+    const confirmation = window.confirm(
+      `Supprimer definitivement "${nomEntreprise || 'ce cabinet'}" ?\n\nCeci supprime le cabinet, toutes ses donnees (cibles, diagnostics, pipeline...) et les comptes de connexion de tous ses membres. Action irreversible.`
+    )
+    if (!confirmation) return
+
+    setMajEnCours(clientId)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+
+    const res = await fetch('/api/admin/clients', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ client_id: clientId }),
+    })
+
+    if (!res.ok) {
+      window.alert('Erreur lors de la suppression. Reessaie ou verifie la console.')
+      setMajEnCours(null)
+      return
+    }
 
     await charger()
     setMajEnCours(null)
@@ -460,10 +491,11 @@ export default function AdminPage() {
                   }`}
                 >
                   <div>
-                    <span className="font-medium">{d.email}</span>
+                    <span className="font-medium">{d.nom_entreprise || '(entreprise inconnue)'}</span>
                     <span className="text-slate-500">
                       {' '}
-                      · {d.carte_slug}
+                      · {d.email}
+                      {d.telephone ? ` · 📞 ${d.telephone}` : ''} · {d.carte_slug}
                       {d.sous_secteur ? ` · ${d.sous_secteur}` : ''} ·{' '}
                       {new Date(d.created_at).toLocaleDateString('fr-FR')}
                     </span>
@@ -565,6 +597,14 @@ export default function AdminPage() {
                         : client.statut_abonnement === 'payant'
                         ? 'Repasser en essai'
                         : 'Passer en payant'}
+                    </button>
+                    <button
+                      onClick={() => supprimerClient(client.id, client.nom_entreprise)}
+                      disabled={majEnCours === client.id}
+                      title="Supprimer definitivement ce cabinet (compte de test, doublon...)"
+                      className="text-sm px-3 py-2 rounded-lg bg-red-950 text-red-400 border border-red-900 hover:bg-red-900 transition disabled:opacity-40 shrink-0"
+                    >
+                      🗑️ Supprimer
                     </button>
                   </div>
                 </div>
