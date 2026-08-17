@@ -210,12 +210,15 @@ export function genererBesoinSousJacent(categorie: Categorie): string {
 
 
 
-// Questions de clarification pre-ecrites (pas d'IA generative) : a poser au prospect
-// quand le besoin reste flou (categorie "general" faute de mots-cles suffisants).
+// Questions de clarification pre-ecrites (pas d'IA generative) : posees
+// uniquement quand le besoin reste flou (categorie "general"). Le
+// formulaire prospect demande deja "depuis quand" et "deja essaye" (voir
+// app/diagnostic/[token]/page.tsx) - ces questions ne doivent donc JAMAIS
+// redemander la meme chose, mais aller plus loin (budget/decideur/impact
+// chiffre) pour vraiment qualifier le prospect avant l'appel.
 const QUESTIONS_CLARIFICATION: string[] = [
-  "Quel est le principal impact de ce problème aujourd'hui (temps perdu, argent, stress) ?",
-  'Depuis combien de temps cette situation dure-t-elle ?',
-  'Avez-vous déjà essayé une solution, et pourquoi ça n\'a pas suffi ?',
+  "Quel est l'objectif chiffré (chiffre d'affaires, budget, délai) impacté par ce problème ?",
+  'Qui est le décisionnaire final pour ce type de projet/budget ?',
 ]
 
 export function genererRecommandations(segment: Segment, score: number): Recommandation[] {
@@ -287,7 +290,9 @@ export function genererRecommandations(segment: Segment, score: number): Recomma
       recos.push({
         titre: 'Besoin encore flou',
         action:
-          "Poser ces questions de clarification avant de proposer une offre, le besoin n'est pas encore precis.",
+          "Le prospect a déjà renseigné sa situation (durée, solutions déjà tentées — voir sa " +
+          "réponse ci-dessus) : ne les redemandez pas. Passez directement à ces questions de " +
+          "qualification plus profondes avant de proposer une offre :",
         priorite: 'basse',
         questions: QUESTIONS_CLARIFICATION,
       })

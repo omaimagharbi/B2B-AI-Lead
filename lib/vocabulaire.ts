@@ -97,6 +97,7 @@ const ETAPES_PAR_DEFAUT: EtapePipeline[] = [
   { etape: 'proposition', label: '📄 Proposition envoyée' },
   { etape: 'negociation', label: '🤝 Négociation' },
   { etape: 'gagne', label: '🏆 Gagné' },
+  { etape: 'a_recontacter', label: '⏳ À recontacter plus tard' },
   { etape: 'perdu', label: '❌ Perdu' },
 ]
 
@@ -107,6 +108,7 @@ const ETAPES_PAR_VERTICAL: Record<string, EtapePipeline[]> = {
     { etape: 'proposition', label: '🏛️ Comité d\'investissement engagé' },
     { etape: 'negociation', label: '🤝 Négociation des termes' },
     { etape: 'gagne', label: '💰 Contrat signé (Closing)' },
+    { etape: 'a_recontacter', label: '⏳ À recontacter plus tard' },
     { etape: 'perdu', label: '❌ Perdu' },
   ],
 }
