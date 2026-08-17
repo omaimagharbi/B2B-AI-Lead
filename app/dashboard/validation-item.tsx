@@ -20,6 +20,7 @@ type DiagnosticEnAttente = {
   phrase_brute_prospect: string | null
   json_ia_brouillon: Brouillon
   lien_ouvert_at: string | null
+  commentaire_expert?: string | null
   recommandations_json: {
     segment: { categorie: string; urgence: string; budget_mentionne: boolean }
     score: number
@@ -43,6 +44,7 @@ export default function ValidationItem({
   const [synthese, setSynthese] = useState(diagnostic.json_ia_brouillon.synthese ?? '')
   const [etapes, setEtapes] = useState<Etape[]>(diagnostic.json_ia_brouillon.etapes ?? [])
   const [packs, setPacks] = useState<Pack[]>(diagnostic.json_ia_brouillon.packs_proposes ?? [])
+  const [commentaireExpert, setCommentaireExpert] = useState(diagnostic.commentaire_expert ?? '')
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
 
@@ -87,6 +89,7 @@ export default function ValidationItem({
             etapes,
           },
           packs,
+          commentaire_expert: commentaireExpert,
         }),
       })
       const data = await res.json()
@@ -293,6 +296,18 @@ export default function ValidationItem({
                 />
               </div>
             ))}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs text-slate-400 uppercase">
+              💬 Votre commentaire personnalisé (optionnel — apparaît dans le rapport)
+            </label>
+            <textarea
+              value={commentaireExpert}
+              onChange={(e) => setCommentaireExpert(e.target.value)}
+              placeholder="Ex : Je recommande de planifier cette session avant la rentrée de septembre..."
+              className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
+            />
           </div>
 
           <button

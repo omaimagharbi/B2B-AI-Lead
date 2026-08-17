@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from('taches')
     .select(
-      'id, titre, description, statut, echeance, created_at, assigne_a, cree_par, membre:client_users!taches_assigne_a_fkey(nom_complet)'
+      'id, titre, description, statut, echeance, created_at, assigne_a, cree_par, cible_id, membre:client_users!taches_assigne_a_fkey(nom_complet), createur:client_users!taches_cree_par_fkey(nom_complet), cible:targets(nom)'
     )
     .eq('client_id', auth.clientId)
     .order('created_at', { ascending: false })
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   const auth = await authentifierClientUser(req)
   if (auth.erreur) return NextResponse.json({ error: auth.erreur }, { status: auth.statut })
 
-  const { titre, description, assigne_a, echeance } = await req.json()
+  const { titre, description, assigne_a, echeance, cible_id } = await req.json()
   if (!titre || !String(titre).trim()) {
     return NextResponse.json({ error: 'Titre manquant' }, { status: 400 })
   }
@@ -36,10 +36,11 @@ export async function POST(req: NextRequest) {
       description: description ? String(description).trim() : null,
       assigne_a: assigne_a || null,
       echeance: echeance || null,
+      cible_id: cible_id || null,
       cree_par: auth.clientUserId,
     })
     .select(
-      'id, titre, description, statut, echeance, created_at, assigne_a, cree_par, membre:client_users!taches_assigne_a_fkey(nom_complet)'
+      'id, titre, description, statut, echeance, created_at, assigne_a, cree_par, cible_id, membre:client_users!taches_assigne_a_fkey(nom_complet), createur:client_users!taches_cree_par_fkey(nom_complet), cible:targets(nom)'
     )
     .single()
 

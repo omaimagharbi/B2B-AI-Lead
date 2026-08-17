@@ -10,7 +10,7 @@ type PackInput = { nom: string; prix_indicatif: number; description: string }
 
 export async function POST(req: NextRequest) {
   try {
-    const { diagnostic_id, json_expert_valide, packs } = (await req.json()) as {
+    const { diagnostic_id, json_expert_valide, packs, commentaire_expert } = (await req.json()) as {
       diagnostic_id: string
       json_expert_valide: {
         titre: string
@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
         etapes: { nom: string; description: string }[]
       }
       packs: PackInput[]
+      commentaire_expert?: string
     }
 
     if (!diagnostic_id || !json_expert_valide) {
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
       .update({
         json_expert_valide,
         statut_validation: 'valide_par_expert',
+        commentaire_expert: commentaire_expert?.trim() || null,
       })
       .eq('id', diagnostic_id)
 

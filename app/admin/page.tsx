@@ -50,6 +50,7 @@ export default function AdminPage() {
   const [statsGlobales, setStatsGlobales] = useState<{
     total_entreprises: number
     entreprises_actives: number
+    en_attente_activation: number
     total_diagnostics: number
     total_cibles: number
     mrr_par_devise: Record<string, number>
@@ -79,6 +80,7 @@ export default function AdminPage() {
       created_at: string
     }[]
   >([])
+  const [demandeBetaOuverte, setDemandeBetaOuverte] = useState<string | null>(null)
   const [erreurCreation, setErreurCreation] = useState<string | null>(null)
 
   const charger = async () => {
@@ -198,7 +200,8 @@ export default function AdminPage() {
     })
 
     if (!res.ok) {
-      window.alert('Erreur lors de la suppression. Reessaie ou verifie la console.')
+      const data = await res.json().catch(() => null)
+      window.alert(data?.error ?? 'Erreur lors de la suppression. Reessaie ou verifie la console.')
       setMajEnCours(null)
       return
     }
@@ -372,7 +375,7 @@ export default function AdminPage() {
         </div>
 
         {statsGlobales && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
               <p className="text-xs text-slate-500 uppercase">Entreprises actives</p>
               <p className="text-2xl font-bold text-accent">
@@ -383,6 +386,10 @@ export default function AdminPage() {
                 </span>
               </p>
             </div>
+            <div className="rounded-xl border border-amber-900 bg-slate-900 p-4">
+              <p className="text-xs text-slate-500 uppercase">En attente d'activation</p>
+              <p className="text-2xl font-bold text-amber-400">{statsGlobales.en_attente_activation}</p>
+            </div>
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
               <p className="text-xs text-slate-500 uppercase">Diagnostics générés</p>
               <p className="text-2xl font-bold">{statsGlobales.total_diagnostics}</p>
@@ -392,7 +399,9 @@ export default function AdminPage() {
               <p className="text-2xl font-bold">{statsGlobales.total_cibles}</p>
             </div>
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
-              <p className="text-xs text-slate-500 uppercase">MRR</p>
+              <p className="text-xs text-slate-500 uppercase" title="Monthly Recurring Revenue : revenu mensuel récurrent total des abonnements payants actifs">
+                MRR (revenu récurrent mensuel)
+              </p>
               <p className="text-lg font-bold">
                 {Object.keys(statsGlobales.mrr_par_devise).length === 0
                   ? '—'
@@ -481,33 +490,65 @@ export default function AdminPage() {
               </span>
             </h2>
             <div className="space-y-2">
-              {demandesBeta.map((d) => (
-                <div
-                  key={d.id}
-                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
-                    d.traite
-                      ? 'bg-slate-950 border-slate-800 opacity-50'
-                      : 'bg-slate-950 border-amber-900'
-                  }`}
-                >
-                  <div>
-                    <span className="font-medium">{d.nom_entreprise || '(entreprise inconnue)'}</span>
-                    <span className="text-slate-500">
-                      {' '}
-                      · {d.email}
-                      {d.telephone ? ` · 📞 ${d.telephone}` : ''} · {d.carte_slug}
-                      {d.sous_secteur ? ` · ${d.sous_secteur}` : ''} ·{' '}
-                      {new Date(d.created_at).toLocaleDateString('fr-FR')}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => basculerDemandeTraitee(d.id, d.traite)}
-                    className="text-xs px-3 py-1 rounded-lg bg-slate-800 border border-slate-700"
+              {demandesBeta.map((d) => {
+                const ouverte = demandeBetaOuverte === d.id
+                return (
+                  <div
+                    key={d.id}
+                    className={`rounded-lg border text-sm ${
+                      d.traite
+                        ? 'bg-slate-950 border-slate-800 opacity-50'
+                        : 'bg-slate-950 border-amber-900'
+                    }`}
                   >
-                    {d.traite ? 'Marquer non traitée' : '✅ Marquer traitée'}
-                  </button>
-                </div>
-              ))}
+                    <button
+                      onClick={() => setDemandeBetaOuverte(ouverte ? null : d.id)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-left"
+                    >
+                      <span>
+                        <span className="font-medium">
+                          {d.nom_entreprise || '(entreprise inconnue)'}
+                        </span>
+                        <span className="text-slate-500">
+                          {' '}
+                          · {d.carte_slug} ·{' '}
+                          {new Date(d.created_at).toLocaleDateString('fr-FR')}
+                        </span>
+                      </span>
+                      <span className="text-slate-500 text-xs">{ouverte ? '▲' : '▼ voir le détail'}</span>
+                    </button>
+                    {ouverte && (
+                      <div className="border-t border-slate-800 px-3 py-3 space-y-2">
+                        <p>
+                          <span className="text-slate-500">Entreprise :</span>{' '}
+                          {d.nom_entreprise || '(non renseignée)'}
+                        </p>
+                        <p>
+                          <span className="text-slate-500">Email :</span> {d.email}
+                        </p>
+                        <p>
+                          <span className="text-slate-500">Téléphone :</span>{' '}
+                          {d.telephone || '(non renseigné)'}
+                        </p>
+                        <p>
+                          <span className="text-slate-500">Carte :</span> {d.carte_slug}
+                          {d.sous_secteur ? ` · ${d.sous_secteur}` : ''}
+                        </p>
+                        <p>
+                          <span className="text-slate-500">Reçue le :</span>{' '}
+                          {new Date(d.created_at).toLocaleString('fr-FR')}
+                        </p>
+                        <button
+                          onClick={() => basculerDemandeTraitee(d.id, d.traite)}
+                          className="text-xs px-3 py-1 rounded-lg bg-slate-800 border border-slate-700"
+                        >
+                          {d.traite ? 'Marquer non traitée' : '✅ Marquer traitée'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}

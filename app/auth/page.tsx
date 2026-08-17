@@ -10,6 +10,7 @@ function AuthForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const vertical = searchParams.get('vertical') ?? 'cabinet-formation'
+  const sousSecteurChoisi = searchParams.get('sous_secteur') ?? ''
 
   const [mode, setMode] = useState<'inscription' | 'connexion' | 'mot_de_passe_oublie'>(
     'inscription'
@@ -38,6 +39,7 @@ function AuthForm() {
   const [afficherMotDePasse, setAfficherMotDePasse] = useState(false)
 
   // Etape 3 : invitation de l'equipe
+  const [emailDirecteurCommercial, setEmailDirecteurCommercial] = useState('')
   const [emailsEquipe, setEmailsEquipe] = useState('')
 
   // Etape 4 : lien site + reseaux sociaux
@@ -49,7 +51,9 @@ function AuthForm() {
   const [erreur, setErreur] = useState<string | null>(null)
   const [messageSucces, setMessageSucces] = useState<string | null>(null)
   const [chargement, setChargement] = useState(false)
-  const [equipeCreee, setEquipeCreee] = useState<{ email: string; motDePasseTemporaire: string }[]>(
+  const [equipeCreee, setEquipeCreee] = useState<
+    { email: string; motDePasseTemporaire: string; role: string }[]
+  >(
     []
   )
 
@@ -93,21 +97,37 @@ function AuthForm() {
     setChargement(true)
 
     try {
-      const { error: erreurSignup } = await supabase.auth.signUp({
+      const { data: signupData, error: erreurSignup } = await supabase.auth.signUp({
         email: emailEntreprise,
         password: motDePasseInscription,
         options: {
           data: {
             nom_entreprise: nomEntreprise,
             vertical_slug: vertical,
+            sous_secteur: sousSecteurChoisi || null,
             nom_complet: nomDirecteur,
           },
         },
       })
 
       if (erreurSignup) {
-        setErreur(erreurSignup.message)
+        setErreur(
+          erreurSignup.message.toLowerCase().includes('already registered') ||
+            erreurSignup.message.toLowerCase().includes('already been registered')
+            ? 'Cet email a déjà un compte — connecte-toi plutôt (un même email ne peut pas créer plusieurs cabinets).'
+            : erreurSignup.message
+        )
         setChargement(false)
+        return
+      }
+
+      // Supabase ne renvoie PAS d'erreur si l'email existe deja (pour eviter
+      // l'enumeration d'emails) - il renvoie un "succes" silencieux avec un
+      // tableau identities vide. On doit donc detecter ce cas nous-memes.
+      if (signupData.user && signupData.user.identities && signupData.user.identities.length === 0) {
+        setErreur('Cet email a déjà un compte — connecte-toi plutôt (un même email ne peut pas créer plusieurs cabinets).')
+        setChargement(false)
+        setMode('connexion')
         return
       }
 
@@ -144,6 +164,7 @@ function AuthForm() {
           instagram_url: instagramUrl || null,
           linkedin_url: linkedinUrl || null,
           invite_emails: emailsEquipe,
+          email_directeur_commercial: emailDirecteurCommercial || null,
         }),
       })
       const data = await res.json()
@@ -240,7 +261,12 @@ function AuthForm() {
           <div className="space-y-2 text-left bg-slate-900 border border-slate-700 rounded-xl p-4">
             {equipeCreee.map((m) => (
               <div key={m.email} className="text-sm border-b border-slate-800 pb-2 last:border-0 last:pb-0">
-                <p className="font-semibold">{m.email}</p>
+                <p className="font-semibold">
+                  {m.email}{' '}
+                  <span className="text-accent text-xs font-normal">
+                    {m.role === 'directeur_commercial' ? '🧭 Directeur commercial' : '👤 Commercial'}
+                  </span>
+                </p>
                 <p className="text-slate-400">
                   Mot de passe temporaire : <span className="text-accent">{m.motDePasseTemporaire}</span>
                 </p>
@@ -271,8 +297,9 @@ function AuthForm() {
           </h1>
           {mode === 'inscription' && (
             <p className="text-slate-600 text-xs">
-              Étape {etape} sur 4 — l'accès administration plateforme est réservé à Braise et n'est pas
-              ouvert à l'inscription.
+              Étape {etape} sur 4
+              {sousSecteurChoisi ? ` — ${sousSecteurChoisi}` : ''} — l'accès administration
+              plateforme est réservé à Braise et n'est pas ouvert à l'inscription.
             </p>
           )}
         </div>
@@ -399,18 +426,33 @@ function AuthForm() {
                 <p className="text-sm font-semibold text-slate-300">
                   L'invitation de l'équipe
                 </p>
-                <p className="text-xs text-slate-500">
-                  Ajoute directement les adresses e-mail de tes commerciaux, séparées par une virgule.
-                  Ils recevront un accès immédiat (à leur transmettre toi-même) — tu peux aussi le faire
-                  plus tard depuis ton tableau de bord.
-                </p>
-                <textarea
-                  value={emailsEquipe}
-                  onChange={(e) => setEmailsEquipe(e.target.value)}
-                  placeholder="commercial1@exemple.com, commercial2@exemple.com"
-                  rows={3}
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
-                />
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-500">
+                    Directeur commercial (optionnel) — supervise l'équipe et voit les statistiques de
+                    chacun.
+                  </p>
+                  <input
+                    value={emailDirecteurCommercial}
+                    onChange={(e) => setEmailDirecteurCommercial(e.target.value)}
+                    placeholder="email.du.directeur@exemple.com"
+                    type="email"
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-500">
+                    Commerciaux — adresses e-mail séparées par une virgule. Ils recevront un accès
+                    immédiat (à leur transmettre toi-même) — tu peux aussi le faire plus tard depuis ton
+                    tableau de bord.
+                  </p>
+                  <textarea
+                    value={emailsEquipe}
+                    onChange={(e) => setEmailsEquipe(e.target.value)}
+                    placeholder="commercial1@exemple.com, commercial2@exemple.com"
+                    rows={3}
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
+                  />
+                </div>
               </div>
             )}
 

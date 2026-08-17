@@ -18,7 +18,7 @@ async function extraireAvecAnthropic(pdfBase64: string, apiKey: string) {
           {
             type: 'text',
             text: `Ce document est une brochure/syllabus de formation ou de service. Reponds UNIQUEMENT en JSON valide, rien d'autre, avec ce format exact :
-{"nom": "...", "description": "... (2-3 phrases max)", "prix": nombre ou null, "duree": "..." ou null, "public_cible": "..." ou null}`,
+{"nom": "...", "description": "... (2-3 phrases max)", "prix": nombre ou null, "duree": "..." ou null, "public_cible": "..." ou null, "thematique": "..." ou null, "format": "inter_entreprise" ou "intra_entreprise" ou null, "mode_delivrance": "presentiel" ou "en_ligne" ou "blended" ou null, "usp": "... (element de differenciation, 1 phrase)" ou null}`,
           },
         ] as any,
       },
@@ -43,7 +43,7 @@ async function extraireAvecGemini(pdfBase64: string, apiKey: string) {
               { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } },
               {
                 text: `Ce document est une brochure/syllabus de formation ou de service. Reponds UNIQUEMENT en JSON valide, rien d'autre, avec ce format exact :
-{"nom": "...", "description": "... (2-3 phrases max)", "prix": nombre ou null, "duree": "..." ou null, "public_cible": "..." ou null}`,
+{"nom": "...", "description": "... (2-3 phrases max)", "prix": nombre ou null, "duree": "..." ou null, "public_cible": "..." ou null, "thematique": "..." ou null, "format": "inter_entreprise" ou "intra_entreprise" ou null, "mode_delivrance": "presentiel" ou "en_ligne" ou "blended" ou null, "usp": "... (element de differenciation, 1 phrase)" ou null}`,
               },
             ],
           },

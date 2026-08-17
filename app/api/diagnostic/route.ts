@@ -11,18 +11,24 @@ import { enregistrerSanteApi } from '@/lib/sante-api'
 import { enregistrerUsageIA } from '@/lib/usage-ia'
 
 function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
+  // Meme en mode simule (pas de cle IA configuree), on evite le texte 100%
+  // generique en reinjectant le probleme reellement decrit par le prospect
+  // dans chaque etape - ca reste un brouillon a affiner par l'expert (voir
+  // le badge "Mode simule" affiche cote validation), mais un point de
+  // depart deja lie au cas concret plutot qu'une definition de dictionnaire.
+  const probremeCourt = probleme.trim().slice(0, 140)
   const etapesAddie = [
-    { nom: 'Analyse', description: 'Identifier precisement les causes du probleme rencontre.' },
-    { nom: 'Design', description: "Concevoir un parcours d'accompagnement adapte au contexte." },
-    { nom: 'Developpement', description: 'Construire les contenus et outils necessaires.' },
-    { nom: 'Implementation', description: "Deployer l'accompagnement aupres des equipes concernees." },
-    { nom: 'Evaluation', description: "Mesurer l'impact et ajuster si necessaire." },
+    { nom: 'Analyse', description: `Auditer la situation decrite ("${probremeCourt}") pour en identifier precisement les causes racines.` },
+    { nom: 'Design', description: `Concevoir un parcours d'accompagnement sur-mesure adapte a ce contexte specifique.` },
+    { nom: 'Developpement', description: 'Construire les contenus, outils et supports necessaires a cet accompagnement.' },
+    { nom: 'Implementation', description: "Deployer l'accompagnement aupres des equipes concernees, avec mise en pratique reelle." },
+    { nom: 'Evaluation', description: "Mesurer l'impact obtenu sur ce probleme precis et ajuster si necessaire." },
   ]
   const etapesGrow = [
-    { nom: 'Goal', description: "Clarifier l'objectif reel poursuivi." },
-    { nom: 'Reality', description: 'Faire un etat des lieux honnete de la situation actuelle.' },
-    { nom: 'Options', description: 'Explorer les options possibles pour avancer.' },
-    { nom: 'Will', description: "Definir un plan d'action concret et engageant." },
+    { nom: 'Goal', description: `Clarifier l'objectif reel poursuivi derriere : "${probremeCourt}".` },
+    { nom: 'Reality', description: 'Faire un etat des lieux honnete de la situation actuelle et de ses blocages.' },
+    { nom: 'Options', description: 'Explorer les options concretes possibles pour avancer sur ce point precis.' },
+    { nom: 'Will', description: "Definir un plan d'action concret et engageant, avec une premiere etape claire." },
   ]
 
   return {

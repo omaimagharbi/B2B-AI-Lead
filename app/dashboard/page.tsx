@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { Fragment, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { PAYS_DISPONIBLES } from '@/lib/pays'
@@ -41,6 +41,9 @@ type Client = {
   linkedin_url?: string | null
   site_web?: string | null
   onglets_masques_equipe?: string[]
+  taux_closing_historique?: number | null
+  mots_cles_expertise?: string | null
+  idees_recues_marche?: string | null
 }
 
 type Target = {
@@ -63,6 +66,7 @@ type Target = {
   signal_ia?: string | null
   reponse_sentiment?: 'positive' | 'negative' | 'neutre' | null
   reponse_a_traiter?: boolean
+  motif_refus?: string | null
 }
 
 type DiagnosticEnAttente = {
@@ -72,6 +76,7 @@ type DiagnosticEnAttente = {
   json_ia_brouillon: any
   recommandations_json: any
   lien_ouvert_at: string | null
+  commentaire_expert?: string | null
   targets: { nom: string } | { nom: string }[] | null
 }
 
@@ -94,6 +99,10 @@ type OffreCatalogue = {
   public_cible: string | null
   pdf_url: string | null
   mode_facturation: string | null
+  thematique: string | null
+  format: string | null
+  mode_delivrance: string | null
+  usp: string | null
 }
 
 type CalendrierEntree = {
@@ -103,6 +112,9 @@ type CalendrierEntree = {
   date_evenement: string
   type: 'rdv' | 'evenement' | 'appel_offre' | 'autre'
   lien: string | null
+  heure_debut: string | null
+  duree_minutes: number | null
+  lieu: string | null
 }
 
 type NoteCible = {
@@ -199,6 +211,9 @@ export default function DashboardPage() {
     date_evenement: '',
     type: 'rdv' as CalendrierEntree['type'],
     lien: '',
+    heure_debut: '',
+    duree_minutes: '60',
+    lieu: '',
   })
   const [nouvelleOffre, setNouvelleOffre] = useState({
     nom: '',
@@ -208,9 +223,37 @@ export default function DashboardPage() {
     duree: '',
     public_cible: '',
     mode_facturation: '',
+    thematique: '',
+    format: '',
+    mode_delivrance: '',
+    usp: '',
   })
   const [pdfUrlTemp, setPdfUrlTemp] = useState<string | null>(null)
   const [pdfEnCours, setPdfEnCours] = useState(false)
+  const [offreEnEdition, setOffreEnEdition] = useState<string | null>(null)
+  const [editionOffreForm, setEditionOffreForm] = useState<{
+    nom: string
+    description: string
+    prix: string
+    devise: string
+    duree: string
+    public_cible: string
+    thematique: string
+    format: string
+    mode_delivrance: string
+    usp: string
+  }>({
+    nom: '',
+    description: '',
+    prix: '',
+    devise: 'TND',
+    duree: '',
+    public_cible: '',
+    thematique: '',
+    format: '',
+    mode_delivrance: '',
+    usp: '',
+  })
   const inputPdfCatalogue = useRef<HTMLInputElement>(null)
   const [strategieEnCours, setStrategieEnCours] = useState(false)
   const [strategieResultat, setStrategieResultat] = useState<{
@@ -244,6 +287,12 @@ export default function DashboardPage() {
   const [chargement, setChargement] = useState(true)
   const [maj, setMaj] = useState(false)
   const [secteurInput, setSecteurInput] = useState('')
+  const [inputsStrategiques, setInputsStrategiques] = useState({
+    taux_closing_historique: '',
+    mots_cles_expertise: '',
+    idees_recues_marche: '',
+  })
+  const [inputsStrategiquesEnCours, setInputsStrategiquesEnCours] = useState(false)
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null)
   const [lancementEnCours, setLancementEnCours] = useState(false)
   const [lancementResultat, setLancementResultat] = useState<Record<string, unknown>[] | null>(
@@ -254,8 +303,17 @@ export default function DashboardPage() {
   const [ciblesSelectionnees, setCiblesSelectionnees] = useState<Set<string>>(new Set())
   const [envoiMasseEnCours, setEnvoiMasseEnCours] = useState(false)
   const [membresEquipe, setMembresEquipe] = useState<
-    { id: string; nom_complet: string | null; role: string }[]
+    {
+      id: string
+      nom_complet: string | null
+      role: string
+      telephone: string | null
+      onglets_masques: string[]
+    }[]
   >([])
+  const [mesOngletsMasques, setMesOngletsMasques] = useState<string[]>([])
+  const [membreEnEdition, setMembreEnEdition] = useState<string | null>(null)
+  const [editionMembreForm, setEditionMembreForm] = useState({ nom_complet: '', telephone: '' })
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteNom, setInviteNom] = useState('')
   const [inviteRole, setInviteRole] = useState<'membre' | 'directeur_commercial'>('membre')
@@ -276,12 +334,17 @@ export default function DashboardPage() {
       statut: 'a_faire' | 'en_cours' | 'terminee'
       echeance: string | null
       assigne_a: string | null
+      cible_id?: string | null
       membre: { nom_complet: string | null } | null
+      createur: { nom_complet: string | null } | null
+      cible?: { nom: string } | null
     }[]
   >([])
   const [nouvelleTache, setNouvelleTache] = useState({ titre: '', description: '', assigne_a: '', echeance: '' })
   const [creationTacheEnCours, setCreationTacheEnCours] = useState(false)
   const [collaborationChargee, setCollaborationChargee] = useState(false)
+  const [popoverPipelineOuvert, setPopoverPipelineOuvert] = useState<string | null>(null)
+  const [popoverPipelineForm, setPopoverPipelineForm] = useState({ assigne_a: '', consigne: '' })
 
   const [nouvelleCible, setNouvelleCible] = useState({
     nom: '',
@@ -317,7 +380,7 @@ export default function DashboardPage() {
     const { data: targetsData } = await supabase
       .from('targets')
       .select(
-        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, etape_pipeline, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a, signal_ia, reponse_sentiment, reponse_a_traiter'
+        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, etape_pipeline, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a, signal_ia, reponse_sentiment, reponse_a_traiter, motif_refus'
       )
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
@@ -326,7 +389,7 @@ export default function DashboardPage() {
     const { data: diagData } = await supabase
       .from('diagnostics')
       .select(
-        'id, token_acces, phrase_brute_prospect, json_ia_brouillon, recommandations_json, lien_ouvert_at, targets(nom)'
+        'id, token_acces, phrase_brute_prospect, json_ia_brouillon, recommandations_json, lien_ouvert_at, commentaire_expert, targets(nom)'
       )
       .eq('client_id', clientId)
       .eq('statut_validation', 'en_attente_validation')
@@ -352,16 +415,17 @@ export default function DashboardPage() {
 
     const { data: catalogueData } = await supabase
       .from('catalogue_offres')
-      .select('id, nom, description, prix, devise, duree, public_cible, pdf_url, mode_facturation')
+      .select('id, nom, description, prix, devise, duree, public_cible, pdf_url, mode_facturation, thematique, format, mode_delivrance, usp')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
     setCatalogue((catalogueData ?? []) as OffreCatalogue[])
 
     const { data: calendrierData } = await supabase
       .from('calendrier_entrees')
-      .select('id, titre, description, date_evenement, type, lien')
+      .select('id, titre, description, date_evenement, type, lien, heure_debut, duree_minutes, lieu')
       .eq('client_id', clientId)
       .order('date_evenement', { ascending: true })
+      .order('heure_debut', { ascending: true })
     setCalendrier((calendrierData ?? []) as CalendrierEntree[])
 
     const { data: notesData } = await supabase
@@ -385,9 +449,9 @@ export default function DashboardPage() {
 
     const { data: membresData } = await supabase
       .from('client_users')
-      .select('id, nom_complet, role')
+      .select('id, nom_complet, role, telephone, onglets_masques')
       .eq('client_id', clientId)
-    setMembresEquipe(membresData ?? [])
+    setMembresEquipe((membresData ?? []) as typeof membresEquipe)
 
     // Statistiques de performance : taux de reponse et de conversion
     const { count: nbMessagesEnvoyes } = await supabase
@@ -445,7 +509,7 @@ export default function DashboardPage() {
 
       const { data: clientUser } = await supabase
         .from('client_users')
-        .select('id, client_id, role')
+        .select('id, client_id, role, onglets_masques')
         .eq('auth_user_id', userData.user.id)
         .single()
 
@@ -455,11 +519,12 @@ export default function DashboardPage() {
       }
       setMonClientUserId(clientUser.id)
       setMonRole(clientUser.role ?? 'membre')
+      setMesOngletsMasques((clientUser.onglets_masques as string[]) ?? [])
 
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -467,6 +532,12 @@ export default function DashboardPage() {
       if (clientData) {
         setClient(clientData as unknown as Client)
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
+        setInputsStrategiques({
+          taux_closing_historique:
+            (clientData as unknown as Client).taux_closing_historique?.toString() ?? '',
+          mots_cles_expertise: (clientData as unknown as Client).mots_cles_expertise ?? '',
+          idees_recues_marche: (clientData as unknown as Client).idees_recues_marche ?? '',
+        })
         setMessageInput((clientData as unknown as Client).message_personnalise ?? '')
         setLogoInput((clientData as unknown as Client).logo_url ?? '')
         setImapForm((prev) => ({
@@ -528,6 +599,21 @@ export default function DashboardPage() {
       .eq('id', client.id)
     setClient({ ...client, secteur_activite: secteur || null })
     setMaj(false)
+  }
+
+  const enregistrerInputsStrategiques = async () => {
+    if (!client) return
+    setInputsStrategiquesEnCours(true)
+    const maj = {
+      taux_closing_historique: inputsStrategiques.taux_closing_historique
+        ? Number(inputsStrategiques.taux_closing_historique)
+        : null,
+      mots_cles_expertise: inputsStrategiques.mots_cles_expertise.trim() || null,
+      idees_recues_marche: inputsStrategiques.idees_recues_marche.trim() || null,
+    }
+    await supabase.from('clients').update(maj).eq('id', client.id)
+    setClient({ ...client, ...maj })
+    setInputsStrategiquesEnCours(false)
   }
 
   const changerTailleEntreprise = async (taille: string) => {
@@ -856,6 +942,34 @@ export default function DashboardPage() {
     }
   }
 
+  // Popover "Assigner / consigne" ouvert au clic sur une carte du Pipeline :
+  // assigne le prospect a un commercial et cree en meme temps une tache liee
+  // a sa fiche, visible dans Collaboration & Tâches et dans le compteur de
+  // la cloche du commercial concerne.
+  const validerPopoverPipeline = async (cible: Target) => {
+    if (popoverPipelineForm.assigne_a) {
+      await assignerCible(cible.id, popoverPipelineForm.assigne_a)
+    }
+    if (popoverPipelineForm.consigne.trim()) {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch('/api/collaboration/taches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          titre: `${cible.nom} — ${popoverPipelineForm.consigne.trim().slice(0, 60)}`,
+          description: popoverPipelineForm.consigne.trim(),
+          assigne_a: popoverPipelineForm.assigne_a || null,
+          cible_id: cible.id,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) setTaches((prev) => [data.tache, ...prev])
+    }
+    setPopoverPipelineOuvert(null)
+    setPopoverPipelineForm({ assigne_a: '', consigne: '' })
+  }
+
   const majTache = async (id: string, changements: { statut?: string; assigne_a?: string | null }) => {
     setTaches((prev) => prev.map((t) => (t.id === id ? { ...t, ...changements } as typeof t : t)))
     const { data: sessionData } = await supabase.auth.getSession()
@@ -874,6 +988,13 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ongletActif])
 
+  useEffect(() => {
+    if (monClientUserId && !collaborationChargee) {
+      chargerCollaboration()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monClientUserId])
+
   const ajouterWhatsappEquipe = async (numero: string) => {
     if (!client || !numero.trim()) return
     const nouveaux = [...(client.whatsapp_equipe ?? []), numero.trim()]
@@ -888,15 +1009,31 @@ export default function DashboardPage() {
     setClient({ ...client, whatsapp_equipe: nouveaux })
   }
 
-  const basculerOngletMasque = async (ongletId: string) => {
-    if (!client) return
-    const actuel = client.onglets_masques_equipe ?? []
+  const modifierMembre = async (
+    id: string,
+    changements: { nom_complet?: string; telephone?: string | null; onglets_masques?: string[] }
+  ) => {
+    setMembresEquipe((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, ...changements } as typeof m : m))
+    )
+    if (id === monClientUserId && changements.onglets_masques !== undefined) {
+      setMesOngletsMasques(changements.onglets_masques)
+    }
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    await fetch('/api/team/modifier', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id, ...changements }),
+    })
+  }
+
+  const basculerOngletMasqueMembre = (membre: { id: string; onglets_masques: string[] }, ongletId: string) => {
+    const actuel = membre.onglets_masques ?? []
     const nouveau = actuel.includes(ongletId)
       ? actuel.filter((id) => id !== ongletId)
       : [...actuel, ongletId]
-
-    await supabase.from('clients').update({ onglets_masques_equipe: nouveau }).eq('id', client.id)
-    setClient({ ...client, onglets_masques_equipe: nouveau })
+    modifierMembre(membre.id, { onglets_masques: nouveau })
   }
 
   const soumettreOnboarding = async () => {
@@ -948,6 +1085,51 @@ export default function DashboardPage() {
     setTargets((prev) =>
       prev.map((tg) => (tg.id === targetId ? { ...tg, etape_pipeline: etape } : tg))
     )
+  }
+
+  // Chemin C ("refus intelligent") : quand le commercial precise pourquoi le
+  // prospect a refuse, on planifie automatiquement une relance de courtoisie
+  // dans Mon Calendrier (delai selon le motif) au lieu d'abandonner la fiche.
+  const DELAI_RECONTACT_JOURS: Record<string, number> = {
+    'Pas de budget': 90,
+    'Pas le moment': 30,
+    "Plus le bon interlocuteur": 60,
+    Autre: 60,
+  }
+
+  const enregistrerMotifRefus = async (target: Target, motif: string) => {
+    setTargets((prev) =>
+      prev.map((tg) => (tg.id === target.id ? { ...tg, motif_refus: motif } : tg))
+    )
+    await supabase
+      .from('targets')
+      .update({ motif_refus: motif, reponse_a_traiter: false })
+      .eq('id', target.id)
+
+    if (!client) return
+    const delaiJours = DELAI_RECONTACT_JOURS[motif] ?? 60
+    const dateRecontact = new Date()
+    dateRecontact.setDate(dateRecontact.getDate() + delaiJours)
+
+    const { data } = await supabase
+      .from('calendrier_entrees')
+      .insert({
+        client_id: client.id,
+        titre: `Recontacter ${target.nom}`,
+        description: `Motif du refus précédent : ${motif}. Relance de courtoisie basée sur du contenu de valeur (pas une offre directe).`,
+        date_evenement: dateRecontact.toISOString().slice(0, 10),
+        type: 'rdv',
+      })
+      .select('id, titre, description, date_evenement, type, lien, heure_debut, duree_minutes, lieu')
+      .single()
+
+    if (data) {
+      setCalendrier((prev) =>
+        [...prev, data as CalendrierEntree].sort((a, b) =>
+          a.date_evenement.localeCompare(b.date_evenement)
+        )
+      )
+    }
   }
 
   const ajouterNote = async (targetId: string) => {
@@ -1048,16 +1230,30 @@ export default function DashboardPage() {
     if (!client || ciblesSelectionnees.size === 0) return
     setEnvoiMasseEnCours(true)
 
+    let echecs = 0
+    let dernierMessageErreur = ''
     for (const targetId of ciblesSelectionnees) {
       try {
-        await fetch('/api/outreach/send', {
+        const res = await fetch('/api/outreach/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ target_id: targetId, type_envoi: typeEnvoi }),
         })
+        if (!res.ok) {
+          const data = await res.json().catch(() => null)
+          echecs += 1
+          dernierMessageErreur = data?.error ?? 'erreur inconnue'
+        }
       } catch {
-        // on continue meme si un envoi echoue, pour ne pas bloquer les autres
+        echecs += 1
+        dernierMessageErreur = 'erreur réseau'
       }
+    }
+
+    if (echecs > 0) {
+      alert(
+        `${echecs} envoi(s) sur ${ciblesSelectionnees.size} ont échoué (ex: ${dernierMessageErreur}). Les cibles concernées restent dans "Cibles" — vérifie leur téléphone/email.`
+      )
     }
 
     setCiblesSelectionnees(new Set())
@@ -1225,12 +1421,16 @@ export default function DashboardPage() {
           duree: data.champs.duree ?? '',
           public_cible: data.champs.public_cible ?? '',
           mode_facturation: '',
+          thematique: data.champs.thematique ?? '',
+          format: data.champs.format ?? '',
+          mode_delivrance: data.champs.mode_delivrance ?? '',
+          usp: data.champs.usp ?? '',
         })
       } else {
         alert(
-          "PDF importé mais pré-remplissage impossible (" +
+          "Le PDF a bien été attaché, mais l'extraction automatique a échoué (" +
             (data.error ?? 'erreur inconnue') +
-            ') — remplis le formulaire manuellement, le PDF reste attaché.'
+            '). Remplis au moins le champ "Nom" ci-dessous puis clique sur "Ajouter l\'offre" — le PDF reste attaché.'
         )
       }
     } catch {
@@ -1241,7 +1441,11 @@ export default function DashboardPage() {
   }
 
   const ajouterOffre = async () => {
-    if (!client || !nouvelleOffre.nom.trim()) return
+    if (!client) return
+    if (!nouvelleOffre.nom.trim()) {
+      alert('Le nom de l\'offre est obligatoire pour l\'ajouter au catalogue.')
+      return
+    }
     setMaj(true)
     const { data } = await supabase
       .from('catalogue_offres')
@@ -1254,9 +1458,15 @@ export default function DashboardPage() {
         duree: nouvelleOffre.duree.trim() || null,
         public_cible: nouvelleOffre.public_cible.trim() || null,
         mode_facturation: nouvelleOffre.mode_facturation || null,
+        thematique: nouvelleOffre.thematique.trim() || null,
+        format: nouvelleOffre.format || null,
+        mode_delivrance: nouvelleOffre.mode_delivrance || null,
+        usp: nouvelleOffre.usp.trim() || null,
         pdf_url: pdfUrlTemp,
       })
-      .select('id, nom, description, prix, devise, duree, public_cible, pdf_url, mode_facturation')
+      .select(
+        'id, nom, description, prix, devise, duree, public_cible, pdf_url, mode_facturation, thematique, format, mode_delivrance, usp'
+      )
       .single()
     if (data) setCatalogue((prev) => [data as OffreCatalogue, ...prev])
     setNouvelleOffre({
@@ -1267,6 +1477,10 @@ export default function DashboardPage() {
       duree: '',
       public_cible: '',
       mode_facturation: '',
+      thematique: '',
+      format: '',
+      mode_delivrance: '',
+      usp: '',
     })
     setPdfUrlTemp(null)
     setMaj(false)
@@ -1275,6 +1489,25 @@ export default function DashboardPage() {
   const supprimerOffre = async (id: string) => {
     await supabase.from('catalogue_offres').delete().eq('id', id)
     setCatalogue((prev) => prev.filter((o) => o.id !== id))
+  }
+
+  const modifierOffre = async (id: string, champs: Partial<OffreCatalogue>) => {
+    setCatalogue((prev) => prev.map((o) => (o.id === id ? { ...o, ...champs } : o)))
+    await supabase
+      .from('catalogue_offres')
+      .update({
+        nom: champs.nom,
+        description: champs.description,
+        prix: champs.prix,
+        devise: champs.devise,
+        duree: champs.duree,
+        public_cible: champs.public_cible,
+        thematique: champs.thematique,
+        format: champs.format,
+        mode_delivrance: champs.mode_delivrance,
+        usp: champs.usp,
+      })
+      .eq('id', id)
   }
 
   const ajouterEntreeCalendrier = async () => {
@@ -1289,17 +1522,31 @@ export default function DashboardPage() {
         date_evenement: nouvelleEntree.date_evenement,
         type: nouvelleEntree.type,
         lien: nouvelleEntree.lien.trim() || null,
+        heure_debut: nouvelleEntree.heure_debut || null,
+        duree_minutes: nouvelleEntree.heure_debut ? Number(nouvelleEntree.duree_minutes) || 60 : null,
+        lieu: nouvelleEntree.lieu.trim() || null,
       })
-      .select('id, titre, description, date_evenement, type, lien')
+      .select('id, titre, description, date_evenement, type, lien, heure_debut, duree_minutes, lieu')
       .single()
     if (data) {
       setCalendrier((prev) =>
         [...prev, data as CalendrierEntree].sort((a, b) =>
-          a.date_evenement.localeCompare(b.date_evenement)
+          a.date_evenement === b.date_evenement
+            ? (a.heure_debut ?? '').localeCompare(b.heure_debut ?? '')
+            : a.date_evenement.localeCompare(b.date_evenement)
         )
       )
     }
-    setNouvelleEntree({ titre: '', description: '', date_evenement: '', type: 'rdv', lien: '' })
+    setNouvelleEntree({
+      titre: '',
+      description: '',
+      date_evenement: '',
+      type: 'rdv',
+      lien: '',
+      heure_debut: '',
+      duree_minutes: '60',
+      lieu: '',
+    })
     setMaj(false)
   }
 
@@ -1467,7 +1714,11 @@ export default function DashboardPage() {
   const ONGLETS: { id: Onglet; label: string; icone: string }[] = [
     { id: 'ciblage', label: t('onglet_ciblage'), icone: '🔍' },
     { id: 'cibles', label: t('onglet_cibles'), icone: '📋' },
-    { id: 'validation', label: t('onglet_validation'), icone: '🛠️' },
+    {
+      id: 'validation',
+      label: `${t('onglet_validation')}${diagnosticsEnAttente.length > 0 ? ` (${diagnosticsEnAttente.length})` : ''}`,
+      icone: '🛠️',
+    },
     {
       id: 'inbox',
       label: `Boîte de réception${messagesRecus.filter((m) => !m.lu).length > 0 ? ` (${messagesRecus.filter((m) => !m.lu).length})` : ''}`,
@@ -1485,7 +1736,7 @@ export default function DashboardPage() {
     { id: 'equipe', label: t('onglet_equipe'), icone: '👥' },
   ].filter((onglet): onglet is { id: Onglet; label: string; icone: string } => {
     if (monRole === 'proprietaire' || monRole === 'admin') return true
-    return !(client.onglets_masques_equipe ?? []).includes(onglet.id)
+    return !mesOngletsMasques.includes(onglet.id)
   })
 
   return (
@@ -1560,6 +1811,26 @@ export default function DashboardPage() {
       <div className="flex-1 overflow-y-auto">
         {/* BARRE DU HAUT (langue + deconnexion) */}
         <div className="flex justify-end items-center gap-3 px-6 py-4 border-b border-slate-800">
+          <button
+            onClick={() => {
+              setSousOngletGroupe('catalogue')
+              setOngletActif('collaboration')
+            }}
+            title="Tâches qui te sont assignées"
+            className="relative text-lg"
+          >
+            🔔
+            {(() => {
+              const mesTachesEnAttente = taches.filter(
+                (tc) => tc.assigne_a === monClientUserId && tc.statut !== 'terminee'
+              ).length
+              return mesTachesEnAttente > 0 ? (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  {mesTachesEnAttente > 9 ? '9+' : mesTachesEnAttente}
+                </span>
+              ) : null
+            })()}
+          </button>
           <select
             value={client.langue_preferee}
             onChange={(e) => changerLangue(e.target.value as Langue)}
@@ -2108,12 +2379,11 @@ export default function DashboardPage() {
                               className="text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
                             >
                               <option value="nouveau">🆕 Nouveau</option>
-                              <option value="contacte">📨 Contacté</option>
-                              <option value="qualifie">✅ Qualifié</option>
-                              <option value="proposition">📄 Proposition envoyée</option>
-                              <option value="negociation">🤝 Négociation</option>
-                              <option value="gagne">🏆 Gagné</option>
-                              <option value="perdu">❌ Perdu</option>
+                              {etapesPipelinePourVertical(verticalSlug).map((e) => (
+                                <option key={e.etape} value={e.etape}>
+                                  {e.label}
+                                </option>
+                              ))}
                             </select>
                             <button
                               onClick={() =>
@@ -2126,6 +2396,37 @@ export default function DashboardPage() {
                               📝 Notes ({(notesCibles[target.id] ?? []).length})
                             </button>
                           </div>
+
+                          {target.etape_pipeline === 'a_recontacter' && !target.motif_refus && (
+                            <div className="mt-2 bg-amber-950/40 border border-amber-900 rounded-lg p-2">
+                              <p className="text-xs text-amber-400 mb-1">
+                                Pourquoi ce prospect a-t-il refusé ?
+                              </p>
+                              <select
+                                defaultValue=""
+                                onChange={(e) => {
+                                  if (!e.target.value) return
+                                  enregistrerMotifRefus(target, e.target.value)
+                                }}
+                                className="w-full text-xs rounded-lg bg-slate-900 border border-amber-800 px-2 py-1"
+                              >
+                                <option value="" disabled>
+                                  Choisir un motif...
+                                </option>
+                                <option value="Pas de budget">Pas de budget (relance dans 90j)</option>
+                                <option value="Pas le moment">Pas le moment (relance dans 30j)</option>
+                                <option value="Plus le bon interlocuteur">
+                                  Plus le bon interlocuteur (relance dans 60j)
+                                </option>
+                                <option value="Autre">Autre (relance dans 60j)</option>
+                              </select>
+                            </div>
+                          )}
+                          {target.motif_refus && (
+                            <p className="text-xs text-slate-500 mt-1">
+                              Motif : {target.motif_refus} — relance planifiée dans Mon Calendrier
+                            </p>
+                          )}
 
                           {cibleNotesOuverte === target.id && (
                             <div className="mt-2 space-y-2 bg-slate-950 border border-slate-800 rounded-lg p-3">
@@ -2225,17 +2526,15 @@ export default function DashboardPage() {
               const cibleEnCours = targets.filter((tg) => tg.statut !== 'nouveau')
               const colonnes = etapesPipelinePourVertical(verticalSlug)
 
-              if (cibleEnCours.length === 0) {
-                return (
-                  <p className="text-slate-500 text-sm italic">
-                    Aucun prospect en cours pour le moment. Les prospects contactés depuis
-                    l'onglet Cibles apparaîtront ici.
-                  </p>
-                )
-              }
-
               return (
-                <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                <div className="space-y-3">
+                  {cibleEnCours.length === 0 && (
+                    <p className="text-slate-500 text-sm italic">
+                      Aucun prospect en cours pour le moment. Les prospects contactés depuis
+                      l'onglet Cibles apparaîtront ici.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
                   {colonnes.map((colonne) => {
                     const cartes = cibleEnCours.filter(
                       (tg) => (tg.etape_pipeline || 'contacte') === colonne.etape
@@ -2262,6 +2561,12 @@ export default function DashboardPage() {
                             draggable
                             onDragStart={() => setCarteEnCoursDeGlissement(carte.id)}
                             onDragEnd={() => setCarteEnCoursDeGlissement(null)}
+                            onClick={() => {
+                              setPopoverPipelineOuvert(
+                                popoverPipelineOuvert === carte.id ? null : carte.id
+                              )
+                              setPopoverPipelineForm({ assigne_a: carte.assigne_a ?? '', consigne: '' })
+                            }}
                             className="rounded-lg border border-slate-700 bg-slate-950 p-2 cursor-grab active:cursor-grabbing space-y-1"
                           >
                             <p className="text-sm font-semibold">{carte.nom}</p>
@@ -2293,11 +2598,107 @@ export default function DashboardPage() {
                                 {drapeauPays(carte.country)} {carte.country}
                               </p>
                             )}
+                            {carte.assigne_a && (
+                              <p className="text-xs text-accent">
+                                👤{' '}
+                                {membresEquipe.find((m) => m.id === carte.assigne_a)?.nom_complet ??
+                                  'Assigné'}
+                              </p>
+                            )}
+
+                            {carte.etape_pipeline === 'a_recontacter' && !carte.motif_refus && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="mt-2 bg-amber-950/40 border border-amber-900 rounded-lg p-2 cursor-default"
+                              >
+                                <p className="text-xs text-amber-400 mb-1">
+                                  Pourquoi ce prospect a-t-il refusé ?
+                                </p>
+                                <select
+                                  defaultValue=""
+                                  onChange={(e) => {
+                                    if (!e.target.value) return
+                                    enregistrerMotifRefus(carte, e.target.value)
+                                  }}
+                                  className="w-full text-xs rounded-lg bg-slate-900 border border-amber-800 px-2 py-1"
+                                >
+                                  <option value="" disabled>
+                                    Choisir un motif...
+                                  </option>
+                                  <option value="Pas de budget">Pas de budget (relance dans 90j)</option>
+                                  <option value="Pas le moment">Pas le moment (relance dans 30j)</option>
+                                  <option value="Plus le bon interlocuteur">
+                                    Plus le bon interlocuteur (relance dans 60j)
+                                  </option>
+                                  <option value="Autre">Autre (relance dans 60j)</option>
+                                </select>
+                              </div>
+                            )}
+                            {carte.motif_refus && (
+                              <p className="text-xs text-slate-500 mt-1">
+                                Motif : {carte.motif_refus} — relance planifiée
+                              </p>
+                            )}
+
+                            {popoverPipelineOuvert === carte.id && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="mt-2 bg-slate-900 border border-accent/40 rounded-lg p-2 space-y-2 cursor-default"
+                              >
+                                <p className="text-xs font-semibold text-slate-300">
+                                  Assigner & donner une consigne
+                                </p>
+                                <select
+                                  value={popoverPipelineForm.assigne_a}
+                                  onChange={(e) =>
+                                    setPopoverPipelineForm({
+                                      ...popoverPipelineForm,
+                                      assigne_a: e.target.value,
+                                    })
+                                  }
+                                  className="w-full text-xs rounded-lg bg-slate-950 border border-slate-700 p-1.5"
+                                >
+                                  <option value="">Assigner à...</option>
+                                  {membresEquipe.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      👤 {m.nom_complet || '(sans nom)'}
+                                    </option>
+                                  ))}
+                                </select>
+                                <textarea
+                                  value={popoverPipelineForm.consigne}
+                                  onChange={(e) =>
+                                    setPopoverPipelineForm({
+                                      ...popoverPipelineForm,
+                                      consigne: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Ex: Rappeler ce vendredi à 14h suite à son message WhatsApp"
+                                  className="w-full text-xs rounded-lg bg-slate-950 border border-slate-700 p-1.5"
+                                  rows={2}
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => validerPopoverPipeline(carte)}
+                                    className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold"
+                                  >
+                                    Valider
+                                  </button>
+                                  <button
+                                    onClick={() => setPopoverPipelineOuvert(null)}
+                                    className="text-xs px-3 py-1 rounded-lg border border-slate-700"
+                                  >
+                                    Annuler
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
                     )
                   })}
+                  </div>
                 </div>
               )
             })()}
@@ -2361,36 +2762,6 @@ export default function DashboardPage() {
           <section className="space-y-4">
             <h2 className="text-lg font-semibold">{t('equipe_titre')}</h2>
 
-            {(monRole === 'proprietaire' || monRole === 'admin') && (
-              <details className="rounded-xl border border-slate-700 bg-slate-900 p-4">
-                <summary className="cursor-pointer text-sm font-semibold">
-                  👑 Droits d'accès — choisir ce que l'équipe peut voir
-                </summary>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {ONGLETS.filter((o) => o.id !== 'equipe').map((onglet) => {
-                    const masque = (client.onglets_masques_equipe ?? []).includes(onglet.id)
-                    return (
-                      <button
-                        key={onglet.id}
-                        onClick={() => basculerOngletMasque(onglet.id)}
-                        className={`text-xs px-3 py-1.5 rounded-full border ${
-                          masque
-                            ? 'bg-slate-800 border-slate-600 text-slate-500 line-through'
-                            : 'bg-accent/10 border-accent/40 text-accent'
-                        }`}
-                      >
-                        {onglet.label}
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="text-xs text-slate-500 mt-2">
-                  Les onglets barrés sont masqués pour les commerciaux et directeurs commerciaux
-                  (toi, propriétaire, vois toujours tout).
-                </p>
-              </details>
-            )}
-
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <h3 className="text-sm font-semibold">📱 Numéros WhatsApp de l'équipe</h3>
               <div className="flex flex-wrap gap-2">
@@ -2432,34 +2803,124 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-2">
-              {membresEquipe.map((m) => (
-                <div
-                  key={m.id}
-                  className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
-                >
-                  <span>{m.nom_complet || '(nom non renseigné)'}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-accent text-xs uppercase">
-                      {m.role === 'proprietaire' || m.role === 'admin'
-                        ? '👑 Propriétaire du cabinet'
-                        : m.role === 'directeur_commercial'
-                        ? '🧭 Directeur commercial'
-                        : '👤 Commercial'}
-                    </span>
-                    {peutSuperviser &&
-                      m.role !== 'proprietaire' &&
-                      m.role !== 'admin' &&
-                      m.id !== monClientUserId && (
-                        <button
-                          onClick={() => supprimerMembre(m.id, m.nom_complet)}
-                          className="text-xs text-red-400 hover:text-red-300 underline"
-                        >
-                          Retirer
-                        </button>
-                      )}
+              {membresEquipe.map((m) => {
+                const estProprietaire = m.role === 'proprietaire' || m.role === 'admin'
+                const ouvert = membreEnEdition === m.id
+                const peutEditer = peutSuperviser || m.id === monClientUserId
+                return (
+                  <div
+                    key={m.id}
+                    className="rounded-lg bg-slate-900 border border-slate-700 text-sm overflow-hidden"
+                  >
+                    <div className="flex items-center justify-between p-3">
+                      <span className="flex items-center gap-2">
+                        {m.nom_complet || '(nom non renseigné)'}
+                        {m.telephone ? ` · ${m.telephone}` : ''}
+                        {peutEditer && (
+                          <button
+                            onClick={() => {
+                              if (ouvert) {
+                                setMembreEnEdition(null)
+                              } else {
+                                setMembreEnEdition(m.id)
+                                setEditionMembreForm({
+                                  nom_complet: m.nom_complet ?? '',
+                                  telephone: m.telephone ?? '',
+                                })
+                              }
+                            }}
+                            title="Modifier le nom / téléphone"
+                            className="text-accent hover:text-accent/80"
+                          >
+                            ✏️
+                          </button>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-accent text-xs uppercase">
+                          {estProprietaire
+                            ? '👑 Propriétaire du cabinet'
+                            : m.role === 'directeur_commercial'
+                            ? '🧭 Directeur commercial'
+                            : '👤 Commercial'}
+                        </span>
+                        {peutSuperviser && !estProprietaire && m.id !== monClientUserId && (
+                          <button
+                            onClick={() => supprimerMembre(m.id, m.nom_complet)}
+                            className="text-xs text-red-400 hover:text-red-300 underline"
+                          >
+                            Retirer
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {ouvert && (
+                      <div className="border-t border-slate-800 p-3 space-y-3 bg-slate-950/60">
+                        <div className="flex gap-2">
+                          <input
+                            value={editionMembreForm.nom_complet}
+                            onChange={(e) =>
+                              setEditionMembreForm({ ...editionMembreForm, nom_complet: e.target.value })
+                            }
+                            placeholder="Nom complet"
+                            className="flex-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                          />
+                          <input
+                            value={editionMembreForm.telephone}
+                            onChange={(e) =>
+                              setEditionMembreForm({ ...editionMembreForm, telephone: e.target.value })
+                            }
+                            placeholder="Téléphone"
+                            className="flex-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                          />
+                          <button
+                            onClick={async () => {
+                              await modifierMembre(m.id, {
+                                nom_complet: editionMembreForm.nom_complet,
+                                telephone: editionMembreForm.telephone || null,
+                              })
+                              setMembreEnEdition(null)
+                            }}
+                            className="text-sm px-3 rounded-lg bg-accent text-slate-950 font-semibold"
+                          >
+                            Enregistrer
+                          </button>
+                        </div>
+
+                        {peutSuperviser && !estProprietaire && (
+                          <div>
+                            <p className="text-xs font-semibold text-slate-400 mb-2">
+                              👑 Onglets visibles pour ce membre
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {ONGLETS.filter((o) => o.id !== 'equipe').map((onglet) => {
+                                const masque = (m.onglets_masques ?? []).includes(onglet.id)
+                                return (
+                                  <button
+                                    key={onglet.id}
+                                    onClick={() => basculerOngletMasqueMembre(m, onglet.id)}
+                                    className={`text-xs px-3 py-1.5 rounded-full border ${
+                                      masque
+                                        ? 'bg-slate-800 border-slate-600 text-slate-500 line-through'
+                                        : 'bg-accent/10 border-accent/40 text-accent'
+                                    }`}
+                                  >
+                                    {onglet.label}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">
+                              Les onglets barrés sont masqués pour ce membre uniquement.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {peutSuperviser && membresEquipe.length > 1 && (
@@ -2839,6 +3300,74 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+                  <p className="text-sm font-semibold">🧠 Vos inputs stratégiques</p>
+                  <p className="text-xs text-slate-500">
+                    Le reste (objections passées, canaux qui ont échoué, volume de travail) sera
+                    mesuré directement par ton usage réel de la plateforme — inutile de le ressaisir.
+                    Seul le taux de closing d'avant la plateforme sert de point de comparaison pour
+                    calculer ton gain net dans Statistiques.
+                  </p>
+                  <div>
+                    <label className="text-xs text-slate-400">
+                      Taux de closing historique (%, avant la plateforme)
+                    </label>
+                    <input
+                      value={inputsStrategiques.taux_closing_historique}
+                      onChange={(e) =>
+                        setInputsStrategiques({
+                          ...inputsStrategiques,
+                          taux_closing_historique: e.target.value,
+                        })
+                      }
+                      type="number"
+                      placeholder="Ex: 15"
+                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">
+                      Mots-clés d'expertise métier (séparés par une virgule)
+                    </label>
+                    <input
+                      value={inputsStrategiques.mots_cles_expertise}
+                      onChange={(e) =>
+                        setInputsStrategiques({
+                          ...inputsStrategiques,
+                          mots_cles_expertise: e.target.value,
+                        })
+                      }
+                      placeholder="Ex: Management Agile, Conduite du changement, RSE & Climat"
+                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">
+                      Idées reçues du marché sur votre expertise
+                    </label>
+                    <textarea
+                      value={inputsStrategiques.idees_recues_marche}
+                      onChange={(e) =>
+                        setInputsStrategiques({
+                          ...inputsStrategiques,
+                          idees_recues_marche: e.target.value,
+                        })
+                      }
+                      placeholder="Ex: Mes prospects croient souvent qu'une certification PMP est trop théorique et inapplicable sur le terrain tunisien."
+                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      rows={2}
+                    />
+                  </div>
+                  <button
+                    onClick={enregistrerInputsStrategiques}
+                    disabled={inputsStrategiquesEnCours}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
+                  >
+                    {inputsStrategiquesEnCours ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                </div>
+
                 <button
                   onClick={genererStrategie}
                   disabled={strategieEnCours}
@@ -3025,6 +3554,37 @@ export default function DashboardPage() {
                 placeholder="Public visé (optionnel)"
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
+              <input
+                value={nouvelleOffre.thematique}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, thematique: e.target.value })}
+                placeholder="Thématique (ex: Management, RH, Soft Skills...)"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <select
+                value={nouvelleOffre.format}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, format: e.target.value })}
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              >
+                <option value="">Format (optionnel)</option>
+                <option value="inter_entreprise">Inter-entreprises</option>
+                <option value="intra_entreprise">Intra-entreprise</option>
+              </select>
+              <select
+                value={nouvelleOffre.mode_delivrance}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, mode_delivrance: e.target.value })}
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              >
+                <option value="">Mode de délivrance (optionnel)</option>
+                <option value="presentiel">100% présentiel</option>
+                <option value="en_ligne">En ligne</option>
+                <option value="blended">Blended (mixte)</option>
+              </select>
+              <input
+                value={nouvelleOffre.usp}
+                onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, usp: e.target.value })}
+                placeholder="Élément de différenciation / USP (optionnel)"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
               <textarea
                 value={nouvelleOffre.description}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, description: e.target.value })}
@@ -3040,48 +3600,249 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <div className="space-y-2">
+            <div className="overflow-x-auto rounded-xl border border-slate-700">
               {catalogue.length === 0 ? (
-                <p className="text-slate-500 text-sm italic">
+                <p className="text-slate-500 text-sm italic p-4">
                   Aucune offre pour le moment — l'IA invente encore des packs génériques.
                 </p>
               ) : (
-                catalogue.map((o) => (
-                  <div
-                    key={o.id}
-                    className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex items-start justify-between gap-3"
-                  >
-                    <div>
-                      <p className="font-semibold">
-                        {o.nom}
-                        {o.prix && <span className="text-accent"> — {o.prix} {o.devise ?? 'TND'}</span>}
-                        {o.duree && <span className="text-slate-400 text-sm"> · {o.duree}</span>}
-                      </p>
-                      {o.description && (
-                        <p className="text-slate-400 text-sm mt-1">{o.description}</p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-900 text-slate-400 text-xs uppercase text-left">
+                      <th className="p-3 font-semibold">Offre</th>
+                      <th className="p-3 font-semibold">Thématique</th>
+                      <th className="p-3 font-semibold">Format</th>
+                      <th className="p-3 font-semibold">Mode de délivrance</th>
+                      <th className="p-3 font-semibold">Tarification</th>
+                      <th className="p-3 font-semibold">USP</th>
+                      <th className="p-3 font-semibold"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {catalogue.map((o) => (
+                      <Fragment key={o.id}>
+                      <tr className="border-t border-slate-800 bg-slate-950 align-top">
+                        <td className="p-3">
+                          <p className="font-semibold">{o.nom}</p>
+                          {o.description && (
+                            <p className="text-slate-400 text-xs mt-1">{o.description}</p>
+                          )}
+                          {o.public_cible && (
+                            <p className="text-slate-500 text-xs mt-1">Public : {o.public_cible}</p>
+                          )}
+                          {o.pdf_url && (
+                            <a
+                              href={o.pdf_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-accent underline mt-1 inline-block"
+                            >
+                              📄 PDF
+                            </a>
+                          )}
+                        </td>
+                        <td className="p-3 text-slate-300">{o.thematique || '—'}</td>
+                        <td className="p-3 text-slate-300">
+                          {o.format === 'inter_entreprise'
+                            ? 'Inter-entreprises'
+                            : o.format === 'intra_entreprise'
+                            ? 'Intra-entreprise'
+                            : '—'}
+                        </td>
+                        <td className="p-3 text-slate-300">
+                          {o.mode_delivrance === 'presentiel'
+                            ? '100% présentiel'
+                            : o.mode_delivrance === 'en_ligne'
+                            ? 'En ligne'
+                            : o.mode_delivrance === 'blended'
+                            ? 'Blended'
+                            : '—'}
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          {o.prix ? (
+                            <span className="text-accent font-medium">
+                              {o.prix} {o.devise ?? 'TND'}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                          {o.duree && <span className="text-slate-400 text-xs block">{o.duree}</span>}
+                        </td>
+                        <td className="p-3 text-slate-300">{o.usp || '—'}</td>
+                        <td className="p-3 whitespace-nowrap space-x-2">
+                          <button
+                            onClick={() => {
+                              if (offreEnEdition === o.id) {
+                                setOffreEnEdition(null)
+                                return
+                              }
+                              setOffreEnEdition(o.id)
+                              setEditionOffreForm({
+                                nom: o.nom,
+                                description: o.description ?? '',
+                                prix: o.prix ? String(o.prix) : '',
+                                devise: o.devise ?? 'TND',
+                                duree: o.duree ?? '',
+                                public_cible: o.public_cible ?? '',
+                                thematique: o.thematique ?? '',
+                                format: o.format ?? '',
+                                mode_delivrance: o.mode_delivrance ?? '',
+                                usp: o.usp ?? '',
+                              })
+                            }}
+                            className="text-xs text-accent hover:text-accent/80 underline"
+                          >
+                            ✏️ Modifier
+                          </button>
+                          <button
+                            onClick={() => supprimerOffre(o.id)}
+                            className="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap"
+                          >
+                            Supprimer
+                          </button>
+                        </td>
+                      </tr>
+                      {offreEnEdition === o.id && (
+                        <tr className="border-t border-slate-800 bg-slate-900/60">
+                          <td colSpan={7} className="p-3">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                              <input
+                                value={editionOffreForm.nom}
+                                onChange={(e) =>
+                                  setEditionOffreForm({ ...editionOffreForm, nom: e.target.value })
+                                }
+                                placeholder="Nom"
+                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                              />
+                              <input
+                                value={editionOffreForm.thematique}
+                                onChange={(e) =>
+                                  setEditionOffreForm({ ...editionOffreForm, thematique: e.target.value })
+                                }
+                                placeholder="Thématique"
+                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                              />
+                              <input
+                                value={editionOffreForm.public_cible}
+                                onChange={(e) =>
+                                  setEditionOffreForm({ ...editionOffreForm, public_cible: e.target.value })
+                                }
+                                placeholder="Public cible"
+                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                              />
+                              <select
+                                value={editionOffreForm.format}
+                                onChange={(e) =>
+                                  setEditionOffreForm({ ...editionOffreForm, format: e.target.value })
+                                }
+                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                              >
+                                <option value="">Format</option>
+                                <option value="inter_entreprise">Inter-entreprises</option>
+                                <option value="intra_entreprise">Intra-entreprise</option>
+                              </select>
+                              <select
+                                value={editionOffreForm.mode_delivrance}
+                                onChange={(e) =>
+                                  setEditionOffreForm({
+                                    ...editionOffreForm,
+                                    mode_delivrance: e.target.value,
+                                  })
+                                }
+                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                              >
+                                <option value="">Mode de délivrance</option>
+                                <option value="presentiel">100% présentiel</option>
+                                <option value="en_ligne">En ligne</option>
+                                <option value="blended">Blended</option>
+                              </select>
+                              <div className="flex gap-2">
+                                <input
+                                  value={editionOffreForm.prix}
+                                  onChange={(e) =>
+                                    setEditionOffreForm({ ...editionOffreForm, prix: e.target.value })
+                                  }
+                                  placeholder="Prix"
+                                  type="number"
+                                  className="w-1/2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                />
+                                <select
+                                  value={editionOffreForm.devise}
+                                  onChange={(e) =>
+                                    setEditionOffreForm({ ...editionOffreForm, devise: e.target.value })
+                                  }
+                                  className="w-1/2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                >
+                                  <option value="TND">TND</option>
+                                  <option value="EUR">EUR</option>
+                                  <option value="USD">USD</option>
+                                </select>
+                              </div>
+                              <input
+                                value={editionOffreForm.duree}
+                                onChange={(e) =>
+                                  setEditionOffreForm({ ...editionOffreForm, duree: e.target.value })
+                                }
+                                placeholder="Durée"
+                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                              />
+                              <input
+                                value={editionOffreForm.usp}
+                                onChange={(e) =>
+                                  setEditionOffreForm({ ...editionOffreForm, usp: e.target.value })
+                                }
+                                placeholder="USP / différenciation"
+                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm md:col-span-2"
+                              />
+                              <textarea
+                                value={editionOffreForm.description}
+                                onChange={(e) =>
+                                  setEditionOffreForm({ ...editionOffreForm, description: e.target.value })
+                                }
+                                placeholder="Description"
+                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm md:col-span-3"
+                                rows={2}
+                              />
+                            </div>
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={async () => {
+                                  if (!editionOffreForm.nom.trim()) {
+                                    alert('Le nom est obligatoire.')
+                                    return
+                                  }
+                                  await modifierOffre(o.id, {
+                                    nom: editionOffreForm.nom.trim(),
+                                    description: editionOffreForm.description.trim() || null,
+                                    prix: editionOffreForm.prix ? Number(editionOffreForm.prix) : null,
+                                    devise: editionOffreForm.devise,
+                                    duree: editionOffreForm.duree.trim() || null,
+                                    public_cible: editionOffreForm.public_cible.trim() || null,
+                                    thematique: editionOffreForm.thematique.trim() || null,
+                                    format: editionOffreForm.format || null,
+                                    mode_delivrance: editionOffreForm.mode_delivrance || null,
+                                    usp: editionOffreForm.usp.trim() || null,
+                                  })
+                                  setOffreEnEdition(null)
+                                }}
+                                className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold"
+                              >
+                                Enregistrer
+                              </button>
+                              <button
+                                onClick={() => setOffreEnEdition(null)}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-slate-700"
+                              >
+                                Annuler
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                      {o.public_cible && (
-                        <p className="text-slate-500 text-xs mt-1">Public : {o.public_cible}</p>
-                      )}
-                      {o.pdf_url && (
-                        <a
-                          href={o.pdf_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-accent underline mt-1 inline-block"
-                        >
-                          📄 Voir le PDF attaché
-                        </a>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => supprimerOffre(o.id)}
-                      className="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap"
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                ))
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           </section>
@@ -3196,8 +3957,27 @@ export default function DashboardPage() {
                           )}
                           <p className="text-xs text-slate-500">
                             {t.membre?.nom_complet ?? 'Non assignée'}
-                            {t.echeance ? ` · ${new Date(t.echeance).toLocaleDateString('fr-FR')}` : ''}
+                            {t.echeance ? (
+                              <span
+                                className={
+                                  t.statut !== 'terminee' && new Date(t.echeance) < new Date()
+                                    ? 'text-red-400 font-semibold'
+                                    : ''
+                                }
+                              >
+                                {' '}
+                                · {new Date(t.echeance).toLocaleDateString('fr-FR')}
+                              </span>
+                            ) : null}
                           </p>
+                          {t.createur?.nom_complet && (
+                            <p className="text-xs text-slate-600">
+                              Créée par {t.createur.nom_complet}
+                            </p>
+                          )}
+                          {t.cible?.nom && (
+                            <p className="text-xs text-accent">🎯 Prospect : {t.cible.nom}</p>
+                          )}
                           <select
                             value={t.statut}
                             onChange={(e) => majTache(t.id, { statut: e.target.value })}
@@ -3251,7 +4031,9 @@ export default function DashboardPage() {
                     .map((c) => (
                       <p key={c.id} className="text-xs text-slate-300">
                         {c.type === 'rdv' ? '📞' : c.type === 'evenement' ? '🎪' : c.type === 'appel_offre' ? '📋' : '📌'}{' '}
+                        {c.heure_debut && <span className="text-accent">{c.heure_debut.slice(0, 5)} — </span>}
                         {c.titre}
+                        {c.lieu && <span className="text-slate-500"> · 📍 {c.lieu}</span>}
                       </p>
                     ))
                 )}
@@ -3271,6 +4053,35 @@ export default function DashboardPage() {
                   setNouvelleEntree({ ...nouvelleEntree, date_evenement: e.target.value })
                 }
                 type="date"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <input
+                value={nouvelleEntree.heure_debut}
+                onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, heure_debut: e.target.value })}
+                type="time"
+                placeholder="Heure (optionnel)"
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              {nouvelleEntree.heure_debut && (
+                <select
+                  value={nouvelleEntree.duree_minutes}
+                  onChange={(e) =>
+                    setNouvelleEntree({ ...nouvelleEntree, duree_minutes: e.target.value })
+                  }
+                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                >
+                  <option value="15">15 min</option>
+                  <option value="30">30 min</option>
+                  <option value="45">45 min</option>
+                  <option value="60">1 h</option>
+                  <option value="90">1 h 30</option>
+                  <option value="120">2 h</option>
+                </select>
+              )}
+              <input
+                value={nouvelleEntree.lieu}
+                onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, lieu: e.target.value })}
+                placeholder="Lieu (adresse, bureau, visio...)"
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <select
@@ -3379,6 +4190,7 @@ export default function DashboardPage() {
                               : c.type === 'appel_offre'
                               ? '📋'
                               : '📌'}{' '}
+                            {c.heure_debut && `${c.heure_debut.slice(0, 5)} `}
                             {c.titre}
                           </div>
                         ))}
@@ -3411,8 +4223,13 @@ export default function DashboardPage() {
                         {c.titre}
                         <span className="text-accent text-sm ml-2">
                           {new Date(c.date_evenement).toLocaleDateString('fr-FR')}
+                          {c.heure_debut && ` à ${c.heure_debut.slice(0, 5)}`}
+                          {c.duree_minutes ? ` (${c.duree_minutes} min)` : ''}
                         </span>
                       </p>
+                      {c.lieu && (
+                        <p className="text-slate-400 text-sm mt-1">📍 {c.lieu}</p>
+                      )}
                       {c.description && (
                         <p className="text-slate-400 text-sm mt-1">{c.description}</p>
                       )}

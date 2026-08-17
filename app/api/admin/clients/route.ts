@@ -117,24 +117,39 @@ export async function DELETE(req: NextRequest) {
   // 1. Recuperer tous les comptes auth lies a ce cabinet (proprietaire + equipe)
   const { data: membres, error: erreurMembres } = await supabaseAdmin
     .from('client_users')
-    .select('auth_user_id')
+    .select('id, auth_user_id')
     .eq('client_id', client_id)
 
   if (erreurMembres) {
+    console.error('Erreur lecture membres avant suppression:', erreurMembres)
     return NextResponse.json({ error: 'Erreur de lecture des membres' }, { status: 500 })
   }
 
-  // 2. Supprimer la ligne clients (cascade sur targets/diagnostics/client_users/...)
+  // 2. Supprimer explicitement les lignes filles qui pourraient bloquer la
+  // suppression du cabinet si leur contrainte n'est pas en "on delete
+  // cascade" (le schema de base, cree avant ces migrations, n'est pas
+  // verifiable ici) - dans le doute on nettoie nous-memes plutot que de
+  // compter uniquement sur le cascade SQL.
+  await supabaseAdmin.from('client_users').delete().eq('client_id', client_id)
+  await supabaseAdmin.from('targets').delete().eq('client_id', client_id)
+  await supabaseAdmin.from('diagnostics').delete().eq('client_id', client_id)
+
+  // 3. Supprimer la ligne clients (cascade sur le reste : catalogue, taches,
+  // messages, notes, historique de strategie, etc.)
   const { error: erreurSuppression } = await supabaseAdmin
     .from('clients')
     .delete()
     .eq('id', client_id)
 
   if (erreurSuppression) {
-    return NextResponse.json({ error: 'Erreur lors de la suppression du cabinet' }, { status: 500 })
+    console.error('Erreur suppression client:', erreurSuppression)
+    return NextResponse.json(
+      { error: `Erreur lors de la suppression du cabinet : ${erreurSuppression.message}` },
+      { status: 500 }
+    )
   }
 
-  // 3. Supprimer chaque compte Supabase Auth associe (best-effort : si l'un
+  // 4. Supprimer chaque compte Supabase Auth associe (best-effort : si l'un
   // echoue on continue les autres et on le signale dans la reponse)
   const echecsAuth: string[] = []
   for (const m of membres ?? []) {

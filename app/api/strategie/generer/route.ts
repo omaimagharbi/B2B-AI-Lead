@@ -79,6 +79,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Aucun cabinet associe' }, { status: 403 })
     }
 
+    const { data: clientData } = await supabaseAdmin
+      .from('clients')
+      .select('taux_closing_historique, mots_cles_expertise, idees_recues_marche')
+      .eq('id', clientUser.client_id)
+      .single()
+
     const { data: cibles } = await supabaseAdmin
       .from('targets')
       .select('id, source_scraping, segment_categorie, segment_urgence, resultat_historique')
@@ -151,14 +157,28 @@ export async function POST(req: NextRequest) {
 Données du cabinet (taux de conversion = % de cibles gagnées) :
 Par canal de sourcing : ${parCanal.map((a) => `${a.canal} (${a.gagnes}/${a.total}, ${a.taux}%)`).join(', ') || 'pas assez de données'}
 Par segment de besoin : ${parSegment.map((a) => `${a.canal} (${a.gagnes}/${a.total}, ${a.taux}%)`).join(', ') || 'pas assez de données'}
+${
+  clientData?.taux_closing_historique
+    ? `Taux de closing historique du cabinet AVANT la plateforme (a comparer aux chiffres ci-dessus pour estimer le gain) : ${clientData.taux_closing_historique}%.`
+    : ''
+}
 `.trim()
 
-    const resumeMarketing =
+    const resumeMarketing = [
       parThemeMarketing.length > 0
         ? `Thèmes de contenu marketing déjà générés, par fréquence : ${parThemeMarketing
             .map((a) => `${a.canal} (${a.total} suggestion(s))`)
             .join(', ')}`
-        : 'Pas encore de contenu marketing généré.'
+        : 'Pas encore de contenu marketing généré.',
+      clientData?.mots_cles_expertise
+        ? `Périmètre technique reel du cabinet (rester dans ce cadre, ne jamais devier hors-sujet) : ${clientData.mots_cles_expertise}.`
+        : '',
+      clientData?.idees_recues_marche
+        ? `Idée reçue du marché à contrer en priorité via du contenu de type "matrice de contre-objection" (thought leadership) : ${clientData.idees_recues_marche}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
 
     const prompt = `Tu es consultant en stratégie commerciale et marketing pour un cabinet de formation/conseil. Voici ses données :\n\n${resumeCommercial}\n\n${resumeMarketing}\n\nRéponds en français, sans jargon, EXACTEMENT dans ce format (rien d'autre) :\nCOMMERCIAL: <3 recommandations courtes séparées par un point, sur où concentrer les efforts de vente>\nMARKETING: <2-3 recommandations courtes séparées par un point, sur quels thèmes/formats de contenu prioriser>`
 

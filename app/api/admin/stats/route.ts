@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
   const [
     { count: totalEntreprises },
     { count: entreprisesActives },
+    { count: enAttenteActivation },
     { count: totalDiagnostics },
     { count: totalCibles },
     { data: abonnementsPayes },
@@ -39,6 +40,10 @@ export async function GET(req: NextRequest) {
       .from('clients')
       .select('id', { count: 'exact', head: true })
       .eq('acces_active', true),
+    supabaseAdmin
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('acces_active', false),
     supabaseAdmin.from('diagnostics').select('id', { count: 'exact', head: true }),
     supabaseAdmin.from('targets').select('id', { count: 'exact', head: true }),
     supabaseAdmin
@@ -57,6 +62,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     total_entreprises: totalEntreprises ?? 0,
     entreprises_actives: entreprisesActives ?? 0,
+    en_attente_activation: enAttenteActivation ?? 0,
     total_diagnostics: totalDiagnostics ?? 0,
     total_cibles: totalCibles ?? 0,
     mrr_par_devise: Object.fromEntries(mrrParDevise),

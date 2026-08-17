@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Aucun cabinet associe' }, { status: 403 })
     }
 
-    const { telephone, logo_url, site_web, facebook_url, instagram_url, linkedin_url, invite_emails } =
+    const { telephone, logo_url, site_web, facebook_url, instagram_url, linkedin_url, invite_emails, email_directeur_commercial } =
       await req.json()
 
     const { error: erreurMaj } = await supabaseAdmin
@@ -76,10 +76,17 @@ export async function POST(req: NextRequest) {
           .map((e) => e.trim())
           .filter(Boolean)
 
-    const equipeCreee: { email: string; motDePasseTemporaire: string }[] = []
+    const equipeCreee: { email: string; motDePasseTemporaire: string; role: string }[] = []
     const echecsInvitation: string[] = []
 
-    for (const email of emailsEquipe) {
+    const membresAInviter: { email: string; role: 'membre' | 'directeur_commercial' }[] = [
+      ...(email_directeur_commercial && String(email_directeur_commercial).trim()
+        ? [{ email: String(email_directeur_commercial).trim(), role: 'directeur_commercial' as const }]
+        : []),
+      ...emailsEquipe.map((email) => ({ email, role: 'membre' as const })),
+    ]
+
+    for (const { email, role } of membresAInviter) {
       const motDePasseTemporaire = genererMotDePasseTemporaire()
       const { error: erreurCreation } = await supabaseAdmin.auth.admin.createUser({
         email,
@@ -88,13 +95,13 @@ export async function POST(req: NextRequest) {
         user_metadata: {
           client_id: clientUser.client_id,
           nom_complet: '',
-          role: 'membre',
+          role,
         },
       })
       if (erreurCreation) {
         echecsInvitation.push(email)
       } else {
-        equipeCreee.push({ email, motDePasseTemporaire })
+        equipeCreee.push({ email, motDePasseTemporaire, role })
       }
     }
 
