@@ -9,7 +9,7 @@ import { professionsDisponibles, PROFILS_PARTICULIER } from '@/lib/professions'
 import { traduire, type Langue } from '@/lib/i18n'
 import { templatesPourVertical } from '@/lib/templates'
 import { vocabulairePourVertical, etapesPipelinePourVertical } from '@/lib/vocabulaire'
-import { zonePourPays, drapeauPays } from '@/lib/pays'
+import { zonePourPays } from '@/lib/pays'
 import ValidationItem from './validation-item'
 import DropdownMultiSelect from './dropdown-multiselect'
 
@@ -167,6 +167,15 @@ export default function DashboardPage() {
   const [calendrier, setCalendrier] = useState<CalendrierEntree[]>([])
   const [notesCibles, setNotesCibles] = useState<Record<string, NoteCible[]>>({})
   const [cibleNotesOuverte, setCibleNotesOuverte] = useState<string | null>(null)
+  const [notifOuvertes, setNotifOuvertes] = useState(false)
+  const [cibleEditionOuverte, setCibleEditionOuverte] = useState<string | null>(null)
+  const [formEditionCible, setFormEditionCible] = useState({
+    nom: '',
+    telephone: '',
+    email: '',
+    country: '',
+    entreprise_ou_objectif: '',
+  })
   const [carteEnCoursDeGlissement, setCarteEnCoursDeGlissement] = useState<string | null>(null)
   const [imapForm, setImapForm] = useState({
     imap_host: '',
@@ -309,6 +318,7 @@ export default function DashboardPage() {
       role: string
       telephone: string | null
       onglets_masques: string[]
+      photo_url?: string | null
     }[]
   >([])
   const [mesOngletsMasques, setMesOngletsMasques] = useState<string[]>([])
@@ -449,7 +459,7 @@ export default function DashboardPage() {
 
     const { data: membresData } = await supabase
       .from('client_users')
-      .select('id, nom_complet, role, telephone, onglets_masques')
+      .select('id, nom_complet, role, telephone, onglets_masques, photo_url')
       .eq('client_id', clientId)
     setMembresEquipe((membresData ?? []) as typeof membresEquipe)
 
@@ -1009,9 +1019,33 @@ export default function DashboardPage() {
     setClient({ ...client, whatsapp_equipe: nouveaux })
   }
 
+  const [uploadPhotoEnCours, setUploadPhotoEnCours] = useState<string | null>(null)
+
+  const uploaderPhotoProfil = async (membreId: string, fichier: File) => {
+    if (!client) return
+    setUploadPhotoEnCours(membreId)
+    try {
+      const chemin = `${client.id}/${membreId}-${Date.now()}.${fichier.name.split('.').pop()}`
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(chemin, fichier)
+      if (uploadError) {
+        alert("Échec de l'upload de la photo")
+        return
+      }
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(chemin)
+      await modifierMembre(membreId, { photo_url: urlData.publicUrl })
+    } finally {
+      setUploadPhotoEnCours(null)
+    }
+  }
+
   const modifierMembre = async (
     id: string,
-    changements: { nom_complet?: string; telephone?: string | null; onglets_masques?: string[] }
+    changements: {
+      nom_complet?: string
+      telephone?: string | null
+      onglets_masques?: string[]
+      photo_url?: string | null
+    }
   ) => {
     setMembresEquipe((prev) =>
       prev.map((m) => (m.id === id ? { ...m, ...changements } as typeof m : m))
@@ -1081,9 +1115,18 @@ export default function DashboardPage() {
   }
 
   const changerEtapePipeline = async (targetId: string, etape: string) => {
-    await supabase.from('targets').update({ etape_pipeline: etape }).eq('id', targetId)
+    // Des qu'une cible quitte l'etape "nouveau" (contacte, qualifie, etc.), on
+    // la fait aussi sortir de l'onglet "Cibles" (qui ne montre que statut='nouveau')
+    // pour qu'elle ne vive plus que dans le Pipeline — evite les doublons.
+    const majStatut = etape === 'nouveau' ? 'nouveau' : 'contacte'
+    await supabase
+      .from('targets')
+      .update({ etape_pipeline: etape, statut: majStatut })
+      .eq('id', targetId)
     setTargets((prev) =>
-      prev.map((tg) => (tg.id === targetId ? { ...tg, etape_pipeline: etape } : tg))
+      prev.map((tg) =>
+        tg.id === targetId ? { ...tg, etape_pipeline: etape, statut: majStatut } : tg
+      )
     )
   }
 
@@ -1166,6 +1209,30 @@ export default function DashboardPage() {
     setTargets((prev) =>
       prev.map((tg) => (tg.id === targetId ? { ...tg, assigne_a: clientUserId } : tg))
     )
+  }
+
+  const ouvrirEditionCible = (target: Target) => {
+    setFormEditionCible({
+      nom: target.nom ?? '',
+      telephone: target.telephone ?? '',
+      email: target.email ?? '',
+      country: target.country ?? '',
+      entreprise_ou_objectif: target.entreprise_ou_objectif ?? '',
+    })
+    setCibleEditionOuverte(target.id)
+  }
+
+  const enregistrerEditionCible = async (targetId: string) => {
+    const maj = {
+      nom: formEditionCible.nom.trim(),
+      telephone: formEditionCible.telephone.trim() || null,
+      email: formEditionCible.email.trim() || null,
+      country: formEditionCible.country || null,
+      entreprise_ou_objectif: formEditionCible.entreprise_ou_objectif.trim() || null,
+    }
+    await supabase.from('targets').update(maj).eq('id', targetId)
+    setTargets((prev) => prev.map((tg) => (tg.id === targetId ? { ...tg, ...maj } : tg)))
+    setCibleEditionOuverte(null)
   }
 
   const envoyerVersTarget = async (targetId: string, typeEnvoi: 'diagnostic' | 'message') => {
@@ -1373,20 +1440,22 @@ export default function DashboardPage() {
     setStrategieEnCours(false)
   }
 
+  const FORMATS_CATALOGUE_ACCEPTES = '.pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.webp'
+
   const importerPdfOffre = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fichier = e.target.files?.[0]
     if (!fichier || !client) return
 
     setPdfEnCours(true)
     try {
-      // 1. Upload dans Supabase Storage
+      // 1. Upload dans Supabase Storage (tous types de fichiers de catalogue)
       const chemin = `${client.id}/${Date.now()}-${fichier.name}`
       const { error: uploadError } = await supabase.storage
         .from('catalogue-pdfs')
         .upload(chemin, fichier)
 
       if (uploadError) {
-        alert("Échec de l'upload du PDF")
+        alert("Échec de l'upload du fichier")
         setPdfEnCours(false)
         return
       }
@@ -1394,7 +1463,7 @@ export default function DashboardPage() {
       const { data: urlData } = supabase.storage.from('catalogue-pdfs').getPublicUrl(chemin)
       setPdfUrlTemp(urlData.publicUrl)
 
-      // 2. Extraction IA pour pré-remplir le formulaire
+      // 2. Extraction IA pour pré-remplir le formulaire (PDF, Word, image ou texte)
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve((reader.result as string).split(',')[1])
@@ -1408,7 +1477,11 @@ export default function DashboardPage() {
       const res = await fetch('/api/catalogue/extraire-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ pdf_base64: base64 }),
+        body: JSON.stringify({
+          fichier_base64: base64,
+          mime_type: fichier.type,
+          nom_fichier: fichier.name,
+        }),
       })
       const data = await res.json()
 
@@ -1428,13 +1501,13 @@ export default function DashboardPage() {
         })
       } else {
         alert(
-          "Le PDF a bien été attaché, mais l'extraction automatique a échoué (" +
+          "Le fichier a bien été attaché, mais l'extraction automatique a échoué (" +
             (data.error ?? 'erreur inconnue') +
-            '). Remplis au moins le champ "Nom" ci-dessous puis clique sur "Ajouter l\'offre" — le PDF reste attaché.'
+            '). Remplis au moins le champ "Nom" ci-dessous puis clique sur "Ajouter l\'offre" — le fichier reste attaché.'
         )
       }
     } catch {
-      alert("Erreur lors de l'import du PDF")
+      alert("Erreur lors de l'import du fichier")
     }
     setPdfEnCours(false)
     if (inputPdfCatalogue.current) inputPdfCatalogue.current.value = ''
@@ -1811,25 +1884,79 @@ export default function DashboardPage() {
       <div className="flex-1 overflow-y-auto">
         {/* BARRE DU HAUT (langue + deconnexion) */}
         <div className="flex justify-end items-center gap-3 px-6 py-4 border-b border-slate-800">
+          <div className="relative">
+            <button
+              onClick={() => setNotifOuvertes((v) => !v)}
+              title="Notifications"
+              className="relative text-lg"
+            >
+              🔔
+              {(() => {
+                const mesTachesEnAttente = taches.filter(
+                  (tc) => tc.assigne_a === monClientUserId && tc.statut !== 'terminee'
+                ).length
+                const messagesNonLus = messagesRecus.filter((m) => !m.lu).length
+                const diagnosticsAValider = diagnosticsEnAttente.length
+                const reponsesATraiter = targets.filter((tg) => tg.reponse_a_traiter).length
+                const total = mesTachesEnAttente + messagesNonLus + diagnosticsAValider + reponsesATraiter
+                return total > 0 ? (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {total > 9 ? '9+' : total}
+                  </span>
+                ) : null
+              })()}
+            </button>
+            {notifOuvertes && (
+              <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-50 p-2 space-y-1">
+                {(() => {
+                  const mesTachesEnAttente = taches.filter(
+                    (tc) => tc.assigne_a === monClientUserId && tc.statut !== 'terminee'
+                  ).length
+                  const messagesNonLus = messagesRecus.filter((m) => !m.lu).length
+                  const diagnosticsAValider = diagnosticsEnAttente.length
+                  const reponsesATraiter = targets.filter((tg) => tg.reponse_a_traiter).length
+                  const items: { label: string; count: number; onglet: Onglet; groupe?: 'catalogue' | 'strategie' | 'idees' }[] = [
+                    { label: '✅ Tâches qui te sont assignées', count: mesTachesEnAttente, onglet: 'collaboration' },
+                    { label: '📬 Messages reçus non lus', count: messagesNonLus, onglet: 'inbox' },
+                    { label: '🛠️ Diagnostics à valider', count: diagnosticsAValider, onglet: 'validation' },
+                    { label: '🔥 Réponses de prospects à traiter', count: reponsesATraiter, onglet: 'cibles' },
+                  ]
+                  const actives = items.filter((i) => i.count > 0)
+                  if (actives.length === 0) {
+                    return <p className="text-xs text-slate-500 p-3">Aucune notification pour le moment.</p>
+                  }
+                  return actives.map((i) => (
+                    <button
+                      key={i.label}
+                      onClick={() => {
+                        setOngletActif(i.onglet)
+                        setNotifOuvertes(false)
+                      }}
+                      className="w-full flex items-center justify-between text-left text-sm px-3 py-2 rounded-lg hover:bg-slate-800"
+                    >
+                      <span>{i.label}</span>
+                      <span className="bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                        {i.count}
+                      </span>
+                    </button>
+                  ))
+                })()}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => {
-              setSousOngletGroupe('catalogue')
-              setOngletActif('collaboration')
+              setOngletActif('equipe')
+              setMembreEnEdition(monClientUserId)
+              const moi = membresEquipe.find((m) => m.id === monClientUserId)
+              setEditionMembreForm({
+                nom_complet: moi?.nom_complet ?? '',
+                telephone: moi?.telephone ?? '',
+              })
             }}
-            title="Tâches qui te sont assignées"
-            className="relative text-lg"
+            className="text-sm text-slate-400 hover:text-white flex items-center gap-1"
           >
-            🔔
-            {(() => {
-              const mesTachesEnAttente = taches.filter(
-                (tc) => tc.assigne_a === monClientUserId && tc.statut !== 'terminee'
-              ).length
-              return mesTachesEnAttente > 0 ? (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                  {mesTachesEnAttente > 9 ? '9+' : mesTachesEnAttente}
-                </span>
-              ) : null
-            })()}
+            👤 Mon profil
           </button>
           <select
             value={client.langue_preferee}
@@ -2303,11 +2430,25 @@ export default function DashboardPage() {
                               </span>
                             )}
                           </p>
-                          <p className="text-slate-400 text-sm">
-                            {target.telephone ?? '—'} · {target.email ?? '—'} ·{' '}
-                            {target.country ? `${drapeauPays(target.country)} ${target.country}` : '—'}{' '}
-                            ·{' '}
-                            <span className="text-accent">{target.statut}</span>
+                          <p className="text-slate-400 text-sm flex items-center flex-wrap gap-x-1">
+                            <span>{target.telephone ?? '—'} · {target.email ?? '—'} ·</span>
+                            {target.country ? (
+                              <span className="inline-flex items-center gap-1">
+                                <img
+                                  src={`https://flagcdn.com/20x15/${target.country.toLowerCase()}.png`}
+                                  alt={target.country}
+                                  className="inline-block rounded-[2px]"
+                                  width={20}
+                                  height={15}
+                                />
+                                {target.country}
+                              </span>
+                            ) : (
+                              <span>—</span>
+                            )}
+                            <span>
+                              · <span className="text-accent">{target.statut}</span>
+                            </span>
                           </p>
                           {target.signal_ia && (
                             <p className="text-xs text-sky-400 mt-1">{target.signal_ia}</p>
@@ -2428,6 +2569,77 @@ export default function DashboardPage() {
                             </p>
                           )}
 
+                          {cibleEditionOuverte === target.id && (
+                            <div className="mt-2 space-y-2 bg-slate-950 border border-slate-800 rounded-lg p-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <input
+                                  value={formEditionCible.nom}
+                                  onChange={(e) =>
+                                    setFormEditionCible((f) => ({ ...f, nom: e.target.value }))
+                                  }
+                                  placeholder="Nom"
+                                  className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
+                                />
+                                <input
+                                  value={formEditionCible.entreprise_ou_objectif}
+                                  onChange={(e) =>
+                                    setFormEditionCible((f) => ({
+                                      ...f,
+                                      entreprise_ou_objectif: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Entreprise / objectif"
+                                  className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
+                                />
+                                <input
+                                  value={formEditionCible.telephone}
+                                  onChange={(e) =>
+                                    setFormEditionCible((f) => ({ ...f, telephone: e.target.value }))
+                                  }
+                                  placeholder="Téléphone"
+                                  className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
+                                />
+                                <input
+                                  value={formEditionCible.email}
+                                  onChange={(e) =>
+                                    setFormEditionCible((f) => ({ ...f, email: e.target.value }))
+                                  }
+                                  placeholder="Email"
+                                  className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
+                                />
+                                <select
+                                  value={formEditionCible.country}
+                                  onChange={(e) =>
+                                    setFormEditionCible((f) => ({ ...f, country: e.target.value }))
+                                  }
+                                  className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2 sm:col-span-2"
+                                >
+                                  <option value="">Pays...</option>
+                                  {PAYS_DISPONIBLES.map((p) => (
+                                    <option key={p.code} value={p.code}>
+                                      {p.nom}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => enregistrerEditionCible(target.id)}
+                                  disabled={!formEditionCible.nom.trim()}
+                                  className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
+                                >
+                                  Enregistrer
+                                </button>
+                                <button
+                                  onClick={() => setCibleEditionOuverte(null)}
+                                  className="text-xs px-3 py-1 rounded-lg bg-slate-800 border border-slate-700"
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
                           {cibleNotesOuverte === target.id && (
                             <div className="mt-2 space-y-2 bg-slate-950 border border-slate-800 rounded-lg p-3">
                               <div className="flex gap-2">
@@ -2509,6 +2721,17 @@ export default function DashboardPage() {
                             {envoiEnCours === target.id ? '...' : '🔗 LinkedIn'}
                           </button>
                         )}
+                        <button
+                          onClick={() =>
+                            cibleEditionOuverte === target.id
+                              ? setCibleEditionOuverte(null)
+                              : ouvrirEditionCible(target)
+                          }
+                          disabled={estPriseParAutre && !peutSuperviser}
+                          className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                        >
+                          ✏️ Modifier
+                        </button>
                       </div>
                     </div>
                       )
@@ -2534,7 +2757,7 @@ export default function DashboardPage() {
                       l'onglet Cibles apparaîtront ici.
                     </p>
                   )}
-                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-7 gap-3">
                   {colonnes.map((colonne) => {
                     const cartes = cibleEnCours.filter(
                       (tg) => (tg.etape_pipeline || 'contacte') === colonne.etape
@@ -2594,8 +2817,15 @@ export default function DashboardPage() {
                               </span>
                             )}
                             {carte.country && (
-                              <p className="text-xs text-slate-500">
-                                {drapeauPays(carte.country)} {carte.country}
+                              <p className="text-xs text-slate-500 flex items-center gap-1">
+                                <img
+                                  src={`https://flagcdn.com/20x15/${carte.country.toLowerCase()}.png`}
+                                  alt={carte.country}
+                                  className="inline-block rounded-[2px]"
+                                  width={20}
+                                  height={15}
+                                />
+                                {carte.country}
                               </p>
                             )}
                             {carte.assigne_a && (
@@ -2814,6 +3044,40 @@ export default function DashboardPage() {
                   >
                     <div className="flex items-center justify-between p-3">
                       <span className="flex items-center gap-2">
+                        {peutEditer ? (
+                          <>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              className="hidden"
+                              id={`photo-membre-${m.id}`}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0]
+                                if (f) uploaderPhotoProfil(m.id, f)
+                                e.target.value = ''
+                              }}
+                            />
+                            <label htmlFor={`photo-membre-${m.id}`} className="cursor-pointer shrink-0">
+                              {m.photo_url ? (
+                                <img
+                                  src={m.photo_url}
+                                  alt={m.nom_complet ?? 'Photo de profil'}
+                                  className="w-7 h-7 rounded-full object-cover border border-slate-600"
+                                />
+                              ) : (
+                                <span className="w-7 h-7 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-[10px] text-slate-400">
+                                  {uploadPhotoEnCours === m.id ? '...' : '📷'}
+                                </span>
+                              )}
+                            </label>
+                          </>
+                        ) : m.photo_url ? (
+                          <img
+                            src={m.photo_url}
+                            alt={m.nom_complet ?? 'Photo de profil'}
+                            className="w-7 h-7 rounded-full object-cover border border-slate-600 shrink-0"
+                          />
+                        ) : null}
                         {m.nom_complet || '(nom non renseigné)'}
                         {m.telephone ? ` · ${m.telephone}` : ''}
                         {peutEditer && (
@@ -3473,6 +3737,24 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 )}
+
+                {strategieResultat && strategieResultat.historique.filter((h) => h.recommandation_marketing).length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-800">
+                    <h3 className="text-sm font-semibold text-slate-300">🕓 Historique (stratégies précédentes)</h3>
+                    {strategieResultat.historique
+                      .filter((h) => h.recommandation_marketing)
+                      .map((h) => (
+                        <details key={h.id} className="bg-slate-900 border border-slate-700 rounded-lg p-2">
+                          <summary className="text-xs text-slate-400 cursor-pointer">
+                            {new Date(h.created_at).toLocaleString('fr-FR')}
+                          </summary>
+                          <p className="mt-2 text-sm whitespace-pre-wrap">
+                            {h.recommandation_marketing}
+                          </p>
+                        </details>
+                      ))}
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -3485,11 +3767,11 @@ export default function DashboardPage() {
               {vocabulairePourVertical(verticalSlug).introCatalogue}
             </p>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <input
                 ref={inputPdfCatalogue}
                 type="file"
-                accept=".pdf"
+                accept={FORMATS_CATALOGUE_ACCEPTES}
                 onChange={importerPdfOffre}
                 className="hidden"
               />
@@ -3498,12 +3780,17 @@ export default function DashboardPage() {
                 disabled={pdfEnCours}
                 className="text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-accent disabled:opacity-50"
               >
-                {pdfEnCours ? 'Analyse du PDF...' : '📄 Importer un PDF (pré-remplit le formulaire)'}
+                {pdfEnCours
+                  ? 'Analyse du fichier...'
+                  : '📄 Importer un fichier (PDF, Word, image... pré-remplit le formulaire)'}
               </button>
               {pdfUrlTemp && (
-                <span className="text-xs text-accent">✓ PDF prêt à être attaché à cette offre</span>
+                <span className="text-xs text-accent">✓ Fichier prêt à être attaché à cette offre</span>
               )}
             </div>
+            <p className="text-xs text-slate-500 -mt-2">
+              Formats acceptés : PDF, Word (.docx), image (photo de brochure) ou texte (.txt).
+            </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
               <input
@@ -3918,12 +4205,15 @@ export default function DashboardPage() {
                       </option>
                     ))}
                   </select>
-                  <input
-                    type="date"
-                    value={nouvelleTache.echeance}
-                    onChange={(e) => setNouvelleTache({ ...nouvelleTache, echeance: e.target.value })}
-                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-                  />
+                  <label className="flex items-center gap-1 text-xs text-slate-500">
+                    Deadline
+                    <input
+                      type="date"
+                      value={nouvelleTache.echeance}
+                      onChange={(e) => setNouvelleTache({ ...nouvelleTache, echeance: e.target.value })}
+                      className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-slate-200"
+                    />
+                  </label>
                   <button
                     onClick={creerTache}
                     disabled={creationTacheEnCours || !nouvelleTache.titre.trim()}

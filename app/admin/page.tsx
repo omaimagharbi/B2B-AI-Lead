@@ -63,6 +63,7 @@ export default function AdminPage() {
   const [nouvelEmail, setNouvelEmail] = useState('')
   const [nouveauContact, setNouveauContact] = useState('')
   const [nouveauVertical, setNouveauVertical] = useState('cabinet-formation')
+  const [demandeBetaEnConversion, setDemandeBetaEnConversion] = useState<string | null>(null)
   const [creationEnCours, setCreationEnCours] = useState(false)
   const [resultatCreation, setResultatCreation] = useState<{
     email: string
@@ -343,6 +344,10 @@ export default function AdminPage() {
       setNouveauNom('')
       setNouvelEmail('')
       setNouveauContact('')
+      if (demandeBetaEnConversion) {
+        await basculerDemandeTraitee(demandeBetaEnConversion, false)
+        setDemandeBetaEnConversion(null)
+      }
       await charger()
     }
     setCreationEnCours(false)
@@ -538,12 +543,35 @@ export default function AdminPage() {
                           <span className="text-slate-500">Reçue le :</span>{' '}
                           {new Date(d.created_at).toLocaleString('fr-FR')}
                         </p>
-                        <button
-                          onClick={() => basculerDemandeTraitee(d.id, d.traite)}
-                          className="text-xs px-3 py-1 rounded-lg bg-slate-800 border border-slate-700"
-                        >
-                          {d.traite ? 'Marquer non traitée' : '✅ Marquer traitée'}
-                        </button>
+                        <div className="flex gap-2 flex-wrap">
+                          <button
+                            onClick={() => {
+                              setNouveauNom(d.nom_entreprise || '')
+                              setNouvelEmail(d.email)
+                              setNouveauContact('')
+                              setNouveauVertical(d.carte_slug)
+                              setDemandeBetaEnConversion(d.id)
+                              setResultatCreation(null)
+                              setErreurCreation(null)
+                              window.scrollTo({ top: 0, behavior: 'smooth' })
+                            }}
+                            className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold"
+                          >
+                            ✅ Donner accès (créer le cabinet)
+                          </button>
+                          <button
+                            onClick={() => basculerDemandeTraitee(d.id, d.traite)}
+                            className="text-xs px-3 py-1 rounded-lg bg-slate-800 border border-slate-700"
+                          >
+                            {d.traite ? 'Marquer non traitée' : 'Marquer traitée'}
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          "Donner accès" pré-remplit le formulaire de création de cabinet en haut de
+                          page avec les infos de cette demande — il ne reste qu'à cliquer sur "Créer
+                          le cabinet". Le nouveau cabinet apparaîtra automatiquement dans la liste des
+                          cabinets ci-dessous.
+                        </p>
                       </div>
                     )}
                   </div>

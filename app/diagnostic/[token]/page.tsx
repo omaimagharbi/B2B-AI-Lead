@@ -32,10 +32,24 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
       .catch(() => {})
   }, [params.token])
 
-  const estValide = defi.trim().length >= 15 && depuisQuand && urgence
+  const MIN_CARACTERES_DEFI = 15
+  const estValide = defi.trim().length >= MIN_CARACTERES_DEFI && depuisQuand && urgence
 
   const soumettre = async () => {
-    if (!estValide) return
+    if (!estValide) {
+      const manques: string[] = []
+      if (defi.trim().length < MIN_CARACTERES_DEFI) {
+        manques.push(
+          `la description (encore ${MIN_CARACTERES_DEFI - defi.trim().length} caractère${
+            MIN_CARACTERES_DEFI - defi.trim().length > 1 ? 's' : ''
+          } minimum)`
+        )
+      }
+      if (!depuisQuand) manques.push('"Depuis combien de temps"')
+      if (!urgence) manques.push('"Niveau d\'urgence"')
+      setErreur(`Merci de compléter : ${manques.join(', ')}.`)
+      return
+    }
     setErreur(null)
     setEtape('envoi')
 
@@ -103,6 +117,13 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
                   placeholder="Décrivez la situation avec le plus de détails possible..."
                   className="w-full h-28 rounded-xl bg-slate-900 border border-slate-700 p-4 text-white placeholder-slate-500 focus:outline-none focus:border-accent"
                 />
+                <p
+                  className={`text-xs ${
+                    defi.trim().length >= MIN_CARACTERES_DEFI ? 'text-slate-500' : 'text-amber-400'
+                  }`}
+                >
+                  {defi.trim().length}/{MIN_CARACTERES_DEFI} caractères minimum
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -154,8 +175,11 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
 
             <button
               onClick={soumettre}
-              disabled={!estValide}
-              className="w-full md:w-auto px-8 py-3 rounded-xl bg-accent text-slate-950 font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition"
+              className={`w-full md:w-auto px-8 py-3 rounded-xl font-semibold transition ${
+                estValide
+                  ? 'bg-accent text-slate-950 hover:opacity-90'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
             >
               Envoyer à mon expert
             </button>

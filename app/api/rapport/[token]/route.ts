@@ -234,7 +234,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
         : ''
     }
 
-    <a href="${dashboardUrl}" class="cta">👉 Bloquer un créneau d'échange de 15 min</a>
+    <a href="${dashboardUrl}" class="cta">👉 Bloquer un créneau d'échange</a>
   </div>
 </body>
 </html>`

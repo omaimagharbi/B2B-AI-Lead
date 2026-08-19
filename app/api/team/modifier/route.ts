@@ -6,7 +6,7 @@ export async function PATCH(req: NextRequest) {
   const auth = await authentifierClientUser(req)
   if (auth.erreur) return NextResponse.json({ error: auth.erreur }, { status: auth.statut })
 
-  const { id, nom_complet, telephone, onglets_masques } = await req.json()
+  const { id, nom_complet, telephone, onglets_masques, photo_url } = await req.json()
   if (!id) return NextResponse.json({ error: 'id manquant' }, { status: 400 })
 
   const peutSuperviser = ['proprietaire', 'admin', 'directeur_commercial'].includes(auth.role)
@@ -26,6 +26,7 @@ export async function PATCH(req: NextRequest) {
   if (nom_complet !== undefined) maj.nom_complet = String(nom_complet).trim()
   if (telephone !== undefined) maj.telephone = telephone ? String(telephone).trim() : null
   if (onglets_masques !== undefined) maj.onglets_masques = onglets_masques
+  if (photo_url !== undefined) maj.photo_url = photo_url ? String(photo_url) : null
 
   if (Object.keys(maj).length === 0) {
     return NextResponse.json({ error: 'Rien à mettre à jour' }, { status: 400 })
