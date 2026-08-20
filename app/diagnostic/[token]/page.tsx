@@ -198,8 +198,8 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
             <div className="text-5xl">✅</div>
             <h1 className="text-2xl md:text-3xl font-bold">C'est envoyé !</h1>
             <p className="text-slate-400 max-w-md mx-auto">
-              Votre expert étudie votre dossier. Vous recevrez votre solution personnalisée par
-              WhatsApp ou Email d'ici quelques minutes.
+              Votre expert étudie votre dossier et vous enverra votre solution personnalisée par
+              WhatsApp ou Email sous 72h maximum.
             </p>
           </div>
         )}

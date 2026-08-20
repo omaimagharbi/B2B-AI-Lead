@@ -83,6 +83,10 @@ export default function AdminPage() {
   >([])
   const [demandeBetaOuverte, setDemandeBetaOuverte] = useState<string | null>(null)
   const [erreurCreation, setErreurCreation] = useState<string | null>(null)
+  const [clientMisEnEvidence, setClientMisEnEvidence] = useState<string | null>(null)
+  const [manuelChatbot, setManuelChatbot] = useState('')
+  const [manuelChatbotChargement, setManuelChatbotChargement] = useState(true)
+  const [manuelChatbotSauvegarde, setManuelChatbotSauvegarde] = useState(false)
 
   const charger = async () => {
     setChargement(true)
@@ -134,7 +138,27 @@ export default function AdminPage() {
 
   useEffect(() => {
     charger()
+    const chargerManuel = async () => {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch('/api/admin/chatbot', { headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) setManuelChatbot((await res.json()).manuel_utilisation ?? '')
+      setManuelChatbotChargement(false)
+    }
+    chargerManuel()
   }, [])
+
+  const sauvegarderManuelChatbot = async () => {
+    setManuelChatbotSauvegarde(true)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    await fetch('/api/admin/chatbot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ manuel_utilisation: manuelChatbot }),
+    })
+    setManuelChatbotSauvegarde(false)
+  }
 
   const basculerPayant = async (clientId: string, planActuel: string) => {
     setMajEnCours(clientId)
@@ -349,6 +373,19 @@ export default function AdminPage() {
         setDemandeBetaEnConversion(null)
       }
       await charger()
+
+      // Le nouveau cabinet est en haut de la liste (tri created_at desc),
+      // mais peut passer inapercu sous le message de confirmation : on
+      // scrolle jusqu'a sa carte et on la met en evidence quelques secondes.
+      if (data.clientId) {
+        setClientMisEnEvidence(data.clientId)
+        setTimeout(() => {
+          document
+            .getElementById(`client-${data.clientId}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
+        setTimeout(() => setClientMisEnEvidence(null), 4000)
+      }
     }
     setCreationEnCours(false)
   }
@@ -377,6 +414,34 @@ export default function AdminPage() {
           <a href="/dashboard" className="text-sm text-accent underline">
             ← Voir mon propre dashboard cabinet
           </a>
+        </div>
+
+        <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+          <p className="text-sm font-semibold">🤖 Manuel d'utilisation du chatbot support</p>
+          <p className="text-xs text-slate-500">
+            Le chatbot flottant visible par tous les cabinets répond UNIQUEMENT à partir du texte
+            ci-dessous. Plus il est détaillé et à jour, meilleures sont les réponses.
+          </p>
+          {manuelChatbotChargement ? (
+            <p className="text-xs text-slate-500">Chargement...</p>
+          ) : (
+            <>
+              <textarea
+                value={manuelChatbot}
+                onChange={(e) => setManuelChatbot(e.target.value)}
+                placeholder="Ex: Pour créer un diagnostic, va dans l'onglet Ciblage... Pour ajouter un membre à l'équipe..."
+                rows={10}
+                className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm font-mono"
+              />
+              <button
+                onClick={sauvegarderManuelChatbot}
+                disabled={manuelChatbotSauvegarde}
+                className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
+              >
+                {manuelChatbotSauvegarde ? 'Enregistrement...' : 'Enregistrer le manuel'}
+              </button>
+            </>
+          )}
         </div>
 
         {statsGlobales && (
@@ -633,7 +698,12 @@ export default function AdminPage() {
             return (
               <div
                 key={client.id}
-                className="rounded-xl border border-slate-700 bg-slate-900 p-4 flex flex-col gap-3"
+                id={`client-${client.id}`}
+                className={`rounded-xl border p-4 flex flex-col gap-3 transition-colors duration-1000 ${
+                  clientMisEnEvidence === client.id
+                    ? 'border-accent bg-accent/10'
+                    : 'border-slate-700 bg-slate-900'
+                }`}
               >
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div>

@@ -45,6 +45,7 @@ export default function ValidationItem({
   const [etapes, setEtapes] = useState<Etape[]>(diagnostic.json_ia_brouillon.etapes ?? [])
   const [packs, setPacks] = useState<Pack[]>(diagnostic.json_ia_brouillon.packs_proposes ?? [])
   const [commentaireExpert, setCommentaireExpert] = useState(diagnostic.commentaire_expert ?? '')
+  const [langueRapport, setLangueRapport] = useState<'fr' | 'en' | 'ar'>('fr')
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
 
@@ -90,6 +91,7 @@ export default function ValidationItem({
           },
           packs,
           commentaire_expert: commentaireExpert,
+          langue_rapport: langueRapport,
         }),
       })
       const data = await res.json()
@@ -308,6 +310,21 @@ export default function ValidationItem({
               placeholder="Ex : Je recommande de planifier cette session avant la rentrée de septembre..."
               className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
             />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs text-slate-400 uppercase">
+              🌐 Langue du rapport envoyé au prospect
+            </label>
+            <select
+              value={langueRapport}
+              onChange={(e) => setLangueRapport(e.target.value as 'fr' | 'en' | 'ar')}
+              className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            >
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+              <option value="ar">العربية (Arabe Fusha)</option>
+            </select>
           </div>
 
           <button

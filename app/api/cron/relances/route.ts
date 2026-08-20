@@ -1,27 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { envoyerWhatsapp, envoyerEmail, construireMessage } from '@/lib/notifications'
+import { envoyerEmail } from '@/lib/notifications'
 import { canalParPays } from '@/lib/pays'
 import { logErreur } from '@/lib/erreurs'
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 const LIMITE_PAR_EXECUTION = 30
-// Regle validee : une seule relance automatique, envoyee si le prospect n'a
-// pas repondu 1 semaine apres le premier message.
+// Regle validee : une seule relance a J+7, mais ce n'est plus le robot qui
+// contacte directement le prospect (ca grillait la credibilite du cabinet
+// en cas de mauvais timing) - le cron notifie desormais le commercial, qui
+// decide lui-meme d'envoyer ou non une relance depuis le pipeline.
 const JOURS_AVANT_RELANCE = 7
 
 function joursEcoules(date: string): number {
   return (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24)
-}
-
-// Une seule relance : ton plus direct si l'urgence detectee au moment du
-// premier contact etait haute, sinon un ton neutre et sans pression.
-function construireMessageRelance(params: { nom: string; cabinet: string; urgence: string | null }) {
-  const { nom, cabinet, urgence } = params
-
-  return urgence === 'haute'
-    ? `Bonjour ${nom},\n\n${cabinet} revient vers vous : votre demande semblait urgente, nous restons disponibles pour en discuter rapidement si besoin.`
-    : `Bonjour ${nom},\n\n${cabinet} souhaitait juste s'assurer que vous avez bien reçu notre message. N'hésitez pas à répondre si vous avez des questions.`
 }
 
 export async function GET(req: NextRequest) {
@@ -34,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
   }
 
-  const resultats = { relances_envoyees: 0, ignores: 0, echoues: 0 }
+  const resultats = { notifications_envoyees: 0, ignores: 0, echoues: 0 }
 
   try {
     const { data: targets, error: targetsError } = await supabaseAdmin
@@ -42,7 +34,7 @@ export async function GET(req: NextRequest) {
       .select(
         `id, nom, telephone, email, country, client_id, ne_plus_contacter, token_desinscription,
          nb_relances, segment_urgence,
-         clients(nom_entreprise, logo_url, message_personnalise)`
+         clients(nom_entreprise, logo_url, message_personnalise, email)`
       )
       .eq('statut', 'contacte')
       .eq('ne_plus_contacter', false)
@@ -63,6 +55,7 @@ export async function GET(req: NextRequest) {
         nom_entreprise: string
         logo_url: string | null
         message_personnalise: string | null
+        email: string | null
       } | null
 
       if (!client) {
@@ -113,55 +106,37 @@ export async function GET(req: NextRequest) {
         continue
       }
 
-      const canal = canalParPays(target.country ?? 'FR')
-      if (canal === 'whatsapp' && !target.telephone) {
-        resultats.echoues++
-        continue
-      }
-      if (canal === 'email' && !target.email) {
+      if (!client.email) {
         resultats.echoues++
         continue
       }
 
       try {
-        const lienDesinscription = `${SITE_URL}/desinscription/${target.token_desinscription}`
-        const messageParDefaut = construireMessageRelance({
-          nom: target.nom,
-          cabinet: client.nom_entreprise,
-          urgence: target.segment_urgence,
-        })
-        // Le message personnalise du cabinet reste utilisable (variables {nom}/{cabinet}/{lien})
-        // mais {lien} n'a pas de sens pour une relance simple : on pointe vers le site.
-        const message = construireMessage(
-          null, // pas de template client pour les relances : on garde un ton neutre et sobre
-          { nom: target.nom, cabinet: client.nom_entreprise, lien: SITE_URL, lienDesinscription },
-          messageParDefaut
+        // Canal suggere au commercial pour sa relance manuelle (whatsapp en
+        // Tunisie/Golfe, email ailleurs) - purement indicatif dans le texte.
+        const canal = canalParPays(target.country ?? 'FR')
+        const dashboardUrl = `${SITE_URL}/dashboard`
+        const tonalite =
+          target.segment_urgence === 'haute'
+            ? "sa demande semblait urgente lors du premier contact"
+            : "aucune urgence particuliere detectee au premier contact"
+
+        await envoyerEmail(
+          client.email,
+          `Bonjour ${client.nom_entreprise ?? ''},\n\n${target.nom} n'a pas repondu depuis 7 jours (${tonalite}). ` +
+            `Une relance manuelle via ${canal === 'whatsapp' ? 'WhatsApp' : 'e-mail'} peut valoir le coup si le contexte s'y prete. ` +
+            `Retrouvez la fiche dans votre pipeline :\n${dashboardUrl}`,
+          client.logo_url
         )
-
-        if (canal === 'whatsapp') {
-          await envoyerWhatsapp(target.telephone!, message, client.logo_url)
-        } else {
-          await envoyerEmail(target.email!, message, client.logo_url)
-        }
-
-        await supabaseAdmin.from('outreach_campaigns').insert({
-          client_id: target.client_id,
-          target_id: target.id,
-          canal,
-          template_message: message,
-          statut: 'envoye',
-          type_envoi: 'relance',
-          date_envoi: new Date().toISOString(),
-        })
 
         await supabaseAdmin
           .from('targets')
           .update({ nb_relances: target.nb_relances + 1, derniere_relance_at: new Date().toISOString() })
           .eq('id', target.id)
 
-        resultats.relances_envoyees++
+        resultats.notifications_envoyees++
       } catch (err) {
-        console.error(`Erreur relance pour cible ${target.id}:`, err)
+        console.error(`Erreur notification relance pour cible ${target.id}:`, err)
         resultats.echoues++
       }
     }

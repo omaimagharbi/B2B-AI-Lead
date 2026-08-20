@@ -32,12 +32,18 @@ export async function traiterReponseEntrante(params: {
     .update({
       reponse_sentiment: sentiment,
       reponse_detectee_at: new Date().toISOString(),
-      // Une reponse positive attend l'envoi du diagnostic par le commercial ;
-      // une reponse negative attend la saisie du motif de refus (chemin C,
-      // "refus intelligent") pour planifier une relance de courtoisie plus
-      // tard au lieu d'abandonner la fiche.
+      // Une reponse positive attend l'envoi du diagnostic par le commercial
+      // (carte deplacee vers "Discussion Engagee" en attendant) ; une reponse
+      // negative attend la saisie du motif de refus (chemin C, "refus
+      // intelligent") pour planifier une relance de courtoisie plus tard au
+      // lieu d'abandonner la fiche.
       reponse_a_traiter: sentiment === 'positive' || sentiment === 'negative',
-      etape_pipeline: sentiment === 'negative' ? 'a_recontacter' : undefined,
+      etape_pipeline:
+        sentiment === 'positive'
+          ? 'discussion_engagee'
+          : sentiment === 'negative'
+          ? 'a_recontacter'
+          : undefined,
       // On sort la cible du circuit de relance automatique des qu'elle a
       // repondu, quel que soit le sentiment - relancer quelqu'un qui a deja
       // repondu (meme negativement) grille la credibilite du cabinet.

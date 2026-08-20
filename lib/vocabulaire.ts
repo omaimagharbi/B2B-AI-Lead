@@ -93,8 +93,10 @@ export type EtapePipeline = { etape: string; label: string }
 
 const ETAPES_PAR_DEFAUT: EtapePipeline[] = [
   { etape: 'contacte', label: '📨 Contacté' },
+  { etape: 'discussion_engagee', label: '💬 Discussion Engagée' },
   { etape: 'qualifie', label: '✅ Qualifié' },
   { etape: 'proposition', label: '📄 Proposition envoyée' },
+  { etape: 'rdv_planifie', label: '📅 Rendez-vous Planifié' },
   { etape: 'negociation', label: '🤝 Négociation' },
   { etape: 'gagne', label: '🏆 Gagné' },
   { etape: 'a_recontacter', label: '⏳ À recontacter plus tard' },
@@ -104,8 +106,10 @@ const ETAPES_PAR_DEFAUT: EtapePipeline[] = [
 const ETAPES_PAR_VERTICAL: Record<string, EtapePipeline[]> = {
   'investisseur-incubateur': [
     { etape: 'contacte', label: '📨 Approche envoyée' },
+    { etape: 'discussion_engagee', label: '💬 Discussion Engagée' },
     { etape: 'qualifie', label: '🔁 Relance note de financement' },
     { etape: 'proposition', label: '🏛️ Comité d\'investissement engagé' },
+    { etape: 'rdv_planifie', label: '📅 Rendez-vous Planifié' },
     { etape: 'negociation', label: '🤝 Négociation des termes' },
     { etape: 'gagne', label: '💰 Contrat signé (Closing)' },
     { etape: 'a_recontacter', label: '⏳ À recontacter plus tard' },

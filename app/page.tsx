@@ -55,7 +55,7 @@ export default function Home() {
             </a>
             <a
               href="/secteurs"
-              className="text-sm px-4.5 py-2.5 rounded-lg border-none bg-navy text-white font-semibold hover:bg-navy-deep"
+              className="text-sm px-4 py-2 rounded-lg border-none bg-navy text-white font-semibold hover:bg-navy-deep"
             >
               S&apos;inscrire
             </a>

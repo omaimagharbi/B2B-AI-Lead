@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { envoyerWhatsapp, envoyerEmail } from '@/lib/notifications'
 import { canalParPays } from '@/lib/pays'
 import { logErreur } from '@/lib/erreurs'
+import { traduireRapportSiNecessaire, messageNotificationParLangue, type LangueRapport } from '@/lib/traduction'
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 
@@ -10,7 +11,7 @@ type PackInput = { nom: string; prix_indicatif: number; description: string }
 
 export async function POST(req: NextRequest) {
   try {
-    const { diagnostic_id, json_expert_valide, packs, commentaire_expert } = (await req.json()) as {
+    const { diagnostic_id, json_expert_valide, packs, commentaire_expert, langue_rapport } = (await req.json()) as {
       diagnostic_id: string
       json_expert_valide: {
         titre: string
@@ -20,7 +21,10 @@ export async function POST(req: NextRequest) {
       }
       packs: PackInput[]
       commentaire_expert?: string
+      langue_rapport?: LangueRapport
     }
+
+    const langueChoisie: LangueRapport = langue_rapport ?? 'fr'
 
     if (!diagnostic_id || !json_expert_valide) {
       return NextResponse.json({ error: 'Donnees manquantes' }, { status: 400 })
@@ -52,17 +56,36 @@ export async function POST(req: NextRequest) {
     // @ts-ignore - jointure Supabase typee dynamiquement
     const logoUrl = diagnostic.clients?.logo_url as string | null | undefined
 
-    // 2. On sauvegarde la version validee par l'expert
+    // 2. Traduction si besoin (Etape 5 : le commercial choisit la langue au
+    // moment de l'envoi - le contenu relu/corrige par l'expert reste la
+    // reference en francais, on ne traduit que la copie envoyee/affichee).
+    const contenuTraduit = await traduireRapportSiNecessaire(
+      {
+        titre: json_expert_valide.titre,
+        synthese: json_expert_valide.synthese,
+        etapes: json_expert_valide.etapes,
+        commentaire_expert: commentaire_expert?.trim() || null,
+      },
+      langueChoisie
+    )
+
+    // 3. On sauvegarde la version validee par l'expert (traduite si besoin)
     await supabaseAdmin
       .from('diagnostics')
       .update({
-        json_expert_valide,
+        json_expert_valide: {
+          ...json_expert_valide,
+          titre: contenuTraduit.titre,
+          synthese: contenuTraduit.synthese,
+          etapes: contenuTraduit.etapes,
+        },
         statut_validation: 'valide_par_expert',
-        commentaire_expert: commentaire_expert?.trim() || null,
+        commentaire_expert: contenuTraduit.commentaire_expert ?? null,
+        langue_rapport: langueChoisie,
       })
       .eq('id', diagnostic_id)
 
-    // 3. On (re)cree les packs proposes (on supprime les anciens au cas ou re-validation)
+    // 4. On (re)cree les packs proposes (on supprime les anciens au cas ou re-validation)
     await supabaseAdmin.from('leads_packs').delete().eq('diagnostic_id', diagnostic_id)
 
     if (packs && packs.length > 0) {
@@ -76,10 +99,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 4. On envoie le lien au prospect, par le canal adapte a son pays
+    // 5. On envoie le lien au prospect, par le canal adapte a son pays, dans
+    // la langue choisie par le commercial pour ce rapport
     const lien = `${SITE_URL}/packs/${diagnostic.token_acces}`
     const lienDesinscription = `${SITE_URL}/desinscription/${target.token_desinscription}`
-    const message = `Bonjour ${target.nom},\n\n${nomCabinet} a etudie votre dossier et vous propose une solution personnalisee :\n${lien}\n\n---\nPour ne plus recevoir de message : ${lienDesinscription}`
+    const message = messageNotificationParLangue({
+      langue: langueChoisie,
+      nomProspect: target.nom,
+      nomCabinet,
+      lien,
+      lienDesinscription,
+    })
 
     const canal = canalParPays(target.country ?? 'FR')
 

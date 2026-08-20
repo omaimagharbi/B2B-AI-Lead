@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
 
     const { data: clientData } = await supabaseAdmin
       .from('clients')
-      .select('taux_closing_historique, mots_cles_expertise, idees_recues_marche')
+      .select(
+        'taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux'
+      )
       .eq('id', clientUser.client_id)
       .single()
 
@@ -160,6 +162,31 @@ Par segment de besoin : ${parSegment.map((a) => `${a.canal} (${a.gagnes}/${a.tot
 ${
   clientData?.taux_closing_historique
     ? `Taux de closing historique du cabinet AVANT la plateforme (a comparer aux chiffres ci-dessus pour estimer le gain) : ${clientData.taux_closing_historique}%.`
+    : ''
+}
+${
+  clientData?.motifs_rejet_passes
+    ? `Objections/motifs de rejet recurrents du passe (a anticiper et casser dans l'argumentaire commercial) : ${clientData.motifs_rejet_passes}`
+    : ''
+}
+${
+  clientData?.canaux_echoues
+    ? `Canaux de prospection deja tentes SANS succes par le passe (a eviter de recommander) : ${clientData.canaux_echoues}`
+    : ''
+}
+${
+  clientData?.positionnement_site
+    ? `Positionnement de marque extrait automatiquement du site web du cabinet (a respecter, ne pas devier) : ${clientData.positionnement_site}`
+    : ''
+}
+${
+  clientData?.ligne_editoriale_reseaux
+    ? `Ligne editoriale/ton observe sur les reseaux du cabinet (LinkedIn/Facebook) : ${clientData.ligne_editoriale_reseaux}`
+    : ''
+}
+${
+  clientData?.volume_equipe_commerciale
+    ? `Volume de travail actuel de l'equipe commerciale avant automatisation (point de comparaison pour chiffrer le gain de productivite) : ${clientData.volume_equipe_commerciale}`
     : ''
 }
 `.trim()

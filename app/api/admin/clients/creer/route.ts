@@ -62,7 +62,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: createError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ succes: true, email: email.trim(), motDePasseTemporaire })
+    // Le trigger SQL handle_new_client_signup a cree la ligne clients de facon
+    // synchrone (dans la meme transaction que l'insert auth.users) : on peut
+    // la relire immediatement pour renvoyer son id au front, qui s'en sert
+    // pour scroller jusqu'a la carte du nouveau cabinet et la mettre en
+    // evidence dans la liste - sinon le nouveau cabinet, cree tout en haut de
+    // la liste (tri par date desc), peut passer inapercu sous le message de
+    // confirmation.
+    const { data: nouveauClient } = await supabaseAdmin
+      .from('clients')
+      .select('id')
+      .eq('email', email.trim())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    return NextResponse.json({
+      succes: true,
+      email: email.trim(),
+      motDePasseTemporaire,
+      clientId: nouveauClient?.id ?? null,
+    })
   } catch (err) {
     console.error('Erreur /api/admin/clients/creer:', err)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

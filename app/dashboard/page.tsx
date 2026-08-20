@@ -12,6 +12,7 @@ import { vocabulairePourVertical, etapesPipelinePourVertical } from '@/lib/vocab
 import { zonePourPays } from '@/lib/pays'
 import ValidationItem from './validation-item'
 import DropdownMultiSelect from './dropdown-multiselect'
+import ChatbotWidget from '@/components/ChatbotWidget'
 
 type Client = {
   id: string
@@ -44,6 +45,13 @@ type Client = {
   taux_closing_historique?: number | null
   mots_cles_expertise?: string | null
   idees_recues_marche?: string | null
+  motifs_rejet_passes?: string | null
+  canaux_echoues?: string | null
+  volume_equipe_commerciale?: string | null
+  positionnement_site?: string | null
+  ligne_editoriale_reseaux?: string | null
+  derniere_analyse_cabinet_at?: string | null
+  token_badge_public?: string | null
 }
 
 type Target = {
@@ -300,8 +308,21 @@ export default function DashboardPage() {
     taux_closing_historique: '',
     mots_cles_expertise: '',
     idees_recues_marche: '',
+    motifs_rejet_passes: '',
+    canaux_echoues: '',
+    volume_equipe_commerciale: '',
   })
   const [inputsStrategiquesEnCours, setInputsStrategiquesEnCours] = useState(false)
+  const [analyseCabinetEnCours, setAnalyseCabinetEnCours] = useState(false)
+  const [erreurAnalyseCabinet, setErreurAnalyseCabinet] = useState<string | null>(null)
+  const [calendrierEditorial, setCalendrierEditorial] = useState<
+    { id: string; semaine: number; theme: string; format_suggere: string; angle_accroche: string; statut: string }[]
+  >([])
+  const [matriceContreObjection, setMatriceContreObjection] = useState<
+    { id: string; objection: string; angle_contenu: string; format_suggere: string }[]
+  >([])
+  const [calendrierEnCours, setCalendrierEnCours] = useState(false)
+  const [erreurCalendrier, setErreurCalendrier] = useState<string | null>(null)
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null)
   const [lancementEnCours, setLancementEnCours] = useState(false)
   const [lancementResultat, setLancementResultat] = useState<Record<string, unknown>[] | null>(
@@ -534,7 +555,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -547,6 +568,10 @@ export default function DashboardPage() {
             (clientData as unknown as Client).taux_closing_historique?.toString() ?? '',
           mots_cles_expertise: (clientData as unknown as Client).mots_cles_expertise ?? '',
           idees_recues_marche: (clientData as unknown as Client).idees_recues_marche ?? '',
+          motifs_rejet_passes: (clientData as unknown as Client).motifs_rejet_passes ?? '',
+          canaux_echoues: (clientData as unknown as Client).canaux_echoues ?? '',
+          volume_equipe_commerciale:
+            (clientData as unknown as Client).volume_equipe_commerciale ?? '',
         })
         setMessageInput((clientData as unknown as Client).message_personnalise ?? '')
         setLogoInput((clientData as unknown as Client).logo_url ?? '')
@@ -563,6 +588,7 @@ export default function DashboardPage() {
         setVerticalSlug(slug ?? '')
         setEstHybride(slug === 'cabinet-formation')
         await chargerTout(clientData.id)
+        await chargerCalendrierEditorial()
       }
       setChargement(false)
     }
@@ -620,10 +646,79 @@ export default function DashboardPage() {
         : null,
       mots_cles_expertise: inputsStrategiques.mots_cles_expertise.trim() || null,
       idees_recues_marche: inputsStrategiques.idees_recues_marche.trim() || null,
+      motifs_rejet_passes: inputsStrategiques.motifs_rejet_passes.trim() || null,
+      canaux_echoues: inputsStrategiques.canaux_echoues.trim() || null,
+      volume_equipe_commerciale: inputsStrategiques.volume_equipe_commerciale.trim() || null,
     }
     await supabase.from('clients').update(maj).eq('id', client.id)
     setClient({ ...client, ...maj })
     setInputsStrategiquesEnCours(false)
+  }
+
+  const analyserSiteCabinet = async () => {
+    if (!client) return
+    setAnalyseCabinetEnCours(true)
+    setErreurAnalyseCabinet(null)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const res = await fetch('/api/cabinet/analyser-site', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setErreurAnalyseCabinet(data.error ?? "Erreur lors de l'analyse")
+    } else {
+      setClient({
+        ...client,
+        positionnement_site: data.positionnement_site,
+        derniere_analyse_cabinet_at: new Date().toISOString(),
+      })
+    }
+    setAnalyseCabinetEnCours(false)
+  }
+
+  const chargerCalendrierEditorial = async () => {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const res = await fetch('/api/marketing/calendrier-editorial', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setCalendrierEditorial(data.calendrier ?? [])
+      setMatriceContreObjection(data.matrice ?? [])
+    }
+  }
+
+  const genererCalendrierEditorial = async () => {
+    setCalendrierEnCours(true)
+    setErreurCalendrier(null)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const res = await fetch('/api/marketing/calendrier-editorial', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setErreurCalendrier(data.error ?? 'Erreur lors de la génération')
+    } else {
+      await chargerCalendrierEditorial()
+    }
+    setCalendrierEnCours(false)
+  }
+
+  const basculerStatutCalendrier = async (id: string, statutActuel: string) => {
+    const nouveauStatut = statutActuel === 'publie' ? 'a_faire' : 'publie'
+    setCalendrierEditorial((prev) => prev.map((e) => (e.id === id ? { ...e, statut: nouveauStatut } : e)))
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    await fetch('/api/marketing/calendrier-editorial', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id, statut: nouveauStatut }),
+    })
   }
 
   const changerTailleEntreprise = async (taille: string) => {
@@ -1944,20 +2039,9 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          <button
-            onClick={() => {
-              setOngletActif('equipe')
-              setMembreEnEdition(monClientUserId)
-              const moi = membresEquipe.find((m) => m.id === monClientUserId)
-              setEditionMembreForm({
-                nom_complet: moi?.nom_complet ?? '',
-                telephone: moi?.telephone ?? '',
-              })
-            }}
-            className="text-sm text-slate-400 hover:text-white flex items-center gap-1"
-          >
+          <a href="/dashboard/profil" className="text-sm text-slate-400 hover:text-white flex items-center gap-1">
             👤 Mon profil
-          </button>
+          </a>
           <select
             value={client.langue_preferee}
             onChange={(e) => changerLangue(e.target.value as Langue)}
@@ -3568,10 +3652,8 @@ export default function DashboardPage() {
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
                   <p className="text-sm font-semibold">🧠 Vos inputs stratégiques</p>
                   <p className="text-xs text-slate-500">
-                    Le reste (objections passées, canaux qui ont échoué, volume de travail) sera
-                    mesuré directement par ton usage réel de la plateforme — inutile de le ressaisir.
-                    Seul le taux de closing d'avant la plateforme sert de point de comparaison pour
-                    calculer ton gain net dans Statistiques.
+                    Ces infos nourrissent le prompt IA (diagnostics, stratégie) : elles ne bloquent
+                    ni ne brident rien techniquement, mais orientent les recommandations générées.
                   </p>
                   <div>
                     <label className="text-xs text-slate-400">
@@ -3622,6 +3704,91 @@ export default function DashboardPage() {
                       className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                       rows={2}
                     />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">
+                      Objections et motifs de rejet récurrents du passé
+                    </label>
+                    <textarea
+                      value={inputsStrategiques.motifs_rejet_passes}
+                      onChange={(e) =>
+                        setInputsStrategiques({
+                          ...inputsStrategiques,
+                          motifs_rejet_passes: e.target.value,
+                        })
+                      }
+                      placeholder="Ex: Les prospects trouvent souvent nos tarifs trop élevés ou disent en cours de route qu'ils n'ont plus de budget."
+                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">
+                      Canaux de prospection déjà tentés sans succès
+                    </label>
+                    <textarea
+                      value={inputsStrategiques.canaux_echoues}
+                      onChange={(e) =>
+                        setInputsStrategiques({
+                          ...inputsStrategiques,
+                          canaux_echoues: e.target.value,
+                        })
+                      }
+                      placeholder="Ex: 6 mois de publicité Facebook Ads sans signer aucun client B2B."
+                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">
+                      Volume de travail actuel de votre équipe commerciale
+                    </label>
+                    <textarea
+                      value={inputsStrategiques.volume_equipe_commerciale}
+                      onChange={(e) =>
+                        setInputsStrategiques({
+                          ...inputsStrategiques,
+                          volume_equipe_commerciale: e.target.value,
+                        })
+                      }
+                      placeholder="Ex: 2 commerciaux, ~3h/jour à chercher des contacts, ~15 e-mails manuels par jour."
+                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      rows={2}
+                    />
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
+                    <p className="text-xs font-semibold">🌐 Analyse auto du positionnement</p>
+                    <p className="text-[11px] text-slate-500">
+                      Scanne le site web renseigné dans Équipe & Paramètres (description,
+                      expertises, références clients) via l'IA.
+                    </p>
+                    {client.positionnement_site && (
+                      <p className="text-xs text-slate-300 whitespace-pre-line bg-slate-900 rounded-lg p-2 border border-slate-700">
+                        {client.positionnement_site}
+                      </p>
+                    )}
+                    {client.ligne_editoriale_reseaux && (
+                      <p className="text-xs text-slate-300 whitespace-pre-line bg-slate-900 rounded-lg p-2 border border-slate-700">
+                        🔗 Réseaux : {client.ligne_editoriale_reseaux}
+                      </p>
+                    )}
+                    {erreurAnalyseCabinet && <p className="text-xs text-red-400">{erreurAnalyseCabinet}</p>}
+                    <button
+                      onClick={analyserSiteCabinet}
+                      disabled={analyseCabinetEnCours || !client.site_web}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 disabled:opacity-40"
+                    >
+                      {analyseCabinetEnCours
+                        ? 'Analyse en cours...'
+                        : client.positionnement_site
+                        ? 'Relancer l\'analyse'
+                        : 'Analyser mon site'}
+                    </button>
+                    {!client.site_web && (
+                      <p className="text-[11px] text-amber-400">
+                        Ajoute d'abord ton site web dans Équipe & Paramètres.
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={enregistrerInputsStrategiques}
@@ -3737,6 +3904,121 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 )}
+
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-400 font-semibold uppercase">
+                      🗓️ Calendrier éditorial du mois
+                    </p>
+                    <button
+                      onClick={genererCalendrierEditorial}
+                      disabled={calendrierEnCours}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
+                    >
+                      {calendrierEnCours
+                        ? 'Génération...'
+                        : calendrierEditorial.length > 0
+                        ? 'Régénérer'
+                        : 'Générer le calendrier'}
+                    </button>
+                  </div>
+                  {erreurCalendrier && <p className="text-xs text-red-400">{erreurCalendrier}</p>}
+                  {calendrierEditorial.length === 0 ? (
+                    <p className="text-slate-500 text-sm italic">Pas encore de calendrier généré.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {calendrierEditorial.map((e) => (
+                        <div
+                          key={e.id}
+                          className="rounded-lg border border-slate-800 p-3 flex items-start justify-between gap-3"
+                        >
+                          <div>
+                            <p className="text-xs text-accent font-semibold">Semaine {e.semaine}</p>
+                            <p className="text-sm font-medium">{e.theme}</p>
+                            <p className="text-xs text-slate-400">{e.format_suggere}</p>
+                            {e.angle_accroche && (
+                              <p className="text-xs text-slate-500 italic mt-1">"{e.angle_accroche}"</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => basculerStatutCalendrier(e.id, e.statut)}
+                            className={`text-[10px] px-2 py-1 rounded-full shrink-0 ${
+                              e.statut === 'publie'
+                                ? 'bg-emerald-900 text-emerald-300'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {e.statut === 'publie' ? '✓ Publié' : 'À faire'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+                  <p className="text-xs text-slate-400 font-semibold uppercase">
+                    🛡️ Matrice de contre-objection
+                  </p>
+                  {matriceContreObjection.length === 0 ? (
+                    <p className="text-slate-500 text-sm italic">
+                      Génère le calendrier éditorial ci-dessus pour l'obtenir en même temps.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {matriceContreObjection.map((m) => (
+                        <div key={m.id} className="rounded-lg border border-slate-800 p-3">
+                          <p className="text-xs text-slate-500">Idée reçue :</p>
+                          <p className="text-sm font-medium">{m.objection}</p>
+                          <p className="text-xs text-slate-500 mt-2">Angle de contenu :</p>
+                          <p className="text-sm text-slate-300">{m.angle_contenu}</p>
+                          {m.format_suggere && (
+                            <p className="text-xs text-accent mt-1">{m.format_suggere}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+                  <p className="text-xs text-slate-400 font-semibold uppercase">🏆 Badge marketing</p>
+                  <p className="text-xs text-slate-500">
+                    Un visuel à intégrer sur ton site ou tes réseaux, avec tes chiffres dans la
+                    devise adaptée à ta zone.
+                  </p>
+                  {client?.token_badge_public && (
+                    <>
+                      <img
+                        src={`/api/marketing/badge?token=${client.token_badge_public}`}
+                        alt="Badge marketing PiloBrain"
+                        className="rounded-lg border border-slate-800"
+                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          readOnly
+                          value={
+                            typeof window !== 'undefined'
+                              ? `${window.location.origin}/api/marketing/badge?token=${client.token_badge_public}`
+                              : ''
+                          }
+                          className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs text-slate-400"
+                          onFocus={(e) => e.target.select()}
+                        />
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              `${window.location.origin}/api/marketing/badge?token=${client.token_badge_public}`
+                            )
+                          }}
+                          className="text-xs px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 shrink-0"
+                        >
+                          Copier le lien
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {strategieResultat && strategieResultat.historique.filter((h) => h.recommandation_marketing).length > 0 && (
                   <div className="space-y-2 pt-2 border-t border-slate-800">
@@ -4879,6 +5161,7 @@ export default function DashboardPage() {
         )}
         </div>
       </div>
+      <ChatbotWidget />
     </main>
   )
 }

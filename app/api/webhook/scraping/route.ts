@@ -18,6 +18,28 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
+
+    // Branche "analyse du cabinet lui-meme" (LinkedIn/Facebook, via outil
+    // tiers type Apify/PhantomBuster - ces plateformes ne sont pas
+    // scrapables par simple fetch HTTP, contrairement a un site web public
+    // qui est analyse directement par /api/cabinet/analyser-site). Meme
+    // secret webhook, payload different : { type: 'analyse_cabinet', ... }
+    if (body.type === 'analyse_cabinet') {
+      const { client_id, ligne_editoriale } = body as { client_id: string; ligne_editoriale: string }
+      if (!client_id || !ligne_editoriale?.trim()) {
+        return NextResponse.json({ error: 'Donnees invalides' }, { status: 400 })
+      }
+      const { error } = await supabaseAdmin
+        .from('clients')
+        .update({
+          ligne_editoriale_reseaux: ligne_editoriale.trim(),
+          derniere_analyse_cabinet_at: new Date().toISOString(),
+        })
+        .eq('id', client_id)
+      if (error) return NextResponse.json({ error: 'Erreur de mise à jour' }, { status: 500 })
+      return NextResponse.json({ succes: true })
+    }
+
     const { client_id, contacts } = body as {
       client_id: string
       contacts: Array<{
