@@ -87,6 +87,8 @@ export default function AdminPage() {
   const [manuelChatbot, setManuelChatbot] = useState('')
   const [manuelChatbotChargement, setManuelChatbotChargement] = useState(true)
   const [manuelChatbotSauvegarde, setManuelChatbotSauvegarde] = useState(false)
+  const [manuelChatbotExtraction, setManuelChatbotExtraction] = useState(false)
+  const [manuelChatbotErreurExtraction, setManuelChatbotErreurExtraction] = useState<string | null>(null)
 
   const charger = async () => {
     setChargement(true)
@@ -158,6 +160,41 @@ export default function AdminPage() {
       body: JSON.stringify({ manuel_utilisation: manuelChatbot }),
     })
     setManuelChatbotSauvegarde(false)
+  }
+
+  const importerFichierManuelChatbot = async (fichier: File) => {
+    setManuelChatbotErreurExtraction(null)
+    setManuelChatbotExtraction(true)
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const lecteur = new FileReader()
+        lecteur.onload = () => resolve((lecteur.result as string).split(',')[1])
+        lecteur.onerror = () => reject(new Error('Lecture du fichier impossible'))
+        lecteur.readAsDataURL(fichier)
+      })
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/admin/manuel-chatbot/extraire-texte', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          fichier_base64: base64,
+          mime_type: fichier.type,
+          nom_fichier: fichier.name,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setManuelChatbotErreurExtraction(data.error ?? "Erreur lors de l'extraction")
+      } else {
+        setManuelChatbot((actuel) => (actuel.trim() ? `${actuel}\n\n${data.texte}` : data.texte))
+      }
+    } catch (err) {
+      setManuelChatbotErreurExtraction("Erreur lors de la lecture du fichier")
+    }
+    setManuelChatbotExtraction(false)
   }
 
   const basculerPayant = async (clientId: string, planActuel: string) => {
@@ -340,8 +377,11 @@ export default function AdminPage() {
     setMajEnCours(null)
   }
 
-  const creerCabinet = async () => {
-    if (!nouveauNom.trim() || !nouvelEmail.trim()) return
+  const creerCabinetAvecDonnees = async (
+    donnees: { nom: string; email: string; contact: string; vertical: string },
+    demandeIdAConvertir: string | null
+  ) => {
+    if (!donnees.nom.trim() || !donnees.email.trim()) return
     setCreationEnCours(true)
     setErreurCreation(null)
     setResultatCreation(null)
@@ -353,10 +393,10 @@ export default function AdminPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        nom_entreprise: nouveauNom,
-        email: nouvelEmail,
-        nom_complet: nouveauContact,
-        vertical_slug: nouveauVertical,
+        nom_entreprise: donnees.nom,
+        email: donnees.email,
+        nom_complet: donnees.contact,
+        vertical_slug: donnees.vertical,
       }),
     })
     const data = await res.json()
@@ -368,8 +408,8 @@ export default function AdminPage() {
       setNouveauNom('')
       setNouvelEmail('')
       setNouveauContact('')
-      if (demandeBetaEnConversion) {
-        await basculerDemandeTraitee(demandeBetaEnConversion, false)
+      if (demandeIdAConvertir) {
+        await basculerDemandeTraitee(demandeIdAConvertir, false)
         setDemandeBetaEnConversion(null)
       }
       await charger()
@@ -385,10 +425,18 @@ export default function AdminPage() {
             ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }, 100)
         setTimeout(() => setClientMisEnEvidence(null), 4000)
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     }
     setCreationEnCours(false)
   }
+
+  const creerCabinet = () =>
+    creerCabinetAvecDonnees(
+      { nom: nouveauNom, email: nouvelEmail, contact: nouveauContact, vertical: nouveauVertical },
+      demandeBetaEnConversion
+    )
 
   if (chargement) {
     return (
@@ -433,13 +481,36 @@ export default function AdminPage() {
                 rows={10}
                 className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm font-mono"
               />
-              <button
-                onClick={sauvegarderManuelChatbot}
-                disabled={manuelChatbotSauvegarde}
-                className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
-              >
-                {manuelChatbotSauvegarde ? 'Enregistrement...' : 'Enregistrer le manuel'}
-              </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  onClick={sauvegarderManuelChatbot}
+                  disabled={manuelChatbotSauvegarde}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
+                >
+                  {manuelChatbotSauvegarde ? 'Enregistrement...' : 'Enregistrer le manuel'}
+                </button>
+                <label className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 cursor-pointer">
+                  {manuelChatbotExtraction ? 'Extraction en cours...' : '📎 Importer un doc (.docx, .pdf, .txt)'}
+                  <input
+                    type="file"
+                    accept=".docx,.pdf,.txt,.md,image/*"
+                    className="hidden"
+                    disabled={manuelChatbotExtraction}
+                    onChange={(e) => {
+                      const fichier = e.target.files?.[0]
+                      if (fichier) importerFichierManuelChatbot(fichier)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              </div>
+              {manuelChatbotErreurExtraction && (
+                <p className="text-xs text-red-400">{manuelChatbotErreurExtraction}</p>
+              )}
+              <p className="text-xs text-slate-500">
+                Le texte importé est ajouté à la suite du contenu existant — relis et corrige avant
+                d'enregistrer.
+              </p>
             </>
           )}
         </div>
@@ -611,18 +682,21 @@ export default function AdminPage() {
                         <div className="flex gap-2 flex-wrap">
                           <button
                             onClick={() => {
-                              setNouveauNom(d.nom_entreprise || '')
-                              setNouvelEmail(d.email)
-                              setNouveauContact('')
-                              setNouveauVertical(d.carte_slug)
-                              setDemandeBetaEnConversion(d.id)
-                              setResultatCreation(null)
                               setErreurCreation(null)
-                              window.scrollTo({ top: 0, behavior: 'smooth' })
+                              creerCabinetAvecDonnees(
+                                {
+                                  nom: d.nom_entreprise || '',
+                                  email: d.email,
+                                  contact: '',
+                                  vertical: d.carte_slug,
+                                },
+                                d.id
+                              )
                             }}
-                            className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold"
+                            disabled={creationEnCours}
+                            className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
                           >
-                            ✅ Donner accès (créer le cabinet)
+                            {creationEnCours ? 'Création...' : '✅ Donner accès (créer le cabinet)'}
                           </button>
                           <button
                             onClick={() => basculerDemandeTraitee(d.id, d.traite)}
@@ -632,10 +706,10 @@ export default function AdminPage() {
                           </button>
                         </div>
                         <p className="text-xs text-slate-500">
-                          "Donner accès" pré-remplit le formulaire de création de cabinet en haut de
-                          page avec les infos de cette demande — il ne reste qu'à cliquer sur "Créer
-                          le cabinet". Le nouveau cabinet apparaîtra automatiquement dans la liste des
-                          cabinets ci-dessous.
+                          "Donner accès" crée directement le cabinet avec les infos de cette demande
+                          (email, entreprise, verticale). Un message de confirmation avec le mot de
+                          passe temporaire s'affiche en haut de page, et le nouveau cabinet est mis en
+                          évidence dans la liste ci-dessous.
                         </p>
                       </div>
                     )}
