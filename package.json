@@ -14,6 +14,7 @@
     "@tiptap/pm": "^3.29.2",
     "@tiptap/react": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
+    "docx": "^9.1.1",
     "imapflow": "^1.6.6",
     "mailparser": "^3.9.15",
     "mammoth": "^1.12.1",
