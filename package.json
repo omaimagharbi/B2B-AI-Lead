@@ -9,19 +9,27 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "@tiptap/pm": "^3.29.2",
+    "@tiptap/react": "^3.29.2",
+    "@tiptap/starter-kit": "^3.29.2",
+    "docx": "^9.1.1",
+    "imapflow": "^1.6.6",
+    "mailparser": "^3.9.15",
+    "mammoth": "^1.12.1",
     "next": "14.2.35",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@supabase/supabase-js": "^2.45.0",
-    "@anthropic-ai/sdk": "^0.27.0"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "typescript": "^5.5.4",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^20.14.15",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "tailwindcss": "^3.4.7",
+    "autoprefixer": "^10.4.19",
     "postcss": "^8.4.40",
-    "autoprefixer": "^10.4.19"
+    "tailwindcss": "^3.4.7",
+    "typescript": "^5.5.4"
   }
 }
