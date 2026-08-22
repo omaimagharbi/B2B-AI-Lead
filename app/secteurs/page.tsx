@@ -172,12 +172,16 @@ export default function Secteurs() {
                 <div
                   key={carte.slug}
                   onClick={() => !ouverte && setCarteOuverte(carte.slug)}
-                  className={`rounded-2xl border p-6 bg-slate-900 transition ${
+                  className={`rounded-2xl border p-6 transition ${
+                    carte.active ? 'bg-slate-900' : 'bg-slate-800/70'
+                  } ${
                     ouverte ? 'border-accent cursor-default' : 'border-slate-700 hover:border-slate-500 cursor-pointer'
                   }`}
                 >
                   <h3 className="font-sans text-[19px] font-bold mb-2 text-white">{carte.titre}</h3>
-                  <p className="text-sm leading-relaxed text-slate-400">{carte.description}</p>
+                  <p className={`text-sm leading-relaxed ${carte.active ? 'text-slate-400' : 'text-slate-300'}`}>
+                    {carte.description}
+                  </p>
 
                   {!ouverte ? (
                     <span

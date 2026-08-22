@@ -222,6 +222,12 @@ export default function DashboardPage() {
     const d = new Date()
     return new Date(d.getFullYear(), d.getMonth(), 1)
   })
+  const [vueCalendrier, setVueCalendrier] = useState<'mois' | 'semaine'>('mois')
+  const [semaineAffichee, setSemaineAffichee] = useState(() => {
+    const d = new Date()
+    const decalage = (d.getDay() + 6) % 7 // lundi en premier
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - decalage)
+  })
   const [nouvelleEntree, setNouvelleEntree] = useState({
     titre: '',
     description: '',
@@ -874,6 +880,19 @@ export default function DashboardPage() {
     const j = String(d.getDate()).padStart(2, '0')
     return `${y}-${m}-${j}`
   }
+
+  // Vue semaine façon Google Calendar : 7 colonnes (lundi->dimanche) avec une
+  // grille horaire, les entrées sans heure sont listées en haut ("journée").
+  const genererJoursSemaine = (debutSemaine: Date) => {
+    const jours: Date[] = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(debutSemaine)
+      d.setDate(debutSemaine.getDate() + i)
+      jours.push(d)
+    }
+    return jours
+  }
+  const HEURES_AFFICHEES = Array.from({ length: 13 }, (_, i) => 7 + i) // 7h -> 19h
 
   const parserCSV = (texte: string): Record<string, string>[] => {
     const lignes = texte.split(/\r?\n/).filter((l) => l.trim().length > 0)
@@ -4527,24 +4546,24 @@ export default function DashboardPage() {
                           {t.description && (
                             <p className="text-xs text-slate-400">{t.description}</p>
                           )}
-                          <p className="text-xs text-slate-500">
-                            {t.membre?.nom_complet ?? 'Non assignée'}
-                            {t.echeance ? (
-                              <span
-                                className={
-                                  t.statut !== 'terminee' && new Date(t.echeance) < new Date()
-                                    ? 'text-red-400 font-semibold'
-                                    : ''
-                                }
-                              >
-                                {' '}
-                                · {new Date(t.echeance).toLocaleDateString('fr-FR')}
-                              </span>
-                            ) : null}
+                          <p className="text-xs text-slate-400">
+                            👤 {t.membre?.nom_complet ?? 'Non assignée'}
                           </p>
+                          {t.echeance && (
+                            <p
+                              className={`text-xs font-medium ${
+                                t.statut !== 'terminee' && new Date(t.echeance) < new Date()
+                                  ? 'text-red-400'
+                                  : 'text-accent'
+                              }`}
+                            >
+                              📅 Échéance : {new Date(t.echeance).toLocaleDateString('fr-FR')}
+                              {t.statut !== 'terminee' && new Date(t.echeance) < new Date() && ' (dépassée)'}
+                            </p>
+                          )}
                           {t.createur?.nom_complet && (
-                            <p className="text-xs text-slate-600">
-                              Créée par {t.createur.nom_complet}
+                            <p className="text-xs text-slate-400">
+                              ✍️ Créée par {t.createur.nom_complet}
                             </p>
                           )}
                           {t.cible?.nom && (
@@ -4695,25 +4714,59 @@ export default function DashboardPage() {
             </div>
 
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                 <button
                   onClick={() =>
-                    setMoisAffiche(
-                      (m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)
-                    )
+                    vueCalendrier === 'mois'
+                      ? setMoisAffiche((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+                      : setSemaineAffichee((s) => {
+                          const d = new Date(s)
+                          d.setDate(d.getDate() - 7)
+                          return d
+                        })
                   }
                   className="px-3 py-1 rounded-lg border border-slate-700 text-sm hover:border-accent"
                 >
                   ← Précédent
                 </button>
-                <p className="font-semibold capitalize">
-                  {moisAffiche.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-                </p>
+                <div className="flex items-center gap-3">
+                  <p className="font-semibold capitalize">
+                    {vueCalendrier === 'mois'
+                      ? moisAffiche.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+                      : (() => {
+                          const jours = genererJoursSemaine(semaineAffichee)
+                          const debut = jours[0]
+                          const fin = jours[6]
+                          return `${debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} – ${fin.toLocaleDateString(
+                            'fr-FR',
+                            { day: 'numeric', month: 'short', year: 'numeric' }
+                          )}`
+                        })()}
+                  </p>
+                  <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
+                    <button
+                      onClick={() => setVueCalendrier('mois')}
+                      className={`px-3 py-1 ${vueCalendrier === 'mois' ? 'bg-accent text-slate-950 font-semibold' : 'bg-slate-950 text-slate-400'}`}
+                    >
+                      Mois
+                    </button>
+                    <button
+                      onClick={() => setVueCalendrier('semaine')}
+                      className={`px-3 py-1 ${vueCalendrier === 'semaine' ? 'bg-accent text-slate-950 font-semibold' : 'bg-slate-950 text-slate-400'}`}
+                    >
+                      Semaine
+                    </button>
+                  </div>
+                </div>
                 <button
                   onClick={() =>
-                    setMoisAffiche(
-                      (m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)
-                    )
+                    vueCalendrier === 'mois'
+                      ? setMoisAffiche((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+                      : setSemaineAffichee((s) => {
+                          const d = new Date(s)
+                          d.setDate(d.getDate() + 7)
+                          return d
+                        })
                   }
                   className="px-3 py-1 rounded-lg border border-slate-700 text-sm hover:border-accent"
                 >
@@ -4721,56 +4774,144 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-1">
-                {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((j) => (
-                  <div key={j}>{j}</div>
-                ))}
-              </div>
+              {vueCalendrier === 'mois' ? (
+                <>
+                  <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-1">
+                    {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((j) => (
+                      <div key={j}>{j}</div>
+                    ))}
+                  </div>
 
-              <div className="grid grid-cols-7 gap-1">
-                {genererGrilleMois(moisAffiche).map(({ date, dansLeMois }) => {
-                  const dateStr = formatDateLocale(date)
-                  const entreesDuJour = calendrier.filter((c) => c.date_evenement === dateStr)
-                  const estAujourdhui = dateStr === formatDateLocale(new Date())
-                  return (
-                    <div
-                      key={dateStr}
-                      onClick={() => {
-                        setJourSelectionne(dateStr)
-                        setNouvelleEntree((prev) => ({ ...prev, date_evenement: dateStr }))
-                      }}
-                      className={`min-h-[70px] rounded-lg border p-1 text-xs cursor-pointer transition ${
-                        dansLeMois ? 'border-slate-700 bg-slate-950 hover:border-accent/60' : 'border-slate-800 bg-slate-900 opacity-40'
-                      } ${estAujourdhui ? 'ring-1 ring-accent' : ''} ${
-                        jourSelectionne === dateStr ? 'border-accent ring-1 ring-accent' : ''
-                      }`}
-                    >
-                      <p className={`text-right ${estAujourdhui ? 'text-accent font-semibold' : 'text-slate-400'}`}>
-                        {date.getDate()}
-                      </p>
-                      <div className="space-y-0.5 mt-1">
-                        {entreesDuJour.map((c) => (
-                          <div
-                            key={c.id}
-                            title={c.titre}
-                            className="truncate rounded bg-slate-800 px-1 py-0.5 text-slate-200"
-                          >
-                            {c.type === 'rdv'
-                              ? '📞'
-                              : c.type === 'evenement'
-                              ? '🎪'
-                              : c.type === 'appel_offre'
-                              ? '📋'
-                              : '📌'}{' '}
-                            {c.heure_debut && `${c.heure_debut.slice(0, 5)} `}
-                            {c.titre}
+                  <div className="grid grid-cols-7 gap-1">
+                    {genererGrilleMois(moisAffiche).map(({ date, dansLeMois }) => {
+                      const dateStr = formatDateLocale(date)
+                      const entreesDuJour = calendrier.filter((c) => c.date_evenement === dateStr)
+                      const estAujourdhui = dateStr === formatDateLocale(new Date())
+                      return (
+                        <div
+                          key={dateStr}
+                          onClick={() => {
+                            setJourSelectionne(dateStr)
+                            setNouvelleEntree((prev) => ({ ...prev, date_evenement: dateStr }))
+                          }}
+                          className={`min-h-[70px] rounded-lg border p-1 text-xs cursor-pointer transition ${
+                            dansLeMois ? 'border-slate-700 bg-slate-950 hover:border-accent/60' : 'border-slate-800 bg-slate-900 opacity-40'
+                          } ${estAujourdhui ? 'ring-1 ring-accent' : ''} ${
+                            jourSelectionne === dateStr ? 'border-accent ring-1 ring-accent' : ''
+                          }`}
+                        >
+                          <p className={`text-right ${estAujourdhui ? 'text-accent font-semibold' : 'text-slate-400'}`}>
+                            {date.getDate()}
+                          </p>
+                          <div className="space-y-0.5 mt-1">
+                            {entreesDuJour.map((c) => (
+                              <div
+                                key={c.id}
+                                title={c.titre}
+                                className="truncate rounded bg-slate-800 px-1 py-0.5 text-slate-200"
+                              >
+                                {c.type === 'rdv'
+                                  ? '📞'
+                                  : c.type === 'evenement'
+                                  ? '🎪'
+                                  : c.type === 'appel_offre'
+                                  ? '📋'
+                                  : '📌'}{' '}
+                                {c.heure_debut && `${c.heure_debut.slice(0, 5)} `}
+                                {c.titre}
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="overflow-x-auto">
+                  <div className="grid grid-cols-[50px_repeat(7,minmax(110px,1fr))] gap-px min-w-[820px]">
+                    {/* En-têtes des jours */}
+                    <div />
+                    {genererJoursSemaine(semaineAffichee).map((date) => {
+                      const dateStr = formatDateLocale(date)
+                      const estAujourdhui = dateStr === formatDateLocale(new Date())
+                      return (
+                        <div
+                          key={dateStr}
+                          onClick={() => {
+                            setJourSelectionne(dateStr)
+                            setNouvelleEntree((prev) => ({ ...prev, date_evenement: dateStr }))
+                          }}
+                          className={`text-center text-xs pb-1 cursor-pointer rounded-t-lg ${
+                            estAujourdhui ? 'text-accent font-semibold' : 'text-slate-400'
+                          } ${jourSelectionne === dateStr ? 'bg-accent/10' : ''}`}
+                        >
+                          {date.toLocaleDateString('fr-FR', { weekday: 'short' })}{' '}
+                          <span className={estAujourdhui ? 'text-accent' : 'text-slate-300'}>{date.getDate()}</span>
+                        </div>
+                      )
+                    })}
+
+                    {/* Entrées sans heure ("toute la journée") en haut de chaque colonne */}
+                    <div className="text-[10px] text-slate-600 flex items-center justify-end pr-1">journée</div>
+                    {genererJoursSemaine(semaineAffichee).map((date) => {
+                      const dateStr = formatDateLocale(date)
+                      const entreesSansHeure = calendrier.filter(
+                        (c) => c.date_evenement === dateStr && !c.heure_debut
+                      )
+                      return (
+                        <div key={dateStr} className="border border-slate-800 bg-slate-950 p-0.5 space-y-0.5 min-h-[24px]">
+                          {entreesSansHeure.map((c) => (
+                            <div key={c.id} title={c.titre} className="truncate rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-200">
+                              {c.type === 'rdv' ? '📞' : c.type === 'evenement' ? '🎪' : c.type === 'appel_offre' ? '📋' : '📌'} {c.titre}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
+
+                    {/* Grille horaire : une ligne par heure, positionnement des entrées selon heure_debut/duree_minutes */}
+                    {HEURES_AFFICHEES.map((heure) => (
+                      <Fragment key={`h-${heure}`}>
+                        <div className="text-[10px] text-slate-600 text-right pr-1 pt-0.5">
+                          {String(heure).padStart(2, '0')}h
+                        </div>
+                        {genererJoursSemaine(semaineAffichee).map((date) => {
+                          const dateStr = formatDateLocale(date)
+                          const entreesHeure = calendrier.filter((c) => {
+                            if (c.date_evenement !== dateStr || !c.heure_debut) return false
+                            return parseInt(c.heure_debut.slice(0, 2), 10) === heure
+                          })
+                          return (
+                            <div
+                              key={`${dateStr}-${heure}`}
+                              onClick={() => {
+                                setJourSelectionne(dateStr)
+                                setNouvelleEntree((prev) => ({
+                                  ...prev,
+                                  date_evenement: dateStr,
+                                  heure_debut: `${String(heure).padStart(2, '0')}:00`,
+                                }))
+                              }}
+                              className="border border-slate-800 bg-slate-950 hover:bg-slate-900 cursor-pointer p-0.5 space-y-0.5 min-h-[32px]"
+                            >
+                              {entreesHeure.map((c) => (
+                                <div
+                                  key={c.id}
+                                  title={`${c.heure_debut?.slice(0, 5)} · ${c.titre}`}
+                                  className="truncate rounded bg-accent/20 border-l-2 border-accent px-1 py-0.5 text-[10px] text-white"
+                                >
+                                  {c.heure_debut?.slice(0, 5)} {c.titre}
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })}
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
