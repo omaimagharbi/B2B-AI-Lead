@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const { data: clients, error } = await supabaseAdmin
     .from('clients')
-    .select('id, nom_entreprise, email, statut_abonnement, plan_tarifaire, commission_pourcentage, acces_active, montant_abonnement, devise_abonnement, statut_paiement, date_echeance_paiement, mode_paiement, quota_cibles_mensuel, vertical_slug, created_at')
+    .select('id, nom_entreprise, email, statut_abonnement, plan_tarifaire, commission_pourcentage, acces_active, montant_abonnement, devise_abonnement, statut_paiement, date_echeance_paiement, mode_paiement, quota_cibles_mensuel, created_at, verticals(slug)')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -81,8 +81,15 @@ export async function GET(req: NextRequest) {
   const clientsAvecComptage = (clients ?? []).map((c) => {
     const montantVendu = montantParClient.get(c.id) ?? 0
     const commissionPourcentage = c.commission_pourcentage ?? 0
+    // @ts-ignore - jointure Supabase typee dynamiquement (objet ou tableau selon la relation)
+    const verticalJointure = c.verticals as { slug: string } | { slug: string }[] | null
+    const vertical_slug = Array.isArray(verticalJointure)
+      ? verticalJointure[0]?.slug ?? null
+      : verticalJointure?.slug ?? null
+    const { verticals: _verticals, ...clientSansJointure } = c as typeof c & { verticals?: unknown }
     return {
-      ...c,
+      ...clientSansJointure,
+      vertical_slug,
       packs_vendus: comptageParClient.get(c.id) ?? 0,
       montant_vendu: montantVendu,
       commission_due: Math.round(montantVendu * (commissionPourcentage / 100) * 100) / 100,
