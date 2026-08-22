@@ -130,16 +130,16 @@ export default function Secteurs() {
   }
 
   return (
-    <main className="min-h-screen bg-white text-ink font-sans antialiased">
+    <main className="min-h-screen bg-slate-950 text-white font-sans antialiased">
       <div className="max-w-[1180px] mx-auto px-7">
         {/* NAVBAR simplifiée */}
-        <nav className="flex items-center justify-between py-5 border-b border-slate-100">
+        <nav className="flex items-center justify-between py-5 border-b border-slate-800">
           <a href="/" className="flex items-center gap-2.5">
             <div
               className="w-[34px] h-[34px] rounded-full relative"
               style={{ background: 'conic-gradient(#1F6F78, #F0CC7A, #0F2540, #1F6F78)' }}
             >
-              <div className="absolute inset-[6px] bg-white rounded-full" />
+              <div className="absolute inset-[6px] bg-slate-950 rounded-full" />
             </div>
             <div className="font-serif font-semibold text-[19px] tracking-tight">
               Pilo<span className="text-teal font-semibold">Brain</span>
@@ -147,21 +147,19 @@ export default function Secteurs() {
           </a>
           <a
             href="/auth"
-            className="text-sm px-4 py-2 rounded-lg border border-slate-300 bg-white text-ink hover:border-slate-400"
+            className="text-sm px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white hover:border-slate-500"
           >
             Se connecter
           </a>
         </nav>
 
         {/* EN-TÊTE */}
-        <section className="py-14 md:py-16">
-          <span className="text-[12.5px] tracking-widest uppercase text-teal font-bold">Étape 1</span>
-          <h1 className="font-serif text-[26px] md:text-[32px] font-medium mt-3 mb-2.5 text-navy-deep">
-            Choisissez votre secteur
+        <section className="py-14 md:py-16 text-center">
+          <h1 className="font-sans text-[28px] md:text-[38px] font-extrabold mt-3 mb-2.5">
+            Des prospects qualifiés, livrés automatiquement
           </h1>
-          <p className="text-[#5B6675] text-[15.5px] leading-relaxed max-w-[560px]">
-            PiloBrain s&apos;adapte au vocabulaire et à la méthodologie de votre secteur —
-            sélectionnez le vôtre pour continuer.
+          <p className="text-slate-400 text-[15.5px] leading-relaxed">
+            Choisissez votre secteur pour commencer
           </p>
         </section>
 
@@ -174,29 +172,17 @@ export default function Secteurs() {
                 <div
                   key={carte.slug}
                   onClick={() => !ouverte && setCarteOuverte(carte.slug)}
-                  className={`rounded-2xl border p-6 bg-white transition ${
-                    carte.active
-                      ? ouverte
-                        ? 'border-teal cursor-default'
-                        : 'border-slate-100 hover:border-slate-300 cursor-pointer'
-                      : ouverte
-                      ? 'border-slate-300 cursor-default'
-                      : 'border-slate-100 opacity-80 hover:opacity-100 hover:border-slate-300 cursor-pointer'
+                  className={`rounded-2xl border p-6 bg-slate-900 transition ${
+                    ouverte ? 'border-accent cursor-default' : 'border-slate-700 hover:border-slate-500 cursor-pointer'
                   }`}
                 >
-                  <div
-                    className="w-[11px] h-[11px] rounded-[3px] mb-4"
-                    style={{ background: carte.dotColor }}
-                  />
-                  <h3 className="font-serif text-[19px] font-semibold mb-2 text-navy-deep">
-                    {carte.titre}
-                  </h3>
-                  <p className="text-sm leading-relaxed text-[#5B6675]">{carte.description}</p>
+                  <h3 className="font-sans text-[19px] font-bold mb-2 text-white">{carte.titre}</h3>
+                  <p className="text-sm leading-relaxed text-slate-400">{carte.description}</p>
 
                   {!ouverte ? (
                     <span
-                      className={`inline-block mt-3.5 text-[11.5px] font-bold uppercase tracking-wide ${
-                        carte.active ? 'text-teal' : 'text-[#8892A0]'
+                      className={`inline-block mt-3.5 text-[13px] font-semibold ${
+                        carte.active ? 'text-accent' : 'text-amber-400'
                       }`}
                     >
                       {carte.active ? 'Commencer →' : '🔒 Accès en bêta privée →'}
@@ -216,7 +202,7 @@ export default function Secteurs() {
                           choisirSousSecteurBeta(carte, e.target.value)
                         }
                       }}
-                      className="w-full mt-3.5 rounded-lg bg-white border border-slate-300 p-2 text-sm text-ink focus:border-teal focus:outline-none"
+                      className="w-full mt-3.5 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
                     >
                       <option value="" disabled>
                         Précisez votre métier exact...
@@ -237,20 +223,18 @@ export default function Secteurs() {
 
       {carteBeta && (
         <div
-          className="fixed inset-0 bg-navy-deep/70 flex items-center justify-center px-4 z-50"
+          className="fixed inset-0 bg-black/70 flex items-center justify-center px-4 z-50"
           onClick={fermerModal}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="max-w-md w-full rounded-2xl border border-slate-200 bg-white p-6 space-y-4 shadow-2xl"
+            className="max-w-md w-full rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl"
           >
             {!confirme ? (
               <>
-                <h2 className="font-serif text-lg font-semibold text-navy-deep">
-                  🚀 Merci pour votre intérêt !
-                </h2>
-                <p className="text-sm text-[#5B6675]">
-                  Notre moteur de commercialisation pour <strong className="text-ink">{carteBeta.titre}</strong> est
+                <h2 className="font-sans text-lg font-bold text-white">🚀 Merci pour votre intérêt !</h2>
+                <p className="text-sm text-slate-400">
+                  Notre moteur de commercialisation pour <strong className="text-white">{carteBeta.titre}</strong> est
                   actuellement accessible uniquement en bêta privée. Laissez-nous votre email et
                   votre secteur exact — notre équipe vous contacte sous 24h pour configurer votre
                   accès sur-mesure.
@@ -259,39 +243,39 @@ export default function Secteurs() {
                   placeholder="Nom de votre entreprise"
                   value={nomEntreprise}
                   onChange={(e) => setNomEntreprise(e.target.value)}
-                  className="w-full rounded-lg bg-white border border-slate-300 p-2 text-sm focus:border-teal focus:outline-none"
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
                 />
                 <input
                   type="email"
                   placeholder="Votre email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg bg-white border border-slate-300 p-2 text-sm focus:border-teal focus:outline-none"
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
                 />
                 <input
                   type="tel"
                   placeholder="Votre numéro de téléphone"
                   value={telephone}
                   onChange={(e) => setTelephone(e.target.value)}
-                  className="w-full rounded-lg bg-white border border-slate-300 p-2 text-sm focus:border-teal focus:outline-none"
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
                 />
                 <input
                   placeholder="Votre secteur exact (optionnel)"
                   value={sousSecteur}
                   onChange={(e) => setSousSecteur(e.target.value)}
-                  className="w-full rounded-lg bg-white border border-slate-300 p-2 text-sm focus:border-teal focus:outline-none"
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={envoyerDemandeBeta}
                     disabled={envoiEnCours || !formulaireValide}
-                    className="flex-1 py-2 rounded-lg bg-navy text-white font-semibold disabled:opacity-50 hover:bg-navy-deep"
+                    className="flex-1 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50 hover:opacity-90"
                   >
                     {envoiEnCours ? 'Envoi...' : 'Demander un accès'}
                   </button>
                   <button
                     onClick={fermerModal}
-                    className="px-4 py-2 rounded-lg border border-slate-300 text-[#5B6675]"
+                    className="px-4 py-2 rounded-lg border border-slate-700 text-slate-300"
                   >
                     Annuler
                   </button>
@@ -299,14 +283,14 @@ export default function Secteurs() {
               </>
             ) : (
               <>
-                <h2 className="font-serif text-lg font-semibold text-navy-deep">✅ Demande envoyée</h2>
-                <p className="text-sm text-[#5B6675]">
+                <h2 className="font-sans text-lg font-bold text-white">✅ Demande envoyée</h2>
+                <p className="text-sm text-slate-400">
                   Votre demande a été placée en priorité haute. Notre équipe vous contacte sous
                   24 heures.
                 </p>
                 <button
                   onClick={fermerModal}
-                  className="w-full py-2 rounded-lg bg-slate-100 text-ink hover:bg-slate-200"
+                  className="w-full py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700"
                 >
                   Fermer
                 </button>

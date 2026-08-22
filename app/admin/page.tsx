@@ -17,6 +17,7 @@ type ClientAdmin = {
   quota_cibles_mensuel: number | null
   nb_cibles_mois_en_cours?: number
   plan_tarifaire: string | null
+  vertical_slug: string | null
   created_at: string
   packs_vendus: number
   montant_vendu: number
@@ -28,6 +29,10 @@ type ClientAdmin = {
 
 export default function AdminPage() {
   const [clients, setClients] = useState<ClientAdmin[]>([])
+  const [filtreRecherche, setFiltreRecherche] = useState('')
+  const [filtreAbonnement, setFiltreAbonnement] = useState<'tous' | 'payant' | 'essai'>('tous')
+  const [filtreAcces, setFiltreAcces] = useState<'tous' | 'actif' | 'inactif'>('tous')
+  const [filtreVertical, setFiltreVertical] = useState<string>('tous')
   const [monitoring, setMonitoring] = useState<{
     sante: Record<
       string,
@@ -87,8 +92,8 @@ export default function AdminPage() {
   const [manuelChatbot, setManuelChatbot] = useState('')
   const [manuelChatbotChargement, setManuelChatbotChargement] = useState(true)
   const [manuelChatbotSauvegarde, setManuelChatbotSauvegarde] = useState(false)
-  const [manuelChatbotExtraction, setManuelChatbotExtraction] = useState(false)
-  const [manuelChatbotErreurExtraction, setManuelChatbotErreurExtraction] = useState<string | null>(null)
+  const [manuelChatbotImportEnCours, setManuelChatbotImportEnCours] = useState(false)
+  const [manuelChatbotErreurImport, setManuelChatbotErreurImport] = useState<string | null>(null)
 
   const charger = async () => {
     setChargement(true)
@@ -162,9 +167,13 @@ export default function AdminPage() {
     setManuelChatbotSauvegarde(false)
   }
 
-  const importerFichierManuelChatbot = async (fichier: File) => {
-    setManuelChatbotErreurExtraction(null)
-    setManuelChatbotExtraction(true)
+  // Retour terrain : le manuel doit pouvoir venir d'un document Word (celui
+  // qu'Omaima a deja redige) au lieu d'etre retape a la main. On extrait le
+  // texte du fichier et on le met dans la zone de texte pour relecture —
+  // l'admin garde la main pour ajuster avant de cliquer "Enregistrer".
+  const importerManuelChatbot = async (fichier: File) => {
+    setManuelChatbotImportEnCours(true)
+    setManuelChatbotErreurImport(null)
     try {
       const base64 = await new Promise<string>((resolve, reject) => {
         const lecteur = new FileReader()
@@ -175,26 +184,38 @@ export default function AdminPage() {
 
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
-
-      const res = await fetch('/api/admin/manuel-chatbot/extraire-texte', {
+      const res = await fetch('/api/admin/chatbot/importer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          fichier_base64: base64,
-          mime_type: fichier.type,
-          nom_fichier: fichier.name,
-        }),
+        body: JSON.stringify({ fichier_base64: base64, mime_type: fichier.type, nom_fichier: fichier.name }),
       })
       const data = await res.json()
       if (!res.ok) {
-        setManuelChatbotErreurExtraction(data.error ?? "Erreur lors de l'extraction")
+        setManuelChatbotErreurImport(data.error ?? "Erreur lors de l'import")
       } else {
-        setManuelChatbot((actuel) => (actuel.trim() ? `${actuel}\n\n${data.texte}` : data.texte))
+        setManuelChatbot(data.texte)
       }
     } catch (err) {
-      setManuelChatbotErreurExtraction("Erreur lors de la lecture du fichier")
+      setManuelChatbotErreurImport("Erreur lors de la lecture du fichier")
+    } finally {
+      setManuelChatbotImportEnCours(false)
     }
-    setManuelChatbotExtraction(false)
+  }
+
+  const telechargerManuelChatbot = async () => {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const res = await fetch('/api/admin/chatbot/telecharger', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'manuel-chatbot-support.docx'
+    a.click()
+    window.URL.revokeObjectURL(url)
   }
 
   const basculerPayant = async (clientId: string, planActuel: string) => {
@@ -377,11 +398,25 @@ export default function AdminPage() {
     setMajEnCours(null)
   }
 
-  const creerCabinetAvecDonnees = async (
-    donnees: { nom: string; email: string; contact: string; vertical: string },
-    demandeIdAConvertir: string | null
-  ) => {
-    if (!donnees.nom.trim() || !donnees.email.trim()) return
+  // Accepte des overrides explicites (au lieu de relire les states) pour que
+  // "Donner accès" puisse creer le cabinet immediatement, en un seul clic,
+  // sans dependre du re-render du formulaire du haut (setState est async :
+  // relire nouveauNom/nouvelEmail juste apres un setNouveauNom(...) lirait
+  // encore l'ancienne valeur).
+  const creerCabinet = async (overrides?: {
+    nom?: string
+    email?: string
+    contact?: string
+    vertical?: string
+    demandeBetaId?: string | null
+  }) => {
+    const nom = overrides?.nom ?? nouveauNom
+    const email = overrides?.email ?? nouvelEmail
+    const contact = overrides?.contact ?? nouveauContact
+    const vertical = overrides?.vertical ?? nouveauVertical
+    const demandeId = overrides?.demandeBetaId !== undefined ? overrides.demandeBetaId : demandeBetaEnConversion
+
+    if (!nom.trim() || !email.trim()) return
     setCreationEnCours(true)
     setErreurCreation(null)
     setResultatCreation(null)
@@ -393,10 +428,10 @@ export default function AdminPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        nom_entreprise: donnees.nom,
-        email: donnees.email,
-        nom_complet: donnees.contact,
-        vertical_slug: donnees.vertical,
+        nom_entreprise: nom,
+        email: email,
+        nom_complet: contact,
+        vertical_slug: vertical,
       }),
     })
     const data = await res.json()
@@ -408,8 +443,8 @@ export default function AdminPage() {
       setNouveauNom('')
       setNouvelEmail('')
       setNouveauContact('')
-      if (demandeIdAConvertir) {
-        await basculerDemandeTraitee(demandeIdAConvertir, false)
+      if (demandeId) {
+        await basculerDemandeTraitee(demandeId, false)
         setDemandeBetaEnConversion(null)
       }
       await charger()
@@ -425,18 +460,39 @@ export default function AdminPage() {
             ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }, 100)
         setTimeout(() => setClientMisEnEvidence(null), 4000)
-      } else {
-        window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     }
     setCreationEnCours(false)
   }
 
-  const creerCabinet = () =>
-    creerCabinetAvecDonnees(
-      { nom: nouveauNom, email: nouvelEmail, contact: nouveauContact, vertical: nouveauVertical },
-      demandeBetaEnConversion
-    )
+  // "Donner accès" doit creer le cabinet tout de suite (retour terrain :
+  // "je clique, rien ne change" — avant, le clic se contentait de pre-remplir
+  // le formulaire du haut, ce qui ne se voit pas si on est deja en haut de
+  // page). On pre-remplit quand meme le formulaire (pour que l'admin voie
+  // ce qui a ete utilise / puisse corriger si l'API echoue) et on lance la
+  // creation immediatement avec les valeurs de la demande.
+  const donnerAccesDepuisDemande = (d: {
+    id: string
+    email: string
+    nom_entreprise: string | null
+    carte_slug: string
+  }) => {
+    setNouveauNom(d.nom_entreprise || d.email)
+    setNouvelEmail(d.email)
+    setNouveauContact('')
+    setNouveauVertical(d.carte_slug)
+    setDemandeBetaEnConversion(d.id)
+    setResultatCreation(null)
+    setErreurCreation(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    creerCabinet({
+      nom: d.nom_entreprise || d.email,
+      email: d.email,
+      contact: '',
+      vertical: d.carte_slug,
+      demandeBetaId: d.id,
+    })
+  }
 
   if (chargement) {
     return (
@@ -453,6 +509,22 @@ export default function AdminPage() {
       </main>
     )
   }
+
+  const clientsFiltres = clients.filter((c) => {
+    const recherche = filtreRecherche.trim().toLowerCase()
+    if (
+      recherche &&
+      !c.nom_entreprise?.toLowerCase().includes(recherche) &&
+      !c.email?.toLowerCase().includes(recherche)
+    ) {
+      return false
+    }
+    if (filtreAbonnement !== 'tous' && c.statut_abonnement !== filtreAbonnement) return false
+    if (filtreAcces === 'actif' && !c.acces_active) return false
+    if (filtreAcces === 'inactif' && c.acces_active) return false
+    if (filtreVertical !== 'tous' && c.vertical_slug !== filtreVertical) return false
+    return true
+  })
 
   return (
     <main className="min-h-screen bg-slate-950 text-white px-6 py-10">
@@ -474,6 +546,31 @@ export default function AdminPage() {
             <p className="text-xs text-slate-500">Chargement...</p>
           ) : (
             <>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 cursor-pointer">
+                  {manuelChatbotImportEnCours ? 'Import en cours...' : '📄 Importer un document (.docx / .pdf / .txt)'}
+                  <input
+                    type="file"
+                    accept=".docx,.pdf,.txt,.md,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/plain"
+                    className="hidden"
+                    disabled={manuelChatbotImportEnCours}
+                    onChange={(e) => {
+                      const fichier = e.target.files?.[0]
+                      if (fichier) importerManuelChatbot(fichier)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+                <button
+                  onClick={telechargerManuelChatbot}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700"
+                >
+                  ⬇️ Télécharger le manuel actuel (.docx)
+                </button>
+              </div>
+              {manuelChatbotErreurImport && (
+                <p className="text-xs text-red-400">{manuelChatbotErreurImport}</p>
+              )}
               <textarea
                 value={manuelChatbot}
                 onChange={(e) => setManuelChatbot(e.target.value)}
@@ -481,36 +578,17 @@ export default function AdminPage() {
                 rows={10}
                 className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm font-mono"
               />
-              <div className="flex items-center gap-3 flex-wrap">
-                <button
-                  onClick={sauvegarderManuelChatbot}
-                  disabled={manuelChatbotSauvegarde}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
-                >
-                  {manuelChatbotSauvegarde ? 'Enregistrement...' : 'Enregistrer le manuel'}
-                </button>
-                <label className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 cursor-pointer">
-                  {manuelChatbotExtraction ? 'Extraction en cours...' : '📎 Importer un doc (.docx, .pdf, .txt)'}
-                  <input
-                    type="file"
-                    accept=".docx,.pdf,.txt,.md,image/*"
-                    className="hidden"
-                    disabled={manuelChatbotExtraction}
-                    onChange={(e) => {
-                      const fichier = e.target.files?.[0]
-                      if (fichier) importerFichierManuelChatbot(fichier)
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-              </div>
-              {manuelChatbotErreurExtraction && (
-                <p className="text-xs text-red-400">{manuelChatbotErreurExtraction}</p>
-              )}
               <p className="text-xs text-slate-500">
-                Le texte importé est ajouté à la suite du contenu existant — relis et corrige avant
-                d'enregistrer.
+                Importer un fichier remplit la zone ci-dessus avec son contenu (à relire), mais ne
+                sauvegarde rien tant que tu n'as pas cliqué sur "Enregistrer le manuel".
               </p>
+              <button
+                onClick={sauvegarderManuelChatbot}
+                disabled={manuelChatbotSauvegarde}
+                className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
+              >
+                {manuelChatbotSauvegarde ? 'Enregistrement...' : 'Enregistrer le manuel'}
+              </button>
             </>
           )}
         </div>
@@ -681,22 +759,13 @@ export default function AdminPage() {
                         </p>
                         <div className="flex gap-2 flex-wrap">
                           <button
-                            onClick={() => {
-                              setErreurCreation(null)
-                              creerCabinetAvecDonnees(
-                                {
-                                  nom: d.nom_entreprise || '',
-                                  email: d.email,
-                                  contact: '',
-                                  vertical: d.carte_slug,
-                                },
-                                d.id
-                              )
-                            }}
+                            onClick={() => donnerAccesDepuisDemande(d)}
                             disabled={creationEnCours}
                             className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
                           >
-                            {creationEnCours ? 'Création...' : '✅ Donner accès (créer le cabinet)'}
+                            {creationEnCours && demandeBetaEnConversion === d.id
+                              ? 'Création en cours...'
+                              : '✅ Donner accès (créer le cabinet)'}
                           </button>
                           <button
                             onClick={() => basculerDemandeTraitee(d.id, d.traite)}
@@ -706,10 +775,11 @@ export default function AdminPage() {
                           </button>
                         </div>
                         <p className="text-xs text-slate-500">
-                          "Donner accès" crée directement le cabinet avec les infos de cette demande
-                          (email, entreprise, verticale). Un message de confirmation avec le mot de
-                          passe temporaire s'affiche en haut de page, et le nouveau cabinet est mis en
-                          évidence dans la liste ci-dessous.
+                          "Donner accès" crée le cabinet immédiatement avec les infos de cette
+                          demande (nom, email, secteur) et affiche le mot de passe temporaire à
+                          transmettre au client — pas besoin d'un second clic. Le formulaire du haut
+                          de page se pré-remplit aussi, au cas où l'email ou le secteur doivent être
+                          corrigés avant de réessayer.
                         </p>
                       </div>
                     )}
@@ -750,7 +820,7 @@ export default function AdminPage() {
             />
           </div>
           <button
-            onClick={creerCabinet}
+            onClick={() => creerCabinet()}
             disabled={creationEnCours || !nouveauNom.trim() || !nouvelEmail.trim()}
             className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
           >
@@ -767,8 +837,50 @@ export default function AdminPage() {
           )}
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={filtreRecherche}
+            onChange={(e) => setFiltreRecherche(e.target.value)}
+            placeholder="🔍 Rechercher un cabinet (nom, email)..."
+            className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm min-w-[220px] flex-1"
+          />
+          <select
+            value={filtreAbonnement}
+            onChange={(e) => setFiltreAbonnement(e.target.value as typeof filtreAbonnement)}
+            className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+          >
+            <option value="tous">Tous les abonnements</option>
+            <option value="payant">Payant</option>
+            <option value="essai">Essai</option>
+          </select>
+          <select
+            value={filtreAcces}
+            onChange={(e) => setFiltreAcces(e.target.value as typeof filtreAcces)}
+            className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+          >
+            <option value="tous">Accès : tous</option>
+            <option value="actif">Accès actif</option>
+            <option value="inactif">Accès désactivé</option>
+          </select>
+          <select
+            value={filtreVertical}
+            onChange={(e) => setFiltreVertical(e.target.value)}
+            className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+          >
+            <option value="tous">Tous les secteurs</option>
+            {Array.from(new Set(clients.map((c) => c.vertical_slug).filter(Boolean))).map((v) => (
+              <option key={v as string} value={v as string}>
+                {v}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-slate-500">
+            {clientsFiltres.length} / {clients.length} cabinet{clients.length > 1 ? 's' : ''}
+          </span>
+        </div>
+
         <div className="space-y-3">
-          {clients.map((client) => {
+          {clientsFiltres.map((client) => {
             return (
               <div
                 key={client.id}
