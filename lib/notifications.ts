@@ -74,7 +74,12 @@ export async function envoyerWhatsapp(telephone: string, message: string, logoUr
   await enregistrerSanteApi('whatsapp', true)
 }
 
-export async function envoyerEmail(email: string, message: string, logoUrl?: string | null) {
+export async function envoyerEmail(
+  email: string,
+  message: string,
+  logoUrl?: string | null,
+  sujet: string = 'Votre diagnostic personnalisé'
+) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) throw new Error('Configuration Resend manquante')
 
@@ -96,7 +101,7 @@ export async function envoyerEmail(email: string, message: string, logoUrl?: str
     body: JSON.stringify({
       from: fromEmail,
       to: email,
-      subject: 'Votre diagnostic personnalisé',
+      subject: sujet,
       html: `${logoHtml}<p>${message.replace(/\n/g, '<br/>')}</p>`,
     }),
   })
