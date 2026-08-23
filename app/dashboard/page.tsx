@@ -52,6 +52,15 @@ type Client = {
   ligne_editoriale_reseaux?: string | null
   derniere_analyse_cabinet_at?: string | null
   token_badge_public?: string | null
+  taille_min_salaries?: number | null
+  taille_max_salaries?: number | null
+  portee_geographique?: string | null
+  villes_ciblees?: string | null
+  reseaux_actifs?: { linkedin?: boolean; facebook?: boolean; instagram?: boolean } | null
+  blog_actif?: boolean | null
+  base_email_existante?: string | null
+  budget_publicitaire?: string | null
+  objectif_chiffre?: string | null
 }
 
 type Target = {
@@ -291,6 +300,12 @@ export default function DashboardPage() {
       recommandation_marketing: string | null
       created_at: string
     }[]
+    filtresRecommandes: { postes: string[]; secteur: string; taille: string } | null
+    scriptAppel: string | null
+    scriptLinkedin: string | null
+    guideQualification: string[]
+    ligneEditoriale: string | null
+    leadMagnets: string[]
   } | null>(null)
   const [reponseTexte, setReponseTexte] = useState<Record<string, string>>({})
   const [envoiReponseEnCours, setEnvoiReponseEnCours] = useState<string | null>(null)
@@ -317,6 +332,17 @@ export default function DashboardPage() {
     motifs_rejet_passes: '',
     canaux_echoues: '',
     volume_equipe_commerciale: '',
+    linkedin_actif: false,
+    facebook_actif: false,
+    instagram_actif: false,
+    blog_actif: false,
+    base_email_existante: '',
+    budget_publicitaire: '',
+    objectif_chiffre: '',
+    taille_min_salaries: '',
+    taille_max_salaries: '',
+    portee_geographique: '',
+    villes_ciblees: '',
   })
   const [inputsStrategiquesEnCours, setInputsStrategiquesEnCours] = useState(false)
   const [analyseCabinetEnCours, setAnalyseCabinetEnCours] = useState(false)
@@ -561,7 +587,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, taille_min_salaries, taille_max_salaries, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, base_email_existante, budget_publicitaire, objectif_chiffre, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -569,15 +595,25 @@ export default function DashboardPage() {
       if (clientData) {
         setClient(clientData as unknown as Client)
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
+        const cd = clientData as unknown as Client
         setInputsStrategiques({
-          taux_closing_historique:
-            (clientData as unknown as Client).taux_closing_historique?.toString() ?? '',
-          mots_cles_expertise: (clientData as unknown as Client).mots_cles_expertise ?? '',
-          idees_recues_marche: (clientData as unknown as Client).idees_recues_marche ?? '',
-          motifs_rejet_passes: (clientData as unknown as Client).motifs_rejet_passes ?? '',
-          canaux_echoues: (clientData as unknown as Client).canaux_echoues ?? '',
-          volume_equipe_commerciale:
-            (clientData as unknown as Client).volume_equipe_commerciale ?? '',
+          taux_closing_historique: cd.taux_closing_historique?.toString() ?? '',
+          mots_cles_expertise: cd.mots_cles_expertise ?? '',
+          idees_recues_marche: cd.idees_recues_marche ?? '',
+          motifs_rejet_passes: cd.motifs_rejet_passes ?? '',
+          canaux_echoues: cd.canaux_echoues ?? '',
+          volume_equipe_commerciale: cd.volume_equipe_commerciale ?? '',
+          linkedin_actif: cd.reseaux_actifs?.linkedin ?? false,
+          facebook_actif: cd.reseaux_actifs?.facebook ?? false,
+          instagram_actif: cd.reseaux_actifs?.instagram ?? false,
+          blog_actif: cd.blog_actif ?? false,
+          base_email_existante: cd.base_email_existante ?? '',
+          budget_publicitaire: cd.budget_publicitaire ?? '',
+          objectif_chiffre: cd.objectif_chiffre ?? '',
+          taille_min_salaries: cd.taille_min_salaries?.toString() ?? '',
+          taille_max_salaries: cd.taille_max_salaries?.toString() ?? '',
+          portee_geographique: cd.portee_geographique ?? '',
+          villes_ciblees: cd.villes_ciblees ?? '',
         })
         setMessageInput((clientData as unknown as Client).message_personnalise ?? '')
         setLogoInput((clientData as unknown as Client).logo_url ?? '')
@@ -655,6 +691,23 @@ export default function DashboardPage() {
       motifs_rejet_passes: inputsStrategiques.motifs_rejet_passes.trim() || null,
       canaux_echoues: inputsStrategiques.canaux_echoues.trim() || null,
       volume_equipe_commerciale: inputsStrategiques.volume_equipe_commerciale.trim() || null,
+      reseaux_actifs: {
+        linkedin: inputsStrategiques.linkedin_actif,
+        facebook: inputsStrategiques.facebook_actif,
+        instagram: inputsStrategiques.instagram_actif,
+      },
+      blog_actif: inputsStrategiques.blog_actif,
+      base_email_existante: inputsStrategiques.base_email_existante.trim() || null,
+      budget_publicitaire: inputsStrategiques.budget_publicitaire || null,
+      objectif_chiffre: inputsStrategiques.objectif_chiffre.trim() || null,
+      taille_min_salaries: inputsStrategiques.taille_min_salaries
+        ? Number(inputsStrategiques.taille_min_salaries)
+        : null,
+      taille_max_salaries: inputsStrategiques.taille_max_salaries
+        ? Number(inputsStrategiques.taille_max_salaries)
+        : null,
+      portee_geographique: inputsStrategiques.portee_geographique || null,
+      villes_ciblees: inputsStrategiques.villes_ciblees.trim() || null,
     }
     await supabase.from('clients').update(maj).eq('id', client.id)
     setClient({ ...client, ...maj })
@@ -1552,6 +1605,48 @@ export default function DashboardPage() {
       // best-effort, pas critique
     }
     setStrategieEnCours(false)
+  }
+
+  const [filtresAppliquesEnCours, setFiltresAppliquesEnCours] = useState(false)
+  const [filtresAppliquesMessage, setFiltresAppliquesMessage] = useState<string | null>(null)
+
+  const appliquerFiltresRecommandes = async () => {
+    if (!strategieResultat?.filtresRecommandes) return
+    setFiltresAppliquesEnCours(true)
+    setFiltresAppliquesMessage(null)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch('/api/strategie/appliquer-filtres', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(strategieResultat.filtresRecommandes),
+      })
+      if (res.ok) {
+        setFiltresAppliquesMessage('✅ Filtres appliqués à l\'onglet Ciblage.')
+        // Recharge le client pour refleter secteur/taille mis a jour, et les
+        // postes cibles (client_professions) - reutilise la logique de charger().
+        const { data: clientMaj } = await supabase
+          .from('clients')
+          .select('secteur_activite, taille_entreprise')
+          .eq('id', client?.id)
+          .single()
+        if (clientMaj && client) {
+          setClient({ ...client, ...clientMaj })
+          setSecteurInput(clientMaj.secteur_activite ?? '')
+        }
+        const { data: professionsData } = await supabase
+          .from('client_professions')
+          .select('profession')
+          .eq('client_id', client?.id)
+        setProfessionsSelectionnees(new Set((professionsData ?? []).map((p) => p.profession)))
+      } else {
+        setFiltresAppliquesMessage("Erreur lors de l'application des filtres.")
+      }
+    } catch {
+      setFiltresAppliquesMessage("Erreur lors de l'application des filtres.")
+    }
+    setFiltresAppliquesEnCours(false)
   }
 
   const FORMATS_CATALOGUE_ACCEPTES = '.pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.webp'
@@ -3775,6 +3870,195 @@ export default function DashboardPage() {
                       rows={2}
                     />
                   </div>
+
+                  <div className="pt-2 border-t border-slate-800 space-y-3">
+                    <p className="text-xs font-semibold text-slate-300">
+                      Profil de ciblage précis
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-400">
+                          Taille min (nb salariés)
+                        </label>
+                        <input
+                          value={inputsStrategiques.taille_min_salaries}
+                          onChange={(e) =>
+                            setInputsStrategiques({
+                              ...inputsStrategiques,
+                              taille_min_salaries: e.target.value,
+                            })
+                          }
+                          type="number"
+                          placeholder="Ex: 20"
+                          className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400">
+                          Taille max (nb salariés)
+                        </label>
+                        <input
+                          value={inputsStrategiques.taille_max_salaries}
+                          onChange={(e) =>
+                            setInputsStrategiques({
+                              ...inputsStrategiques,
+                              taille_max_salaries: e.target.value,
+                            })
+                          }
+                          type="number"
+                          placeholder="Ex: 100"
+                          className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400">Portée géographique</label>
+                      <select
+                        value={inputsStrategiques.portee_geographique}
+                        onChange={(e) =>
+                          setInputsStrategiques({
+                            ...inputsStrategiques,
+                            portee_geographique: e.target.value,
+                          })
+                        }
+                        className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      >
+                        <option value="">Non précisé</option>
+                        <option value="local">Local</option>
+                        <option value="national">National</option>
+                        <option value="international">International</option>
+                      </select>
+                    </div>
+                    {inputsStrategiques.portee_geographique === 'local' && (
+                      <div>
+                        <label className="text-xs text-slate-400">
+                          Villes ciblées (séparées par une virgule)
+                        </label>
+                        <input
+                          value={inputsStrategiques.villes_ciblees}
+                          onChange={(e) =>
+                            setInputsStrategiques({
+                              ...inputsStrategiques,
+                              villes_ciblees: e.target.value,
+                            })
+                          }
+                          placeholder="Ex: Tunis, Sfax, Sousse"
+                          className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 space-y-3">
+                    <p className="text-xs font-semibold text-slate-300">
+                      Présence digitale
+                    </p>
+                    <div className="flex flex-wrap gap-4">
+                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={inputsStrategiques.linkedin_actif}
+                          onChange={(e) =>
+                            setInputsStrategiques({
+                              ...inputsStrategiques,
+                              linkedin_actif: e.target.checked,
+                            })
+                          }
+                        />
+                        Page LinkedIn entreprise active
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={inputsStrategiques.facebook_actif}
+                          onChange={(e) =>
+                            setInputsStrategiques({
+                              ...inputsStrategiques,
+                              facebook_actif: e.target.checked,
+                            })
+                          }
+                        />
+                        Page Facebook active
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={inputsStrategiques.instagram_actif}
+                          onChange={(e) =>
+                            setInputsStrategiques({
+                              ...inputsStrategiques,
+                              instagram_actif: e.target.checked,
+                            })
+                          }
+                        />
+                        Instagram actif
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={inputsStrategiques.blog_actif}
+                          onChange={(e) =>
+                            setInputsStrategiques({
+                              ...inputsStrategiques,
+                              blog_actif: e.target.checked,
+                            })
+                          }
+                        />
+                        Site avec blog
+                      </label>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400">
+                        Base de données e-mail existante ?
+                      </label>
+                      <input
+                        value={inputsStrategiques.base_email_existante}
+                        onChange={(e) =>
+                          setInputsStrategiques({
+                            ...inputsStrategiques,
+                            base_email_existante: e.target.value,
+                          })
+                        }
+                        placeholder="Ex: Oui, ~500 contacts. Laisser vide si non."
+                        className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400">Budget publicitaire</label>
+                      <select
+                        value={inputsStrategiques.budget_publicitaire}
+                        onChange={(e) =>
+                          setInputsStrategiques({
+                            ...inputsStrategiques,
+                            budget_publicitaire: e.target.value,
+                          })
+                        }
+                        className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      >
+                        <option value="">Non précisé</option>
+                        <option value="organique">Organique uniquement (gratuit)</option>
+                        <option value="payant">Prêt à faire de la pub payante (Facebook/LinkedIn Ads)</option>
+                        <option value="mixte">Les deux</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400">
+                        Objectifs chiffrés (conventions/mois ou CA visé)
+                      </label>
+                      <input
+                        value={inputsStrategiques.objectif_chiffre}
+                        onChange={(e) =>
+                          setInputsStrategiques({
+                            ...inputsStrategiques,
+                            objectif_chiffre: e.target.value,
+                          })
+                        }
+                        placeholder="Ex: 5 conventions/mois, ou 50k TND ce trimestre"
+                        className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      />
+                    </div>
+                  </div>
+
                   <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
                     <p className="text-xs font-semibold">🌐 Analyse auto du positionnement</p>
                     <p className="text-[11px] text-slate-500">
@@ -3842,6 +4126,79 @@ export default function DashboardPage() {
                         {strategieResultat.recommandationCommerciale}
                       </p>
                     </div>
+
+                    {strategieResultat.filtresRecommandes && (
+                      <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
+                        <p className="text-xs text-slate-400 font-semibold uppercase">
+                          🎯 Plan de chasse recommandé
+                        </p>
+                        <div className="text-sm text-slate-200 space-y-1">
+                          {strategieResultat.filtresRecommandes.postes.length > 0 && (
+                            <p>
+                              <span className="text-slate-400">Postes :</span>{' '}
+                              {strategieResultat.filtresRecommandes.postes.join(', ')}
+                            </p>
+                          )}
+                          {strategieResultat.filtresRecommandes.secteur && (
+                            <p>
+                              <span className="text-slate-400">Secteur :</span>{' '}
+                              {strategieResultat.filtresRecommandes.secteur}
+                            </p>
+                          )}
+                          {strategieResultat.filtresRecommandes.taille && (
+                            <p>
+                              <span className="text-slate-400">Taille :</span>{' '}
+                              {strategieResultat.filtresRecommandes.taille}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={appliquerFiltresRecommandes}
+                          disabled={filtresAppliquesEnCours}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
+                        >
+                          {filtresAppliquesEnCours ? 'Application...' : "Appliquer à l'onglet Ciblage"}
+                        </button>
+                        {filtresAppliquesMessage && (
+                          <p className="text-xs text-slate-400">{filtresAppliquesMessage}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {strategieResultat.scriptAppel && (
+                      <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
+                        <p className="text-xs text-slate-400 font-semibold uppercase">
+                          📞 Script d'appel
+                        </p>
+                        <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                          {strategieResultat.scriptAppel}
+                        </p>
+                      </div>
+                    )}
+
+                    {strategieResultat.scriptLinkedin && (
+                      <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
+                        <p className="text-xs text-slate-400 font-semibold uppercase">
+                          💬 Message LinkedIn
+                        </p>
+                        <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                          {strategieResultat.scriptLinkedin}
+                        </p>
+                      </div>
+                    )}
+
+                    {strategieResultat.guideQualification.length > 0 && (
+                      <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
+                        <p className="text-xs text-slate-400 font-semibold uppercase">
+                          ❓ Guide de qualification (1er RDV)
+                        </p>
+                        <ul className="text-sm text-slate-200 list-disc list-inside space-y-1">
+                          {strategieResultat.guideQualification.map((q, i) => (
+                            <li key={i}>{q}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     {strategieResultat.parCanal.length > 0 && (
                       <div className="space-y-2">
@@ -3921,6 +4278,30 @@ export default function DashboardPage() {
                     <p className="text-sm text-slate-200 whitespace-pre-wrap">
                       {strategieResultat.recommandationMarketing}
                     </p>
+                  </div>
+                )}
+
+                {strategieResultat?.ligneEditoriale && (
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
+                    <p className="text-xs text-slate-400 font-semibold uppercase">
+                      🖊️ Ligne éditoriale
+                    </p>
+                    <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                      {strategieResultat.ligneEditoriale}
+                    </p>
+                  </div>
+                )}
+
+                {strategieResultat && strategieResultat.leadMagnets.length > 0 && (
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
+                    <p className="text-xs text-slate-400 font-semibold uppercase">
+                      🧲 Idées de lead magnets
+                    </p>
+                    <ul className="text-sm text-slate-200 list-disc list-inside space-y-1">
+                      {strategieResultat.leadMagnets.map((m, i) => (
+                        <li key={i}>{m}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
 

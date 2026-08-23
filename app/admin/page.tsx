@@ -73,6 +73,7 @@ export default function AdminPage() {
   const [resultatCreation, setResultatCreation] = useState<{
     email: string
     motDePasseTemporaire: string
+    emailEnvoye?: boolean
   } | null>(null)
   const [demandesBeta, setDemandesBeta] = useState<
     {
@@ -439,7 +440,11 @@ export default function AdminPage() {
     if (!res.ok) {
       setErreurCreation(data.error ?? 'Erreur lors de la création')
     } else {
-      setResultatCreation({ email: data.email, motDePasseTemporaire: data.motDePasseTemporaire })
+      setResultatCreation({
+        email: data.email,
+        motDePasseTemporaire: data.motDePasseTemporaire,
+        emailEnvoye: data.emailEnvoye,
+      })
       setNouveauNom('')
       setNouvelEmail('')
       setNouveauContact('')
@@ -829,7 +834,14 @@ export default function AdminPage() {
           {erreurCreation && <p className="text-red-400 text-sm">{erreurCreation}</p>}
           {resultatCreation && (
             <p className="text-sm text-accent bg-slate-950 border border-accent/40 rounded-lg p-3">
-              ✅ Cabinet créé — transmets ces identifiants au client (par WhatsApp, en main propre...) :
+              {resultatCreation.emailEnvoye ? (
+                <>✅ Cabinet créé — un email avec les identifiants a été envoyé automatiquement au client.</>
+              ) : (
+                <>
+                  ✅ Cabinet créé, mais l&apos;email automatique n&apos;a pas pu être envoyé — transmets ces
+                  identifiants toi-même (WhatsApp, en main propre...) :
+                </>
+              )}
               <br />
               Email : <strong>{resultatCreation.email}</strong> · Mot de passe temporaire :{' '}
               <strong>{resultatCreation.motDePasseTemporaire}</strong>

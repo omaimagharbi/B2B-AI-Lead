@@ -48,7 +48,7 @@ export default function Home() {
               FR
             </span>
             <a
-              href="/auth"
+              href="/auth?mode=connexion"
               className="text-sm px-4 py-2 rounded-lg border border-slate-300 bg-white text-ink hover:border-slate-400"
             >
               Se connecter

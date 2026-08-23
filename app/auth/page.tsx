@@ -13,7 +13,7 @@ function AuthForm() {
   const sousSecteurChoisi = searchParams.get('sous_secteur') ?? ''
 
   const [mode, setMode] = useState<'inscription' | 'connexion' | 'mot_de_passe_oublie'>(
-    'inscription'
+    searchParams.get('mode') === 'connexion' ? 'connexion' : 'inscription'
   )
 
   // ----- Connexion / mot de passe oublie (inchange) -----
@@ -249,6 +249,36 @@ function AuthForm() {
   }
 
   // ----- Ecran final : identifiants de l'equipe a transmettre -----
+  const [envoiIdentifiantsEnCours, setEnvoiIdentifiantsEnCours] = useState(false)
+  const [envoiIdentifiantsMessage, setEnvoiIdentifiantsMessage] = useState<string | null>(null)
+
+  const envoyerIdentifiantsParEmail = async () => {
+    setEnvoiIdentifiantsEnCours(true)
+    setEnvoiIdentifiantsMessage(null)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const jeton = sessionData.session?.access_token
+      const res = await fetch('/api/auth/envoyer-identifiants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton}` },
+        body: JSON.stringify({ membres: equipeCreee }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setEnvoiIdentifiantsMessage(
+          data.echecs > 0
+            ? `${data.envoyes} email(s) envoyé(s), ${data.echecs} échec(s).`
+            : `✅ Identifiants envoyés à ${data.envoyes} membre(s) de l'équipe.`
+        )
+      } else {
+        setEnvoiIdentifiantsMessage(data.error ?? "Erreur lors de l'envoi.")
+      }
+    } catch {
+      setEnvoiIdentifiantsMessage("Erreur lors de l'envoi.")
+    }
+    setEnvoiIdentifiantsEnCours(false)
+  }
+
   if (equipeCreee.length > 0) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4">
@@ -273,6 +303,16 @@ function AuthForm() {
               </div>
             ))}
           </div>
+          <button
+            onClick={envoyerIdentifiantsParEmail}
+            disabled={envoiIdentifiantsEnCours}
+            className="w-full py-2.5 rounded-lg border border-accent text-accent font-semibold hover:bg-accent/10 transition disabled:opacity-50"
+          >
+            {envoiIdentifiantsEnCours ? 'Envoi en cours...' : '📧 Envoyer les identifiants par email'}
+          </button>
+          {envoiIdentifiantsMessage && (
+            <p className="text-xs text-slate-400">{envoiIdentifiantsMessage}</p>
+          )}
           <button
             onClick={redirigerApresConnexion}
             className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold hover:opacity-90 transition"
@@ -299,7 +339,7 @@ function AuthForm() {
             <p className="text-slate-600 text-xs">
               Étape {etape} sur 4
               {sousSecteurChoisi ? ` — ${sousSecteurChoisi}` : ''} — l'accès administration
-              plateforme est réservé à Braise et n'est pas ouvert à l'inscription.
+              plateforme est réservé à PiloBrain et n'est pas ouvert à l'inscription.
             </p>
           )}
         </div>
@@ -599,9 +639,16 @@ function AuthForm() {
               {mode === 'inscription' ? 'Déjà un compte ?' : 'Pas encore de compte ?'}{' '}
               <button
                 onClick={() => {
-                  setMode(mode === 'inscription' ? 'connexion' : 'inscription')
-                  setErreur(null)
-                  setEtape(1)
+                  if (mode === 'inscription') {
+                    setMode('connexion')
+                    setErreur(null)
+                    setEtape(1)
+                  } else {
+                    // "S'inscrire" doit repasser par le choix du secteur (page /secteurs)
+                    // avant d'arriver sur le formulaire d'inscription pré-rempli, plutot
+                    // que d'afficher directement le formulaire generique.
+                    router.push('/secteurs')
+                  }
                 }}
                 className="text-accent underline"
               >

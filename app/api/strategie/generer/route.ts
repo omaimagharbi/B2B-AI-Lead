@@ -5,10 +5,18 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 
 type Agregat = { canal: string; total: number; gagnes: number; taux: number }
 
-function agreger(
-  cles: (string | null)[],
-  gagnes: boolean[]
-): Agregat[] {
+type SortieStrategie = {
+  commercial: string
+  marketing: string
+  filtresRecommandes: { postes: string[]; secteur: string; taille: string } | null
+  scriptAppel: string
+  scriptLinkedin: string
+  guideQualification: string[]
+  ligneEditoriale: string
+  leadMagnets: string[]
+}
+
+function agreger(cles: (string | null)[], gagnes: boolean[]): Agregat[] {
   const map = new Map<string, { total: number; gagnes: number }>()
   cles.forEach((cle, i) => {
     const c = cle?.trim() || 'Non renseigné'
@@ -28,7 +36,19 @@ function agreger(
     .sort((a, b) => b.taux - a.taux)
 }
 
-async function genererTexteGemini(prompt: string, apiKey: string): Promise<string> {
+const FORMAT_JSON_ATTENDU = `Réponds UNIQUEMENT avec un objet JSON valide (sans balises markdown, sans texte avant/après), exactement dans ce format :
+{
+  "commercial": "3 recommandations courtes séparées par un point, sur où concentrer les efforts de vente",
+  "marketing": "2-3 recommandations courtes séparées par un point, sur quels thèmes/formats de contenu prioriser",
+  "filtresRecommandes": { "postes": ["poste1", "poste2"], "secteur": "nom du secteur le plus prometteur", "taille": "pme ou grande_entreprise ou indifferent" },
+  "scriptAppel": "une trame d'appel téléphonique complète et concrète (5-8 phrases), adaptée au profil ciblé et à l'expertise du cabinet",
+  "scriptLinkedin": "un message LinkedIn court et concret (3-5 phrases) à envoyer à un décideur ciblé",
+  "guideQualification": ["question 1 exacte à poser au premier rendez-vous", "question 2", "question 3"],
+  "ligneEditoriale": "1-2 phrases définissant l'angle éditorial à adopter pour séduire le persona ciblé",
+  "leadMagnets": ["idée de contenu gratuit 1 pour capter des emails", "idée 2"]
+}`
+
+async function genererJsonGemini(prompt: string, apiKey: string): Promise<string> {
   const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
@@ -43,15 +63,119 @@ async function genererTexteGemini(prompt: string, apiKey: string): Promise<strin
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 }
 
-async function genererTexteAnthropic(prompt: string, apiKey: string): Promise<string> {
+async function genererJsonAnthropic(prompt: string, apiKey: string): Promise<string> {
   const anthropic = new Anthropic({ apiKey })
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-5',
-    max_tokens: 400,
+    max_tokens: 1500,
     messages: [{ role: 'user', content: prompt }],
   })
   const bloc = message.content.find((b) => b.type === 'text')
   return bloc && 'text' in bloc ? bloc.text : ''
+}
+
+// Repli 100% rule-based (pas d'IA configuree ou IA indisponible) : reste
+// utile et concret en s'appuyant sur les vraies donnees du cabinet plutot
+// que de renvoyer du vide, sur le meme principe que genererBrouillonSimule
+// pour les diagnostics.
+function genererSortieSimulee(params: {
+  meilleurCanal: Agregat | null
+  meilleurSegment: Agregat | null
+  themePrincipal: Agregat | null
+  postesCibles: string[]
+  secteurActivite: string | null
+  tailleEntreprise: string
+  motsClesExpertise: string | null
+  ideesRecuesMarche: string | null
+  positionnementSite: string | null
+}): SortieStrategie {
+  const {
+    meilleurCanal,
+    meilleurSegment,
+    themePrincipal,
+    postesCibles,
+    secteurActivite,
+    tailleEntreprise,
+    motsClesExpertise,
+    ideesRecuesMarche,
+    positionnementSite,
+  } = params
+
+  const posteRef = postesCibles[0] ?? 'décideur'
+  const expertiseRef = motsClesExpertise?.split(',')[0]?.trim() || 'votre domaine d\'expertise'
+
+  const commercial = [
+    meilleurCanal
+      ? `Ton canal le plus efficace est "${meilleurCanal.canal}" (${meilleurCanal.taux}% de conversion) — concentre ton budget de sourcing dessus.`
+      : 'Pas assez de données par canal pour recommander une priorité.',
+    meilleurSegment
+      ? `Le segment "${meilleurSegment.canal}" convertit le mieux (${meilleurSegment.taux}%) — adapte ton message pour ce type de besoin.`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const marketing = themePrincipal
+    ? `Le thème "${themePrincipal.canal}" revient le plus souvent dans tes suggestions — priorise-le dans tes prochaines publications.`
+    : 'Pas encore assez de contenu marketing généré pour dégager une tendance.'
+
+  return {
+    commercial,
+    marketing,
+    filtresRecommandes: {
+      postes: postesCibles.slice(0, 3),
+      secteur: secteurActivite ?? '',
+      taille: tailleEntreprise,
+    },
+    scriptAppel:
+      `Bonjour, je suis [ton prénom] de [nom du cabinet]. Je vous contacte car nous accompagnons des ${posteRef}s ` +
+      `sur des problématiques de ${expertiseRef}. Est-ce un sujet d'actualité pour vous en ce moment ? ` +
+      `[Laisser répondre, puis :] Ce que nous proposons, c'est un diagnostic rapide de votre situation, sans engagement, ` +
+      `pour voir si un accompagnement aurait du sens. Est-ce que 15 minutes cette semaine seraient possibles ?`,
+    scriptLinkedin:
+      `Bonjour [prénom], je vois que vous êtes ${posteRef} chez [entreprise]. Nous accompagnons des profils similaires ` +
+      `sur des sujets de ${expertiseRef}. Seriez-vous ouvert(e) à un échange rapide pour voir si cela pourrait vous être utile ?`,
+    guideQualification: [
+      `Quel est l'objectif chiffré (chiffre d'affaires, budget, délai) impacté par ce problème ?`,
+      `Qui est le décisionnaire final pour ce type de projet/budget ?`,
+      `Depuis combien de temps ce sujet est-il une priorité pour vous ?`,
+    ],
+    ligneEditoriale: ideesRecuesMarche
+      ? `Pour contrer l'idée reçue "${ideesRecuesMarche.slice(0, 100)}", publiez du contenu qui démontre concrètement l'impact terrain de votre expertise.`
+      : positionnementSite
+      ? `Publiez autour de : ${positionnementSite.slice(0, 140)}`
+      : `Publiez sur les problématiques concrètes de vos ${posteRef}s cibles, avec des exemples chiffrés plutôt que de la théorie.`,
+    leadMagnets: [
+      `Un guide PDF court : "Comment [résoudre le problème principal de vos ${posteRef}s cibles]"`,
+      `Une checklist d'auto-diagnostic à télécharger contre une adresse email`,
+    ],
+  }
+}
+
+function parserSortieIA(texteBrut: string): Partial<SortieStrategie> | null {
+  try {
+    const nettoye = texteBrut.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(nettoye)
+    return {
+      commercial: typeof parsed.commercial === 'string' ? parsed.commercial : undefined,
+      marketing: typeof parsed.marketing === 'string' ? parsed.marketing : undefined,
+      filtresRecommandes:
+        parsed.filtresRecommandes && typeof parsed.filtresRecommandes === 'object'
+          ? {
+              postes: Array.isArray(parsed.filtresRecommandes.postes) ? parsed.filtresRecommandes.postes : [],
+              secteur: parsed.filtresRecommandes.secteur ?? '',
+              taille: parsed.filtresRecommandes.taille ?? '',
+            }
+          : undefined,
+      scriptAppel: typeof parsed.scriptAppel === 'string' ? parsed.scriptAppel : undefined,
+      scriptLinkedin: typeof parsed.scriptLinkedin === 'string' ? parsed.scriptLinkedin : undefined,
+      guideQualification: Array.isArray(parsed.guideQualification) ? parsed.guideQualification : undefined,
+      ligneEditoriale: typeof parsed.ligneEditoriale === 'string' ? parsed.ligneEditoriale : undefined,
+      leadMagnets: Array.isArray(parsed.leadMagnets) ? parsed.leadMagnets : undefined,
+    }
+  } catch {
+    return null
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -79,13 +203,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Aucun cabinet associe' }, { status: 403 })
     }
 
-    const { data: clientData } = await supabaseAdmin
+    const { data: clientDataRaw } = await supabaseAdmin
       .from('clients')
       .select(
-        'taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux'
+        'taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, ' +
+          'canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, ' +
+          'mode_ciblage, secteur_activite, taille_entreprise, taille_min_salaries, taille_max_salaries, ' +
+          'profil_particulier, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, ' +
+          'base_email_existante, budget_publicitaire, objectif_chiffre'
       )
       .eq('id', clientUser.client_id)
       .single()
+
+    const clientData = clientDataRaw as unknown as {
+      taux_closing_historique: number | null
+      mots_cles_expertise: string | null
+      idees_recues_marche: string | null
+      motifs_rejet_passes: string | null
+      canaux_echoues: string | null
+      volume_equipe_commerciale: string | null
+      positionnement_site: string | null
+      ligne_editoriale_reseaux: string | null
+      mode_ciblage: string | null
+      secteur_activite: string | null
+      taille_entreprise: string | null
+      taille_min_salaries: number | null
+      taille_max_salaries: number | null
+      profil_particulier: string | null
+      portee_geographique: string | null
+      villes_ciblees: string | null
+      reseaux_actifs: Record<string, boolean> | null
+      blog_actif: boolean | null
+      base_email_existante: string | null
+      budget_publicitaire: string | null
+      objectif_chiffre: string | null
+    } | null
+
+    const { data: professionsData } = await supabaseAdmin
+      .from('client_professions')
+      .select('profession')
+      .eq('client_id', clientUser.client_id)
+    const postesCibles = (professionsData ?? []).map((p) => p.profession)
 
     const { data: cibles } = await supabaseAdmin
       .from('targets')
@@ -110,8 +268,6 @@ export async function POST(req: NextRequest) {
     const cibleGagnee = (c: { id: string; resultat_historique: string | null }) =>
       c.resultat_historique === 'gagne' || targetIdsGagnesReels.has(c.id)
 
-    // Contenu marketing deja genere (toutes les suggestions liees a ce cabinet),
-    // pour degager les themes/formats qui reviennent le plus souvent.
     const { data: diagnosticsAvecContenu } = await supabaseAdmin
       .from('diagnostics')
       .select('recommandations_json')
@@ -129,8 +285,8 @@ export async function POST(req: NextRequest) {
 
     const parThemeMarketing = agreger(
       suggestionsMarketing,
-      suggestionsMarketing.map(() => false) // pas de notion de "gagne" ici, juste la frequence
-    ).map((a) => ({ ...a, taux: 0 })) // le taux n'a pas de sens ici, seul le total compte
+      suggestionsMarketing.map(() => false)
+    ).map((a) => ({ ...a, taux: 0 }))
 
     if (!cibles || cibles.length < 4) {
       return NextResponse.json({
@@ -142,6 +298,12 @@ export async function POST(req: NextRequest) {
         parSegment: [],
         parThemeMarketing: [],
         historique: [],
+        filtresRecommandes: null,
+        scriptAppel: null,
+        scriptLinkedin: null,
+        guideQualification: [],
+        ligneEditoriale: null,
+        leadMagnets: [],
       })
     }
 
@@ -154,6 +316,35 @@ export async function POST(req: NextRequest) {
       cibles.map((c) => c.segment_categorie),
       gagnesArray
     )
+
+    const reseauxActifs = (clientData?.reseaux_actifs ?? {}) as Record<string, boolean>
+    const reseauxActifsTexte = ['linkedin', 'facebook', 'instagram']
+      .filter((r) => reseauxActifs?.[r])
+      .join(', ')
+
+    const resumeProfil = `
+Profil cible : ${
+      clientData?.mode_ciblage === 'particulier'
+        ? `Particuliers — ${clientData?.profil_particulier || 'non précisé'}`
+        : `Entreprises — postes visés : ${postesCibles.join(', ') || 'non précisé'} ; secteur : ${
+            clientData?.secteur_activite || 'indifférent'
+          } ; taille : ${clientData?.taille_entreprise || 'indifférent'}${
+            clientData?.taille_min_salaries || clientData?.taille_max_salaries
+              ? ` (${clientData?.taille_min_salaries ?? '?'}-${clientData?.taille_max_salaries ?? '+'} salariés)`
+              : ''
+          }`
+    }
+Portée géographique : ${clientData?.portee_geographique || 'non précisée'}${
+      clientData?.portee_geographique === 'local' && clientData?.villes_ciblees
+        ? ` (${clientData.villes_ciblees})`
+        : ''
+    }
+Réseaux sociaux actifs : ${reseauxActifsTexte || 'aucun déclaré'}
+Blog actif : ${clientData?.blog_actif ? 'oui' : 'non'}
+Base email existante : ${clientData?.base_email_existante || 'non déclarée'}
+Budget publicitaire : ${clientData?.budget_publicitaire || 'non précisé'}
+Objectifs chiffrés : ${clientData?.objectif_chiffre || 'non précisés'}
+`.trim()
 
     const resumeCommercial = `
 Données du cabinet (taux de conversion = % de cibles gagnées) :
@@ -207,71 +398,91 @@ ${
       .filter(Boolean)
       .join('\n')
 
-    const prompt = `Tu es consultant en stratégie commerciale et marketing pour un cabinet de formation/conseil. Voici ses données :\n\n${resumeCommercial}\n\n${resumeMarketing}\n\nRéponds en français, sans jargon, EXACTEMENT dans ce format (rien d'autre) :\nCOMMERCIAL: <3 recommandations courtes séparées par un point, sur où concentrer les efforts de vente>\nMARKETING: <2-3 recommandations courtes séparées par un point, sur quels thèmes/formats de contenu prioriser>`
+    const prompt = `Tu es consultant en stratégie commerciale et marketing pour un cabinet de formation/conseil. Voici son profil de ciblage et ses données :\n\n${resumeProfil}\n\n${resumeCommercial}\n\n${resumeMarketing}\n\n${FORMAT_JSON_ATTENDU}`
 
     const geminiKey = process.env.GEMINI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     let texteBrut = ''
 
     try {
-      if (geminiKey) texteBrut = await genererTexteGemini(prompt, geminiKey)
-      else if (anthropicKey) texteBrut = await genererTexteAnthropic(prompt, anthropicKey)
+      if (geminiKey) texteBrut = await genererJsonGemini(prompt, geminiKey)
+      else if (anthropicKey) texteBrut = await genererJsonAnthropic(prompt, anthropicKey)
     } catch (err) {
       console.error('IA indisponible pour la strategie:', err)
     }
 
-    let recommandationCommerciale = ''
-    let recommandationMarketing = ''
+    const sortieSimulee = genererSortieSimulee({
+      meilleurCanal: parCanal[0] ?? null,
+      meilleurSegment: parSegment[0] ?? null,
+      themePrincipal: parThemeMarketing[0] ?? null,
+      postesCibles,
+      secteurActivite: clientData?.secteur_activite ?? null,
+      tailleEntreprise: clientData?.taille_entreprise ?? 'indifferent',
+      motsClesExpertise: clientData?.mots_cles_expertise ?? null,
+      ideesRecuesMarche: clientData?.idees_recues_marche ?? null,
+      positionnementSite: clientData?.positionnement_site ?? null,
+    })
 
-    const matchCommercial = texteBrut.match(/COMMERCIAL:\s*([\s\S]*?)(?:MARKETING:|$)/i)
-    const matchMarketing = texteBrut.match(/MARKETING:\s*([\s\S]*)/i)
-    if (matchCommercial) recommandationCommerciale = matchCommercial[1].trim()
-    if (matchMarketing) recommandationMarketing = matchMarketing[1].trim()
+    const parsedIA = texteBrut ? parserSortieIA(texteBrut) : null
 
-    if (!recommandationCommerciale) {
-      const meilleurCanal = parCanal[0]
-      const meilleurSegment = parSegment[0]
-      recommandationCommerciale = [
-        meilleurCanal
-          ? `Ton canal le plus efficace est "${meilleurCanal.canal}" (${meilleurCanal.taux}% de conversion) — concentre ton budget de sourcing dessus.`
-          : 'Pas assez de données par canal pour recommander une priorité.',
-        meilleurSegment
-          ? `Le segment "${meilleurSegment.canal}" convertit le mieux (${meilleurSegment.taux}%) — adapte ton message pour ce type de besoin.`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(' ')
-    }
-
-    if (!recommandationMarketing) {
-      const themePrincipal = parThemeMarketing[0]
-      recommandationMarketing = themePrincipal
-        ? `Le thème "${themePrincipal.canal}" revient le plus souvent dans tes suggestions — priorise-le dans tes prochaines publications.`
-        : 'Pas encore assez de contenu marketing généré pour dégager une tendance.'
+    const sortie: SortieStrategie = {
+      commercial: parsedIA?.commercial || sortieSimulee.commercial,
+      marketing: parsedIA?.marketing || sortieSimulee.marketing,
+      filtresRecommandes: parsedIA?.filtresRecommandes || sortieSimulee.filtresRecommandes,
+      scriptAppel: parsedIA?.scriptAppel || sortieSimulee.scriptAppel,
+      scriptLinkedin: parsedIA?.scriptLinkedin || sortieSimulee.scriptLinkedin,
+      guideQualification:
+        parsedIA?.guideQualification && parsedIA.guideQualification.length > 0
+          ? parsedIA.guideQualification
+          : sortieSimulee.guideQualification,
+      ligneEditoriale: parsedIA?.ligneEditoriale || sortieSimulee.ligneEditoriale,
+      leadMagnets:
+        parsedIA?.leadMagnets && parsedIA.leadMagnets.length > 0 ? parsedIA.leadMagnets : sortieSimulee.leadMagnets,
     }
 
     const { data: historiquePrecedent } = await supabaseAdmin
       .from('strategies_generees')
-      .select('id, recommandation_commerciale, recommandation_marketing, created_at')
+      .select(
+        'id, recommandation_commerciale, recommandation_marketing, script_appel, script_linkedin, ligne_editoriale, created_at'
+      )
       .eq('client_id', clientUser.client_id)
       .order('created_at', { ascending: false })
       .limit(10)
 
     await supabaseAdmin.from('strategies_generees').insert({
       client_id: clientUser.client_id,
-      recommandation_commerciale: recommandationCommerciale,
-      recommandation_marketing: recommandationMarketing,
+      recommandation_commerciale: sortie.commercial,
+      recommandation_marketing: sortie.marketing,
       stats_json: { parCanal, parSegment, parThemeMarketing },
+      filtres_recommandes: sortie.filtresRecommandes,
+      script_appel: sortie.scriptAppel,
+      script_linkedin: sortie.scriptLinkedin,
+      guide_qualification: sortie.guideQualification,
+      ligne_editoriale: sortie.ligneEditoriale,
+      lead_magnets: sortie.leadMagnets,
+      profil_utilise_json: {
+        mode_ciblage: clientData?.mode_ciblage,
+        postes_cibles: postesCibles,
+        secteur_activite: clientData?.secteur_activite,
+        taille_entreprise: clientData?.taille_entreprise,
+        portee_geographique: clientData?.portee_geographique,
+      },
     })
 
     return NextResponse.json({
       succes: true,
-      recommandationCommerciale,
-      recommandationMarketing,
+      recommandationCommerciale: sortie.commercial,
+      recommandationMarketing: sortie.marketing,
       parCanal,
       parSegment,
       parThemeMarketing,
       historique: historiquePrecedent ?? [],
+      filtresRecommandes: sortie.filtresRecommandes,
+      scriptAppel: sortie.scriptAppel,
+      scriptLinkedin: sortie.scriptLinkedin,
+      guideQualification: sortie.guideQualification,
+      ligneEditoriale: sortie.ligneEditoriale,
+      leadMagnets: sortie.leadMagnets,
     })
   } catch (err) {
     console.error('Erreur /api/strategie/generer:', err)

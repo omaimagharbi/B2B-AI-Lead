@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { envoyerEmail } from '@/lib/notifications'
 
 // Meme verification admin que le reste de /api/admin/clients
 async function estAdmin(req: NextRequest): Promise<boolean> {
@@ -77,11 +78,37 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle()
 
+    // Retour terrain : apres "Donner acces", l'admin devait transmettre le
+    // mot de passe temporaire au client manuellement (aucune notification
+    // automatique). On envoie maintenant un email directement au client -
+    // best-effort : si Resend echoue (pas configure, etc.), la creation du
+    // compte n'est pas bloquee pour autant, l'admin peut toujours transmettre
+    // le mot de passe affiche a l'ecran comme avant.
+    let emailEnvoye = true
+    try {
+      const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')
+      await envoyerEmail(
+        email.trim(),
+        `Bonjour,\n\n` +
+          `Votre accès à la plateforme "${nom_entreprise.trim()}" vient d'être activé.\n\n` +
+          `Email de connexion : ${email.trim()}\n` +
+          `Mot de passe temporaire : ${motDePasseTemporaire}\n\n` +
+          `Connectez-vous ici : ${siteUrl}/auth?mode=connexion\n\n` +
+          `Nous vous recommandons de changer ce mot de passe après votre première connexion.`,
+        null,
+        `Votre accès est activé — ${nom_entreprise.trim()}`
+      )
+    } catch (err) {
+      console.error('Email de bienvenue non envoye (compte cree quand meme):', err)
+      emailEnvoye = false
+    }
+
     return NextResponse.json({
       succes: true,
       email: email.trim(),
       motDePasseTemporaire,
       clientId: nouveauClient?.id ?? null,
+      emailEnvoye,
     })
   } catch (err) {
     console.error('Erreur /api/admin/clients/creer:', err)
