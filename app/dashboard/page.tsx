@@ -84,6 +84,7 @@ type Target = {
   reponse_sentiment?: 'positive' | 'negative' | 'neutre' | null
   reponse_a_traiter?: boolean
   motif_refus?: string | null
+  dernier_canal_contact?: string | null
 }
 
 type DiagnosticEnAttente = {
@@ -231,7 +232,8 @@ export default function DashboardPage() {
     const d = new Date()
     return new Date(d.getFullYear(), d.getMonth(), 1)
   })
-  const [vueCalendrier, setVueCalendrier] = useState<'mois' | 'semaine'>('mois')
+  const [vueCalendrier, setVueCalendrier] = useState<'mois' | 'semaine' | 'jour'>('mois')
+  const [jourAffiche, setJourAffiche] = useState(() => new Date())
   const [semaineAffichee, setSemaineAffichee] = useState(() => {
     const d = new Date()
     const decalage = (d.getDay() + 6) % 7 // lundi en premier
@@ -443,7 +445,7 @@ export default function DashboardPage() {
     const { data: targetsData } = await supabase
       .from('targets')
       .select(
-        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, etape_pipeline, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a, signal_ia, reponse_sentiment, reponse_a_traiter, motif_refus'
+        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, etape_pipeline, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a, signal_ia, reponse_sentiment, reponse_a_traiter, motif_refus, dernier_canal_contact'
       )
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
@@ -514,6 +516,7 @@ export default function DashboardPage() {
       .from('client_users')
       .select('id, nom_complet, role, telephone, onglets_masques, photo_url')
       .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
     setMembresEquipe((membresData ?? []) as typeof membresEquipe)
 
     // Statistiques de performance : taux de reponse et de conversion
@@ -1165,6 +1168,23 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ongletActif])
 
+  // Retour terrain : "les messages n'arrivent pas à temps, il faut rafraîchir".
+  // Pas de vraie synchro temps reel (Supabase Realtime demanderait d'activer
+  // une publication dediee) - on se contente d'un polling leger toutes les
+  // 5 secondes tant que l'onglet Collaboration est ouvert, ce qui suffit
+  // largement pour une messagerie d'equipe interne a faible volume.
+  useEffect(() => {
+    if (ongletActif !== 'collaboration') return
+    const intervalle = setInterval(async () => {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch('/api/collaboration/messages', { headers: { Authorization: `Bearer ${token}` } })
+      const data = await res.json()
+      if (res.ok) setMessagesEquipe(data.messages ?? [])
+    }, 5000)
+    return () => clearInterval(intervalle)
+  }, [ongletActif])
+
   useEffect(() => {
     if (monClientUserId && !collaborationChargee) {
       chargerCollaboration()
@@ -1515,7 +1535,9 @@ export default function DashboardPage() {
         setInviteMessage(`❌ ${data.error ?? "Erreur lors de l'invitation"}`)
       } else {
         setInviteMessage(
-          `✅ Compte créé pour ${inviteEmail} — mot de passe temporaire : ${data.motDePasseTemporaire} (transmets-le toi-même, il n'y a pas d'email envoyé)`
+          data.emailEnvoye
+            ? `✅ Compte créé pour ${inviteEmail} — ses identifiants lui ont été envoyés automatiquement par email.`
+            : `✅ Compte créé pour ${inviteEmail}, mais l'email automatique a échoué — transmets-lui toi-même le mot de passe temporaire : ${data.motDePasseTemporaire}`
         )
         setInviteEmail('')
         setInviteNom('')
@@ -2626,7 +2648,19 @@ export default function DashboardPage() {
                               <span className="text-slate-400 font-normal">
                                 — {target.entreprise_ou_objectif}
                               </span>
-                            )}
+                            )}{' '}
+                            <button
+                              onClick={() =>
+                                cibleEditionOuverte === target.id
+                                  ? setCibleEditionOuverte(null)
+                                  : ouvrirEditionCible(target)
+                              }
+                              disabled={estPriseParAutre && !peutSuperviser}
+                              className="text-xs text-slate-400 hover:text-white disabled:opacity-40"
+                              title="Modifier"
+                            >
+                              ✏️
+                            </button>
                           </p>
                           <p className="text-slate-400 text-sm flex items-center flex-wrap gap-x-1">
                             <span>{target.telephone ?? '—'} · {target.email ?? '—'} ·</span>
@@ -2734,6 +2768,16 @@ export default function DashboardPage() {
                             >
                               📝 Notes ({(notesCibles[target.id] ?? []).length})
                             </button>
+                            {target.dernier_canal_contact && (
+                              <span className="text-xs text-slate-500">
+                                ·{' '}
+                                {target.dernier_canal_contact === 'whatsapp'
+                                  ? '📱 Contactée par WhatsApp'
+                                  : target.dernier_canal_contact === 'linkedin'
+                                  ? '🔗 Contactée via LinkedIn'
+                                  : '📧 Contactée par email'}
+                              </span>
+                            )}
                           </div>
 
                           {target.etape_pipeline === 'a_recontacter' && !target.motif_refus && (
@@ -2886,6 +2930,15 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        {target.statut === 'nouveau' && (
+                          <button
+                            onClick={() => envoyerMessage(target.id)}
+                            disabled={envoiEnCours === target.id}
+                            className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                          >
+                            {envoiEnCours === target.id ? 'Envoi...' : '✉️ Premier contact'}
+                          </button>
+                        )}
                         <button
                           onClick={() => envoyerDiagnostic(target.id)}
                           disabled={
@@ -2903,15 +2956,6 @@ export default function DashboardPage() {
                         </button>
                         {target.statut === 'nouveau' && (
                           <button
-                            onClick={() => envoyerMessage(target.id)}
-                            disabled={envoiEnCours === target.id}
-                            className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
-                          >
-                            {envoiEnCours === target.id ? 'Envoi...' : '✉️ Message pro'}
-                          </button>
-                        )}
-                        {target.statut === 'nouveau' && (
-                          <button
                             onClick={() => preparerLinkedin(target.id)}
                             disabled={envoiEnCours === target.id}
                             className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
@@ -2919,17 +2963,6 @@ export default function DashboardPage() {
                             {envoiEnCours === target.id ? '...' : '🔗 LinkedIn'}
                           </button>
                         )}
-                        <button
-                          onClick={() =>
-                            cibleEditionOuverte === target.id
-                              ? setCibleEditionOuverte(null)
-                              : ouvrirEditionCible(target)
-                          }
-                          disabled={estPriseParAutre && !peutSuperviser}
-                          className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
-                        >
-                          ✏️ Modifier
-                        </button>
                       </div>
                     </div>
                       )
@@ -3439,7 +3472,7 @@ export default function DashboardPage() {
 
             <div className="pt-2">
               <a href="/admin" className="text-xs text-slate-600 hover:text-slate-400 underline">
-                Vous êtes Braise ? Accès administration plateforme →
+                Vous êtes PiloBrain ? Accès administration plateforme →
               </a>
             </div>
 
@@ -4828,17 +4861,30 @@ export default function DashboardPage() {
                     Pas encore de message — écrivez le premier ci-dessous.
                   </p>
                 )}
-                {messagesEquipe.map((m) => (
-                  <div key={m.id} className="text-sm">
-                    <span className="font-semibold text-accent">
-                      {m.client_users?.nom_complet ?? 'Membre'}
-                    </span>{' '}
-                    <span className="text-slate-500 text-xs">
-                      {new Date(m.created_at).toLocaleString('fr-FR')}
-                    </span>
-                    <p className="text-slate-300">{m.contenu}</p>
-                  </div>
-                ))}
+                {messagesEquipe.map((m) => {
+                  const estMoi = m.auteur_id === monClientUserId
+                  return (
+                    <div key={m.id} className={`flex ${estMoi ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
+                          estMoi
+                            ? 'bg-accent text-slate-950 rounded-br-sm'
+                            : 'bg-slate-800 text-slate-200 rounded-bl-sm'
+                        }`}
+                      >
+                        {!estMoi && (
+                          <p className="font-semibold text-accent text-xs mb-0.5">
+                            {m.client_users?.nom_complet ?? 'Membre'}
+                          </p>
+                        )}
+                        <p>{m.contenu}</p>
+                        <p className={`text-[10px] mt-0.5 ${estMoi ? 'text-slate-950/60' : 'text-slate-500'}`}>
+                          {new Date(m.created_at).toLocaleString('fr-FR')}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
               <div className="flex gap-2">
                 <input
@@ -5100,9 +5146,15 @@ export default function DashboardPage() {
                   onClick={() =>
                     vueCalendrier === 'mois'
                       ? setMoisAffiche((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
-                      : setSemaineAffichee((s) => {
+                      : vueCalendrier === 'semaine'
+                      ? setSemaineAffichee((s) => {
                           const d = new Date(s)
                           d.setDate(d.getDate() - 7)
+                          return d
+                        })
+                      : setJourAffiche((j) => {
+                          const d = new Date(j)
+                          d.setDate(d.getDate() - 1)
                           return d
                         })
                   }
@@ -5114,7 +5166,8 @@ export default function DashboardPage() {
                   <p className="font-semibold capitalize">
                     {vueCalendrier === 'mois'
                       ? moisAffiche.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
-                      : (() => {
+                      : vueCalendrier === 'semaine'
+                      ? (() => {
                           const jours = genererJoursSemaine(semaineAffichee)
                           const debut = jours[0]
                           const fin = jours[6]
@@ -5122,7 +5175,13 @@ export default function DashboardPage() {
                             'fr-FR',
                             { day: 'numeric', month: 'short', year: 'numeric' }
                           )}`
-                        })()}
+                        })()
+                      : jourAffiche.toLocaleDateString('fr-FR', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })}
                   </p>
                   <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
                     <button
@@ -5137,15 +5196,27 @@ export default function DashboardPage() {
                     >
                       Semaine
                     </button>
+                    <button
+                      onClick={() => setVueCalendrier('jour')}
+                      className={`px-3 py-1 ${vueCalendrier === 'jour' ? 'bg-accent text-slate-950 font-semibold' : 'bg-slate-950 text-slate-400'}`}
+                    >
+                      Jour
+                    </button>
                   </div>
                 </div>
                 <button
                   onClick={() =>
                     vueCalendrier === 'mois'
                       ? setMoisAffiche((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
-                      : setSemaineAffichee((s) => {
+                      : vueCalendrier === 'semaine'
+                      ? setSemaineAffichee((s) => {
                           const d = new Date(s)
                           d.setDate(d.getDate() + 7)
+                          return d
+                        })
+                      : setJourAffiche((j) => {
+                          const d = new Date(j)
+                          d.setDate(d.getDate() + 1)
                           return d
                         })
                   }
@@ -5208,7 +5279,7 @@ export default function DashboardPage() {
                     })}
                   </div>
                 </>
-              ) : (
+              ) : vueCalendrier === 'semaine' ? (
                 <div className="overflow-x-auto">
                   <div className="grid grid-cols-[50px_repeat(7,minmax(110px,1fr))] gap-px min-w-[820px]">
                     {/* En-têtes des jours */}
@@ -5290,6 +5361,67 @@ export default function DashboardPage() {
                         })}
                       </Fragment>
                     ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="max-w-md">
+                  {/* Entrées sans heure ("toute la journée") */}
+                  {(() => {
+                    const dateStr = formatDateLocale(jourAffiche)
+                    const entreesSansHeure = calendrier.filter(
+                      (c) => c.date_evenement === dateStr && !c.heure_debut
+                    )
+                    return entreesSansHeure.length > 0 ? (
+                      <div className="mb-2 space-y-1">
+                        <p className="text-[10px] text-slate-600">journée</p>
+                        {entreesSansHeure.map((c) => (
+                          <div
+                            key={c.id}
+                            title={c.titre}
+                            className="truncate rounded bg-slate-800 px-2 py-1 text-xs text-slate-200"
+                          >
+                            {c.type === 'rdv' ? '📞' : c.type === 'evenement' ? '🎪' : c.type === 'appel_offre' ? '📋' : '📌'} {c.titre}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
+                  <div className="grid grid-cols-[50px_1fr] gap-px">
+                    {HEURES_AFFICHEES.map((heure) => {
+                      const dateStr = formatDateLocale(jourAffiche)
+                      const entreesHeure = calendrier.filter((c) => {
+                        if (c.date_evenement !== dateStr || !c.heure_debut) return false
+                        return parseInt(c.heure_debut.slice(0, 2), 10) === heure
+                      })
+                      return (
+                        <Fragment key={`h-${heure}`}>
+                          <div className="text-[10px] text-slate-600 text-right pr-1 pt-1">
+                            {String(heure).padStart(2, '0')}h
+                          </div>
+                          <div
+                            onClick={() => {
+                              setJourSelectionne(dateStr)
+                              setNouvelleEntree((prev) => ({
+                                ...prev,
+                                date_evenement: dateStr,
+                                heure_debut: `${String(heure).padStart(2, '0')}:00`,
+                              }))
+                            }}
+                            className="border border-slate-800 bg-slate-950 hover:bg-slate-900 cursor-pointer p-1 space-y-0.5 min-h-[36px]"
+                          >
+                            {entreesHeure.map((c) => (
+                              <div
+                                key={c.id}
+                                title={`${c.heure_debut?.slice(0, 5)} · ${c.titre}`}
+                                className="truncate rounded bg-accent/20 border-l-2 border-accent px-2 py-1 text-xs text-white"
+                              >
+                                {c.heure_debut?.slice(0, 5)} {c.titre}
+                              </div>
+                            ))}
+                          </div>
+                        </Fragment>
+                      )
+                    })}
                   </div>
                 </div>
               )}

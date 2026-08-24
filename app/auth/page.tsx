@@ -15,6 +15,8 @@ function AuthForm() {
   const [mode, setMode] = useState<'inscription' | 'connexion' | 'mot_de_passe_oublie'>(
     searchParams.get('mode') === 'connexion' ? 'connexion' : 'inscription'
   )
+  const [etapeMdpOublie, setEtapeMdpOublie] = useState<'email' | 'code'>('email')
+  const [codeVerification, setCodeVerification] = useState('')
 
   // ----- Connexion / mot de passe oublie (inchange) -----
   const [email, setEmail] = useState('')
@@ -28,6 +30,7 @@ function AuthForm() {
   const [nomEntreprise, setNomEntreprise] = useState('')
   const [emailEntreprise, setEmailEntreprise] = useState('')
   const [telephone, setTelephone] = useState('')
+  const [indicatifTelephone, setIndicatifTelephone] = useState('+216')
   const [logoFichier, setLogoFichier] = useState<File | null>(null)
   const [logoApercu, setLogoApercu] = useState<string | null>(null)
   const [glisserSurvol, setGlisserSurvol] = useState(false)
@@ -157,7 +160,7 @@ function AuthForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          telephone,
+          telephone: telephone.trim() ? `${indicatifTelephone}${telephone.trim()}` : telephone,
           logo_url: logoUrl,
           site_web: siteWeb || null,
           facebook_url: facebookUrl || null,
@@ -216,10 +219,27 @@ function AuthForm() {
 
     try {
       if (mode === 'mot_de_passe_oublie') {
-        const res = await fetch('/api/auth/reset-password-direct', {
+        if (etapeMdpOublie === 'email') {
+          const res = await fetch('/api/auth/mot-de-passe-oublie/demander', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          })
+          const data = await res.json()
+          if (!res.ok) {
+            setErreur(data.error ?? "Erreur lors de l'envoi du code")
+          } else {
+            setMessageSucces('Code envoyé — vérifie ta boîte mail (et les spams).')
+            setEtapeMdpOublie('code')
+          }
+          setChargement(false)
+          return
+        }
+
+        const res = await fetch('/api/auth/mot-de-passe-oublie/confirmer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, nouveauMotDePasse }),
+          body: JSON.stringify({ email, code: codeVerification, nouveauMotDePasse }),
         })
         const data = await res.json()
         if (!res.ok) {
@@ -227,6 +247,8 @@ function AuthForm() {
         } else {
           setMessageSucces('Mot de passe mis à jour ! Tu peux te connecter.')
           setNouveauMotDePasse('')
+          setCodeVerification('')
+          setEtapeMdpOublie('email')
           setMode('connexion')
         }
         setChargement(false)
@@ -385,13 +407,27 @@ function AuthForm() {
                   type="email"
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
-                <input
-                  value={telephone}
-                  onChange={(e) => setTelephone(e.target.value)}
-                  placeholder="Téléphone / WhatsApp pro"
-                  type="tel"
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
-                />
+                <div className="flex gap-2">
+                  <select
+                    value={indicatifTelephone}
+                    onChange={(e) => setIndicatifTelephone(e.target.value)}
+                    className="rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
+                  >
+                    <option value="+216">🇹🇳 +216</option>
+                    <option value="+971">🇦🇪 +971</option>
+                    <option value="+966">🇸🇦 +966</option>
+                    <option value="+974">🇶🇦 +974</option>
+                    <option value="+33">🇫🇷 +33</option>
+                    <option value="">Autre</option>
+                  </select>
+                  <input
+                    value={telephone}
+                    onChange={(e) => setTelephone(e.target.value)}
+                    placeholder="Téléphone / WhatsApp pro"
+                    type="tel"
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
+                  />
+                </div>
                 <label
                   onDragOver={(e) => {
                     e.preventDefault()
@@ -578,15 +614,23 @@ function AuthForm() {
                 className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
               />
             )}
-            {mode === 'mot_de_passe_oublie' && (
-              <input
-                value={nouveauMotDePasse}
-                onChange={(e) => setNouveauMotDePasse(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && soumettreConnexion()}
-                placeholder="Nouveau mot de passe"
-                type="password"
-                className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
-              />
+            {mode === 'mot_de_passe_oublie' && etapeMdpOublie === 'code' && (
+              <>
+                <input
+                  value={codeVerification}
+                  onChange={(e) => setCodeVerification(e.target.value)}
+                  placeholder="Code reçu par email (6 chiffres)"
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
+                />
+                <input
+                  value={nouveauMotDePasse}
+                  onChange={(e) => setNouveauMotDePasse(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && soumettreConnexion()}
+                  placeholder="Nouveau mot de passe"
+                  type="password"
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
+                />
+              </>
             )}
             <button
               onClick={soumettreConnexion}
@@ -594,7 +638,9 @@ function AuthForm() {
                 chargement ||
                 !email ||
                 (mode === 'connexion' && !motDePasse) ||
-                (mode === 'mot_de_passe_oublie' && nouveauMotDePasse.length < 6)
+                (mode === 'mot_de_passe_oublie' &&
+                  etapeMdpOublie === 'code' &&
+                  (codeVerification.length < 4 || nouveauMotDePasse.length < 6))
               }
               className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40 hover:opacity-90 transition"
             >
@@ -602,6 +648,8 @@ function AuthForm() {
                 ? 'Chargement...'
                 : mode === 'connexion'
                 ? 'Se connecter'
+                : mode === 'mot_de_passe_oublie' && etapeMdpOublie === 'email'
+                ? 'Envoyer le code'
                 : 'Mettre à jour le mot de passe'}
             </button>
           </div>
@@ -612,6 +660,7 @@ function AuthForm() {
             <button
               onClick={() => {
                 setMode('mot_de_passe_oublie')
+                setEtapeMdpOublie('email')
                 setErreur(null)
                 setMessageSucces(null)
               }}
@@ -627,6 +676,8 @@ function AuthForm() {
             <button
               onClick={() => {
                 setMode('connexion')
+                setEtapeMdpOublie('email')
+                setCodeVerification('')
                 setErreur(null)
                 setMessageSucces(null)
               }}

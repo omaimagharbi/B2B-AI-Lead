@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
       date_envoi: new Date().toISOString(),
     })
 
-    await supabaseAdmin.from('targets').update({ statut: 'contacte' }).eq('id', target.id)
+    await supabaseAdmin.from('targets').update({ statut: 'contacte', dernier_canal_contact: canal }).eq('id', target.id)
 
     return NextResponse.json({ succes: true, canal, type_envoi: typeEnvoi, message })
   } catch (err) {

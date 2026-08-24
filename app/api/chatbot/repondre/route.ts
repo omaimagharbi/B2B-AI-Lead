@@ -52,9 +52,13 @@ export async function POST(req: NextRequest) {
 
   const manuel = config?.manuel_utilisation ?? ''
   if (!manuel.trim()) {
+    const emailSupport = process.env.SUPPORT_EMAIL || (process.env.ADMIN_EMAILS ?? '').split(',')[0]?.trim()
     return NextResponse.json({
       reponse:
-        "Le manuel d'utilisation n'a pas encore été configuré par l'équipe PiloBrain. Contacte le support directement en attendant.",
+        "Le manuel d'utilisation n'a pas encore été configuré par l'équipe PiloBrain." +
+        (emailSupport
+          ? ` Contacte directement le support à ${emailSupport} en attendant.`
+          : ' Contacte directement le support en attendant.'),
     })
   }
 

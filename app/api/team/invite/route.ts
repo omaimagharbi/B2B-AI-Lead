@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { envoyerEmail } from '@/lib/notifications'
 
 // Genere un mot de passe temporaire simple (lettres + chiffres, sans caracteres
 // ambigus comme 0/O ou 1/l) que le cabinet transmet lui-meme a son collegue.
@@ -73,7 +74,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: createError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ succes: true, motDePasseTemporaire })
+    // Email automatique au nouveau membre (best-effort, ne bloque pas la creation).
+    let emailEnvoye = true
+    try {
+      const { data: clientData } = await supabaseAdmin
+        .from('clients')
+        .select('nom_entreprise, logo_url')
+        .eq('id', clientUser.client_id)
+        .single()
+      const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')
+      const nomCabinet = clientData?.nom_entreprise ?? 'votre cabinet'
+      const roleLisible = roleFinal === 'directeur_commercial' ? 'Directeur commercial' : 'Commercial'
+      await envoyerEmail(
+        email,
+        `Bonjour,\n\n` +
+          `Un compte vient d'être créé pour vous sur la plateforme de ${nomCabinet} (rôle : ${roleLisible}).\n\n` +
+          `Email de connexion : ${email}\n` +
+          `Mot de passe temporaire : ${motDePasseTemporaire}\n\n` +
+          `Connectez-vous ici : ${siteUrl}/auth?mode=connexion\n\n` +
+          `Nous vous recommandons de changer ce mot de passe après votre première connexion.`,
+        clientData?.logo_url ?? null,
+        `Vos identifiants — ${nomCabinet}`
+      )
+    } catch (err) {
+      console.error('Email au nouveau membre non envoye (compte cree quand meme):', err)
+      emailEnvoye = false
+    }
+
+    return NextResponse.json({ succes: true, motDePasseTemporaire, emailEnvoye })
   } catch (err) {
     console.error('Erreur /api/team/invite:', err)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
