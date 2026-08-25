@@ -599,6 +599,12 @@ export default function DashboardPage() {
         setClient(clientData as unknown as Client)
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
         const cd = clientData as unknown as Client
+        setPresenceDigitale({
+          site_web: cd.site_web ?? '',
+          facebook_url: cd.facebook_url ?? '',
+          instagram_url: cd.instagram_url ?? '',
+          linkedin_url: cd.linkedin_url ?? '',
+        })
         setInputsStrategiques({
           taux_closing_historique: cd.taux_closing_historique?.toString() ?? '',
           mots_cles_expertise: cd.mots_cles_expertise ?? '',
@@ -1206,7 +1212,55 @@ export default function DashboardPage() {
     setClient({ ...client, whatsapp_equipe: nouveaux })
   }
 
+  // Retour terrain : site_web/facebook_url/instagram_url/linkedin_url n'etaient
+  // modifiables qu'une seule fois, pendant l'assistant de premiere connexion -
+  // aucun moyen de les ajouter/corriger ensuite. On ajoute une edition
+  // permanente dans Equipe & Parametres.
+  const [presenceDigitale, setPresenceDigitale] = useState({
+    site_web: '',
+    facebook_url: '',
+    instagram_url: '',
+    linkedin_url: '',
+  })
+  const [presenceDigitaleEnCours, setPresenceDigitaleEnCours] = useState(false)
+  const [presenceDigitaleMessage, setPresenceDigitaleMessage] = useState<string | null>(null)
+
+  const enregistrerPresenceDigitale = async () => {
+    if (!client) return
+    setPresenceDigitaleEnCours(true)
+    setPresenceDigitaleMessage(null)
+    const maj = {
+      site_web: presenceDigitale.site_web.trim() || null,
+      facebook_url: presenceDigitale.facebook_url.trim() || null,
+      instagram_url: presenceDigitale.instagram_url.trim() || null,
+      linkedin_url: presenceDigitale.linkedin_url.trim() || null,
+    }
+    const { error } = await supabase.from('clients').update(maj).eq('id', client.id)
+    if (error) {
+      setPresenceDigitaleMessage("Erreur lors de l'enregistrement.")
+    } else {
+      setClient({ ...client, ...maj })
+      setPresenceDigitaleMessage('✅ Enregistré.')
+    }
+    setPresenceDigitaleEnCours(false)
+  }
+
   const [uploadPhotoEnCours, setUploadPhotoEnCours] = useState<string | null>(null)
+  const [lienBadgeCopie, setLienBadgeCopie] = useState(false)
+
+  // navigator.clipboard.writeText() peut echouer silencieusement (contexte
+  // non securise, permission refusee, iframe...) sans jamais le signaler a
+  // l'utilisateur - "le bouton copier le lien ne fonctionne pas". On ajoute
+  // un retour visuel + un repli manuel si l'API echoue.
+  const copierLienBadge = async (lien: string) => {
+    try {
+      await navigator.clipboard.writeText(lien)
+      setLienBadgeCopie(true)
+      setTimeout(() => setLienBadgeCopie(false), 2500)
+    } catch {
+      alert("La copie automatique a échoué (autorisation refusée par le navigateur). Sélectionne le texte dans le champ ci-dessus et copie-le manuellement (Ctrl+C).")
+    }
+  }
 
   const uploaderPhotoProfil = async (membreId: string, fichier: File) => {
     if (!client) return
@@ -1716,20 +1770,51 @@ export default function DashboardPage() {
       })
       const data = await res.json()
 
-      if (res.ok && data.champs) {
-        setNouvelleOffre({
-          nom: data.champs.nom ?? '',
-          description: data.champs.description ?? '',
-          prix: data.champs.prix ? String(data.champs.prix) : '',
-          devise: 'TND',
-          duree: data.champs.duree ?? '',
-          public_cible: data.champs.public_cible ?? '',
-          mode_facturation: '',
-          thematique: data.champs.thematique ?? '',
-          format: data.champs.format ?? '',
-          mode_delivrance: data.champs.mode_delivrance ?? '',
-          usp: data.champs.usp ?? '',
-        })
+      if (res.ok && Array.isArray(data.offres) && data.offres.length > 0) {
+        if (data.offres.length === 1) {
+          // Une seule offre detectee : on pre-remplit le formulaire pour
+          // relecture avant ajout, comme avant.
+          const champs = data.offres[0]
+          setNouvelleOffre({
+            nom: champs.nom ?? '',
+            description: champs.description ?? '',
+            prix: champs.prix ? String(champs.prix) : '',
+            devise: 'TND',
+            duree: champs.duree ?? '',
+            public_cible: champs.public_cible ?? '',
+            mode_facturation: '',
+            thematique: champs.thematique ?? '',
+            format: champs.format ?? '',
+            mode_delivrance: champs.mode_delivrance ?? '',
+            usp: champs.usp ?? '',
+          })
+        } else {
+          // Plusieurs offres detectees dans un seul document (vrai catalogue) :
+          // on les ajoute toutes directement, plutot que de forcer une saisie
+          // manuelle offre par offre.
+          const lignes = data.offres.map((champs: Record<string, unknown>) => ({
+            client_id: client.id,
+            nom: (champs.nom as string) ?? 'Offre sans nom',
+            description: (champs.description as string) ?? null,
+            prix: champs.prix ? Number(champs.prix) : null,
+            devise: 'TND',
+            duree: (champs.duree as string) ?? null,
+            public_cible: (champs.public_cible as string) ?? null,
+            thematique: (champs.thematique as string) ?? null,
+            format: (champs.format as string) ?? null,
+            mode_delivrance: (champs.mode_delivrance as string) ?? null,
+            usp: (champs.usp as string) ?? null,
+            pdf_url: urlData.publicUrl,
+          }))
+          const { data: inserees } = await supabase
+            .from('catalogue_offres')
+            .insert(lignes)
+            .select(
+              'id, nom, description, prix, devise, duree, public_cible, pdf_url, mode_facturation, thematique, format, mode_delivrance, usp'
+            )
+          if (inserees) setCatalogue((prev) => [...(inserees as OffreCatalogue[]), ...prev])
+          alert(`${data.offres.length} offres importées automatiquement depuis le catalogue.`)
+        }
       } else {
         alert(
           "Le fichier a bien été attaché, mais l'extraction automatique a échoué (" +
@@ -3263,6 +3348,50 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+              <h3 className="text-sm font-semibold">🌐 Présence digitale (site web & réseaux)</h3>
+              <p className="text-xs text-slate-500">
+                Utilisé pour l'analyse auto du positionnement et le scraping du cabinet. Modifiable à
+                tout moment, pas seulement à l'inscription.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <input
+                  value={presenceDigitale.site_web}
+                  onChange={(e) => setPresenceDigitale({ ...presenceDigitale, site_web: e.target.value })}
+                  placeholder="Site web (https://...)"
+                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <input
+                  value={presenceDigitale.linkedin_url}
+                  onChange={(e) => setPresenceDigitale({ ...presenceDigitale, linkedin_url: e.target.value })}
+                  placeholder="Page LinkedIn entreprise"
+                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <input
+                  value={presenceDigitale.facebook_url}
+                  onChange={(e) => setPresenceDigitale({ ...presenceDigitale, facebook_url: e.target.value })}
+                  placeholder="Page Facebook"
+                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <input
+                  value={presenceDigitale.instagram_url}
+                  onChange={(e) => setPresenceDigitale({ ...presenceDigitale, instagram_url: e.target.value })}
+                  placeholder="Instagram"
+                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+              </div>
+              <button
+                onClick={enregistrerPresenceDigitale}
+                disabled={presenceDigitaleEnCours}
+                className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
+              >
+                {presenceDigitaleEnCours ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+              {presenceDigitaleMessage && (
+                <p className="text-xs text-slate-400">{presenceDigitaleMessage}</p>
+              )}
+            </div>
+
             <div className="space-y-2">
               {membresEquipe.map((m) => {
                 const estProprietaire = m.role === 'proprietaire' || m.role === 'admin'
@@ -4439,14 +4568,14 @@ export default function DashboardPage() {
                           onFocus={(e) => e.target.select()}
                         />
                         <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(
+                          onClick={() =>
+                            copierLienBadge(
                               `${window.location.origin}/api/marketing/badge?token=${client.token_badge_public}`
                             )
-                          }}
+                          }
                           className="text-xs px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 shrink-0"
                         >
-                          Copier le lien
+                          {lienBadgeCopie ? '✅ Copié !' : 'Copier le lien'}
                         </button>
                       </div>
                     </>

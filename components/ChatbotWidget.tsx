@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
 type MessageChat = { role: 'user' | 'bot'; texte: string }
@@ -10,8 +10,35 @@ export default function ChatbotWidget() {
   const [messages, setMessages] = useState<MessageChat[]>([
     { role: 'bot', texte: '👋 Bonjour ! Pose-moi une question sur l\'utilisation de la plateforme.' },
   ])
+  const [historiqueCharge, setHistoriqueCharge] = useState(false)
   const [saisie, setSaisie] = useState('')
   const [enCours, setEnCours] = useState(false)
+
+  // Les discussions sont desormais enregistrees cote serveur - on recharge
+  // l'historique a la premiere ouverture du widget, pour qu'il persiste
+  // entre deux visites/rafraichissements de page.
+  useEffect(() => {
+    if (!ouvert || historiqueCharge) return
+    ;(async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        const res = await fetch('/api/chatbot/repondre', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        if (res.ok && Array.isArray(data.messages) && data.messages.length > 0) {
+          setMessages(data.messages.map((m: { role: 'user' | 'bot'; texte: string }) => ({
+            role: m.role,
+            texte: m.texte,
+          })))
+        }
+      } catch {
+        // best-effort - on garde le message d'accueil par defaut si ca echoue
+      }
+      setHistoriqueCharge(true)
+    })()
+  }, [ouvert, historiqueCharge])
 
   const envoyer = async () => {
     const question = saisie.trim()

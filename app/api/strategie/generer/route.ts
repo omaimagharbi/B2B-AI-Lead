@@ -49,7 +49,7 @@ const FORMAT_JSON_ATTENDU = `Réponds UNIQUEMENT avec un objet JSON valide (sans
 }`
 
 async function genererJsonGemini(prompt: string, apiKey: string): Promise<string> {
-  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
     {

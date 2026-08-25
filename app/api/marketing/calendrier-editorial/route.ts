@@ -33,7 +33,7 @@ Reponds en francais, contenu concret et specifique au secteur (pas de generalite
 }
 
 async function genererAvecGemini(prompt: string, apiKey: string): Promise<string> {
-  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
     {
@@ -89,11 +89,13 @@ export async function POST(req: NextRequest) {
   const geminiKey = process.env.GEMINI_API_KEY
   const anthropicKey = process.env.ANTHROPIC_API_KEY
   let texteBrut = ''
+  let derniereErreur = ''
 
   if (geminiKey) {
     try {
       texteBrut = await genererAvecGemini(prompt, geminiKey)
     } catch (err) {
+      derniereErreur = err instanceof Error ? err.message : String(err)
       console.error('Gemini indisponible pour calendrier editorial:', err)
     }
   }
@@ -101,13 +103,19 @@ export async function POST(req: NextRequest) {
     try {
       texteBrut = await genererAvecAnthropic(prompt, anthropicKey)
     } catch (err) {
+      derniereErreur = err instanceof Error ? err.message : String(err)
       console.error('Anthropic indisponible pour calendrier editorial:', err)
     }
   }
 
   if (!texteBrut) {
     return NextResponse.json(
-      { error: 'Aucun service IA disponible (ajoute une clé GEMINI_API_KEY ou ANTHROPIC_API_KEY)' },
+      {
+        error:
+          geminiKey || anthropicKey
+            ? `Le service IA a répondu une erreur${derniereErreur ? ` (${derniereErreur})` : ''}. Vérifie que la clé est valide et non expirée.`
+            : 'Aucun service IA disponible (ajoute une clé GEMINI_API_KEY ou ANTHROPIC_API_KEY)',
+      },
       { status: 503 }
     )
   }
