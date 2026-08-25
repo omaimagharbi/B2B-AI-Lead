@@ -11,7 +11,7 @@ function construirePrompt(manuel: string, question: string): string {
 }
 
 async function repondreAvecGemini(prompt: string, apiKey: string): Promise<string> {
-  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
     {
@@ -37,12 +37,43 @@ async function repondreAvecAnthropic(prompt: string, apiKey: string): Promise<st
   return bloc && 'text' in bloc ? bloc.text : ''
 }
 
+export async function GET(req: NextRequest) {
+  const auth = await authentifierClientUser(req)
+  if (auth.erreur) return NextResponse.json({ error: auth.erreur }, { status: auth.statut })
+
+  const { data } = await supabaseAdmin
+    .from('chatbot_conversations')
+    .select('id, role, texte, created_at')
+    .eq('client_user_id', auth.clientUserId)
+    .order('created_at', { ascending: true })
+    .limit(100)
+
+  return NextResponse.json({ messages: data ?? [] })
+}
+
 export async function POST(req: NextRequest) {
   const auth = await authentifierClientUser(req)
   if (auth.erreur) return NextResponse.json({ error: auth.erreur }, { status: auth.statut })
 
   const { question } = await req.json()
   if (!question?.trim()) return NextResponse.json({ error: 'Question requise' }, { status: 400 })
+
+  await supabaseAdmin.from('chatbot_conversations').insert({
+    client_id: auth.clientId,
+    client_user_id: auth.clientUserId,
+    role: 'user',
+    texte: question.trim(),
+  })
+
+  const enregistrerEtRepondre = async (reponse: string) => {
+    await supabaseAdmin.from('chatbot_conversations').insert({
+      client_id: auth.clientId,
+      client_user_id: auth.clientUserId,
+      role: 'bot',
+      texte: reponse,
+    })
+    return NextResponse.json({ reponse })
+  }
 
   const { data: config } = await supabaseAdmin
     .from('chatbot_config')
@@ -53,13 +84,12 @@ export async function POST(req: NextRequest) {
   const manuel = config?.manuel_utilisation ?? ''
   if (!manuel.trim()) {
     const emailSupport = process.env.SUPPORT_EMAIL || (process.env.ADMIN_EMAILS ?? '').split(',')[0]?.trim()
-    return NextResponse.json({
-      reponse:
-        "Le manuel d'utilisation n'a pas encore été configuré par l'équipe PiloBrain." +
+    return enregistrerEtRepondre(
+      "Le manuel d'utilisation n'a pas encore été configuré par l'équipe PiloBrain." +
         (emailSupport
           ? ` Contacte directement le support à ${emailSupport} en attendant.`
-          : ' Contacte directement le support en attendant.'),
-    })
+          : ' Contacte directement le support en attendant.')
+    )
   }
 
   const prompt = construirePrompt(manuel, question)
@@ -69,7 +99,7 @@ export async function POST(req: NextRequest) {
   if (geminiKey) {
     try {
       const reponse = await repondreAvecGemini(prompt, geminiKey)
-      if (reponse) return NextResponse.json({ reponse })
+      if (reponse) return enregistrerEtRepondre(reponse)
     } catch (err) {
       console.error('Gemini indisponible pour le chatbot, on essaie la suite:', err)
     }
@@ -78,13 +108,13 @@ export async function POST(req: NextRequest) {
   if (anthropicKey) {
     try {
       const reponse = await repondreAvecAnthropic(prompt, anthropicKey)
-      if (reponse) return NextResponse.json({ reponse })
+      if (reponse) return enregistrerEtRepondre(reponse)
     } catch (err) {
       console.error('Anthropic indisponible pour le chatbot:', err)
     }
   }
 
-  return NextResponse.json({
-    reponse: "Le service IA est momentanément indisponible. Réessaie dans quelques instants.",
-  })
+  return enregistrerEtRepondre(
+    'Le service IA est momentanément indisponible. Réessaie dans quelques instants.'
+  )
 }

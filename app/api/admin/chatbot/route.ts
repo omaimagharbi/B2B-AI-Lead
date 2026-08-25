@@ -35,6 +35,28 @@ export async function POST(req: NextRequest) {
 
   const { manuel_utilisation } = await req.json()
 
+  // Garde une trace de l'ancienne version avant de l'ecraser, pour permettre
+  // de revenir en arriere (retour terrain : "je dois avoir des versions").
+  const { data: ancien } = await supabaseAdmin
+    .from('chatbot_config')
+    .select('manuel_utilisation')
+    .eq('id', 1)
+    .single()
+  if (ancien?.manuel_utilisation?.trim()) {
+    await supabaseAdmin
+      .from('chatbot_manuel_historique')
+      .insert({ manuel_utilisation: ancien.manuel_utilisation })
+    // On ne garde que les 20 dernieres versions pour ne pas accumuler indefiniment.
+    const { data: historique } = await supabaseAdmin
+      .from('chatbot_manuel_historique')
+      .select('id')
+      .order('created_at', { ascending: false })
+    const aSupprimer = (historique ?? []).slice(20).map((h) => h.id)
+    if (aSupprimer.length > 0) {
+      await supabaseAdmin.from('chatbot_manuel_historique').delete().in('id', aSupprimer)
+    }
+  }
+
   const { error } = await supabaseAdmin
     .from('chatbot_config')
     .update({ manuel_utilisation: manuel_utilisation ?? '', updated_at: new Date().toISOString() })

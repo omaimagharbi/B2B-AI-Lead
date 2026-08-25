@@ -219,6 +219,36 @@ export default function AdminPage() {
     window.URL.revokeObjectURL(url)
   }
 
+  // Retour terrain : "je dois avoir des versions" - historique des versions
+  // precedentes du manuel, avec possibilite de restaurer l'une d'elles.
+  const [versionsManuel, setVersionsManuel] = useState<
+    { id: string; manuel_utilisation: string; created_at: string }[]
+  >([])
+  const [versionsOuvertes, setVersionsOuvertes] = useState(false)
+  const [versionsChargement, setVersionsChargement] = useState(false)
+
+  const chargerVersionsManuel = async () => {
+    if (versionsOuvertes) {
+      setVersionsOuvertes(false)
+      return
+    }
+    setVersionsChargement(true)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const res = await fetch('/api/admin/chatbot/historique', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (res.ok) setVersionsManuel(data.versions ?? [])
+    setVersionsOuvertes(true)
+    setVersionsChargement(false)
+  }
+
+  const restaurerVersionManuel = (texte: string) => {
+    setManuelChatbot(texte)
+    setVersionsOuvertes(false)
+  }
+
   const basculerPayant = async (clientId: string, planActuel: string) => {
     setMajEnCours(clientId)
     const { data: sessionData } = await supabase.auth.getSession()
@@ -572,7 +602,50 @@ export default function AdminPage() {
                 >
                   ⬇️ Télécharger le manuel actuel (.docx)
                 </button>
+                <button
+                  onClick={chargerVersionsManuel}
+                  disabled={versionsChargement}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 disabled:opacity-50"
+                >
+                  {versionsChargement
+                    ? 'Chargement...'
+                    : versionsOuvertes
+                    ? '🕘 Masquer les versions'
+                    : '🕘 Voir les versions précédentes'}
+                </button>
               </div>
+              {versionsOuvertes && (
+                <div className="rounded-lg border border-slate-700 bg-slate-950 p-3 space-y-2 max-h-64 overflow-y-auto">
+                  {versionsManuel.length === 0 ? (
+                    <p className="text-xs text-slate-500">
+                      Aucune version précédente enregistrée pour le moment.
+                    </p>
+                  ) : (
+                    versionsManuel.map((v) => (
+                      <div
+                        key={v.id}
+                        className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2 last:border-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs text-slate-400">
+                            {new Date(v.created_at).toLocaleString('fr-FR')}
+                          </p>
+                          <p className="text-xs text-slate-500 truncate max-w-md">
+                            {v.manuel_utilisation.slice(0, 100)}
+                            {v.manuel_utilisation.length > 100 ? '...' : ''}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => restaurerVersionManuel(v.manuel_utilisation)}
+                          className="text-xs px-2 py-1 rounded-lg bg-accent text-slate-950 font-semibold shrink-0"
+                        >
+                          Restaurer
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
               {manuelChatbotErreurImport && (
                 <p className="text-xs text-red-400">{manuelChatbotErreurImport}</p>
               )}

@@ -47,7 +47,7 @@ function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
 }
 
 async function genererBrouillonGemini(probleme: string, systemPrompt: string, apiKey: string) {
-  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
     {

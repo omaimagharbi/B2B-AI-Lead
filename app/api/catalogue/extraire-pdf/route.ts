@@ -8,8 +8,9 @@ import mammoth from 'mammoth'
 // pre-remplir le formulaire au lieu de tout retaper a la main.
 // Formats supportes : PDF, images (photo de brochure), Word (.docx), texte brut.
 
-const CONSIGNE_EXTRACTION = `Ce document est une brochure/syllabus de formation ou de service. Reponds UNIQUEMENT en JSON valide, rien d'autre, avec ce format exact :
-{"nom": "...", "description": "... (2-3 phrases max)", "prix": nombre ou null, "duree": "..." ou null, "public_cible": "..." ou null, "thematique": "..." ou null, "format": "inter_entreprise" ou "intra_entreprise" ou null, "mode_delivrance": "presentiel" ou "en_ligne" ou "blended" ou null, "usp": "... (element de differenciation, 1 phrase)" ou null}`
+const CONSIGNE_EXTRACTION = `Ce document est une brochure/catalogue de formations ou de services. Il peut contenir UNE SEULE offre ou PLUSIEURS offres distinctes (catalogue complet). Repere chaque offre distincte et renvoie UNIQUEMENT du JSON valide, rien d'autre, avec ce format exact :
+{"offres": [{"nom": "...", "description": "... (2-3 phrases max)", "prix": nombre ou null, "duree": "..." ou null, "public_cible": "..." ou null, "thematique": "..." ou null, "format": "inter_entreprise" ou "intra_entreprise" ou null, "mode_delivrance": "presentiel" ou "en_ligne" ou "blended" ou null, "usp": "... (element de differenciation, 1 phrase)" ou null}, ...]}
+S'il n'y a qu'une seule offre dans le document, renvoie quand meme un tableau "offres" avec un seul element.`
 
 type ContenuAExtraire =
   | { nature: 'document'; base64: string; mediaType: string }
@@ -41,7 +42,7 @@ async function extraireAvecAnthropic(contenu: ContenuAExtraire, apiKey: string) 
 }
 
 async function extraireAvecGemini(contenu: ContenuAExtraire, apiKey: string) {
-  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
 
   const partieContenu =
     contenu.nature === 'texte'
@@ -220,9 +221,12 @@ export async function POST(req: NextRequest) {
     }
 
     const nettoye = texteBrut.replace(/```json|```/g, '').trim()
-    const champs = JSON.parse(nettoye)
+    const parsed = JSON.parse(nettoye)
+    // Compatibilite : si jamais l'IA renvoie l'ancien format (un seul objet
+    // plat au lieu de {offres: [...]}), on le normalise quand meme.
+    const offres = Array.isArray(parsed.offres) ? parsed.offres : parsed.nom ? [parsed] : []
 
-    return NextResponse.json({ succes: true, champs })
+    return NextResponse.json({ succes: true, offres })
   } catch (err) {
     console.error('Erreur /api/catalogue/extraire-pdf:', err)
     return NextResponse.json({ error: "Erreur lors de l'extraction du fichier" }, { status: 500 })

@@ -52,7 +52,7 @@ async function transcrireAvecAnthropic(base64: string, apiKey: string) {
 }
 
 async function transcrireAvecGemini(base64: string, apiKey: string) {
-  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
     {
