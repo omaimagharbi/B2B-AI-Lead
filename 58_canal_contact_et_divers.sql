@@ -23,6 +23,16 @@ create index if not exists idx_chatbot_manuel_historique_date on chatbot_manuel_
 alter table chatbot_manuel_historique enable row level security;
 -- Pas de policy anon/authenticated : gere uniquement via supabaseAdmin (service role).
 
+-- Retour terrain : l'admin doit pouvoir controler, par cabinet, quelles
+-- cartes/secteurs il a le droit d'utiliser (un ou plusieurs) et quelles
+-- options de menu (onglets) lui sont accessibles - une restriction au
+-- niveau du compte entier, au-dessus de la restriction par membre qui
+-- existe deja (onglets_masques sur client_users, controlee par le
+-- proprietaire du cabinet lui-meme).
+alter table clients
+  add column if not exists onglets_autorises jsonb, -- array d'ids d'onglets ; null/vide = tous autorises (comportement actuel inchange)
+  add column if not exists verticals_autorises jsonb; -- array de slugs de secteurs ; null/vide = uniquement son vertical_id actuel
+
 -- Retour terrain : "les discussions [avec le chatbot support] doivent etre
 -- enregistrees" - rien n'etait persiste, tout restait uniquement dans le
 -- state React du navigateur (perdu au refresh, invisible pour l'admin).
