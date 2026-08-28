@@ -81,9 +81,10 @@ export async function POST(req: NextRequest) {
     .eq('id', 1)
     .single()
 
+  const emailSupport = process.env.SUPPORT_EMAIL || (process.env.ADMIN_EMAILS ?? '').split(',')[0]?.trim()
+
   const manuel = config?.manuel_utilisation ?? ''
   if (!manuel.trim()) {
-    const emailSupport = process.env.SUPPORT_EMAIL || (process.env.ADMIN_EMAILS ?? '').split(',')[0]?.trim()
     return enregistrerEtRepondre(
       "Le manuel d'utilisation n'a pas encore été configuré par l'équipe PiloBrain." +
         (emailSupport
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
   }
 
   return enregistrerEtRepondre(
-    'Le service IA est momentanément indisponible. Réessaie dans quelques instants.'
+    'Le service IA est momentanément indisponible. Réessaie dans quelques instants.' +
+      (emailSupport ? ` Si le problème persiste, contacte le support à ${emailSupport}.` : '')
   )
 }

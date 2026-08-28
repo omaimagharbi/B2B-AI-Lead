@@ -1,8 +1,25 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'B2B AI Lead Machine',
+  title: 'PiloBrain',
   description: 'Diagnostic IA pour cabinets de formation et conseil',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'PiloBrain',
+  },
+  icons: {
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+}
+
+export const viewport = {
+  themeColor: '#0A1A2E',
 }
 
 export default function RootLayout({

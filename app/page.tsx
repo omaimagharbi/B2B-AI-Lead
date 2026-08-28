@@ -80,13 +80,13 @@ export default function Home() {
             </p>
             <div className="flex flex-wrap gap-3 items-center">
               <a
-                href="/secteurs"
+                href="/decouvrir"
                 className="text-sm px-[18px] py-[10px] rounded-lg bg-navy text-white font-semibold hover:bg-navy-deep"
               >
                 Découvrir PiloBrain →
               </a>
               <a
-                href="/auth"
+                href="/demo"
                 className="text-sm px-4 py-[9px] rounded-lg border border-slate-300 bg-white text-ink hover:border-slate-400"
               >
                 Voir une démo

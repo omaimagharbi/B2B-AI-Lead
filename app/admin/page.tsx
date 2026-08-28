@@ -18,6 +18,8 @@ type ClientAdmin = {
   nb_cibles_mois_en_cours?: number
   plan_tarifaire: string | null
   vertical_slug: string | null
+  onglets_autorises?: string[] | null
+  verticals_autorises?: string[] | null
   created_at: string
   packs_vendus: number
   montant_vendu: number
@@ -63,6 +65,7 @@ export default function AdminPage() {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState<string | null>(null)
   const [majEnCours, setMajEnCours] = useState<string | null>(null)
+  const [gestionAccesOuverte, setGestionAccesOuverte] = useState<string | null>(null)
 
   const [nouveauNom, setNouveauNom] = useState('')
   const [nouvelEmail, setNouvelEmail] = useState('')
@@ -293,6 +296,69 @@ export default function AdminPage() {
     await charger()
     setMajEnCours(null)
   }
+
+  // Retour terrain : l'admin doit pouvoir donner acces a un cabinet a une ou
+  // plusieurs cartes/secteurs, et restreindre les onglets accessibles au
+  // niveau du compte (au-dela de ce que le proprietaire du cabinet controle
+  // deja pour ses propres membres).
+  const basculerVerticalAutorise = async (client: ClientAdmin, slug: string) => {
+    const actuels = client.verticals_autorises ?? (client.vertical_slug ? [client.vertical_slug] : [])
+    const dejaAutorise = actuels.includes(slug)
+    const nouveaux = dejaAutorise ? actuels.filter((v) => v !== slug) : [...actuels, slug]
+
+    setMajEnCours(client.id)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    await fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ client_id: client.id, verticals_autorises: nouveaux }),
+    })
+    await charger()
+    setMajEnCours(null)
+  }
+
+  const basculerOngletAutorise = async (client: ClientAdmin, ongletId: string) => {
+    // null/vide = tous autorises ; on part donc de la liste complete si rien
+    // n'a encore ete restreint, pour que le premier clic retire bien juste
+    // celui-la (et pas tout le reste).
+    const actuels = client.onglets_autorises ?? ONGLETS_ADMIN.map((o) => o.id)
+    const dejaAutorise = actuels.includes(ongletId)
+    const nouveaux = dejaAutorise ? actuels.filter((o) => o !== ongletId) : [...actuels, ongletId]
+
+    setMajEnCours(client.id)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    await fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ client_id: client.id, onglets_autorises: nouveaux }),
+    })
+    await charger()
+    setMajEnCours(null)
+  }
+
+  const VERTICALS_ADMIN = [
+    { slug: 'cabinet-formation', label: 'Cabinet de Formation & Conseil' },
+    { slug: 'startup-saas', label: 'Startup Tech & SaaS' },
+    { slug: 'pme-services', label: 'PME de Services & Entreprises' },
+    { slug: 'investisseur-incubateur', label: 'Écosystème Entrepreneurial' },
+    { slug: 'comptable-fiscal', label: 'Cabinet Comptable, Juridique & Fiscal' },
+    { slug: 'services-generaux', label: 'Logistique, Transit & Services Généraux' },
+  ]
+
+  const ONGLETS_ADMIN = [
+    { id: 'ciblage', label: 'Ciblage' },
+    { id: 'cibles', label: 'Cibles' },
+    { id: 'validation', label: 'Validation' },
+    { id: 'inbox', label: 'Boîte de réception' },
+    { id: 'pipeline', label: 'Pipeline' },
+    { id: 'catalogue_strategie', label: 'Catalogue / Stratégie' },
+    { id: 'collaboration', label: 'Collaboration & Tâches' },
+    { id: 'calendrier', label: 'Calendrier' },
+    { id: 'stats', label: 'Stats' },
+    { id: 'equipe', label: 'Équipe' },
+  ]
 
   const supprimerClient = async (clientId: string, nomEntreprise: string) => {
     const confirmation = window.confirm(
@@ -1016,8 +1082,81 @@ export default function AdminPage() {
                     >
                       🗑️ Supprimer
                     </button>
+                    <button
+                      onClick={() =>
+                        setGestionAccesOuverte(gestionAccesOuverte === client.id ? null : client.id)
+                      }
+                      className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 transition shrink-0"
+                    >
+                      ⚙️ Accès
+                    </button>
                   </div>
                 </div>
+
+                {gestionAccesOuverte === client.id && (
+                  <div className="rounded-lg border border-slate-700 bg-slate-950 p-3 space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-300 mb-1">
+                        Cartes/secteurs autorisés (un ou plusieurs)
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {VERTICALS_ADMIN.map((v) => {
+                          const actuels =
+                            client.verticals_autorises ??
+                            (client.vertical_slug ? [client.vertical_slug] : [])
+                          const coche = actuels.includes(v.slug)
+                          return (
+                            <label
+                              key={v.slug}
+                              className={`text-xs px-2 py-1 rounded-lg border cursor-pointer ${
+                                coche
+                                  ? 'border-accent bg-accent/10 text-accent'
+                                  : 'border-slate-700 text-slate-400'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={coche}
+                                onChange={() => basculerVerticalAutorise(client, v.slug)}
+                                className="mr-1"
+                              />
+                              {v.label}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-300 mb-1">
+                        Onglets accessibles (décoche pour restreindre)
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {ONGLETS_ADMIN.map((o) => {
+                          const actuels = client.onglets_autorises ?? ONGLETS_ADMIN.map((x) => x.id)
+                          const coche = actuels.includes(o.id)
+                          return (
+                            <label
+                              key={o.id}
+                              className={`text-xs px-2 py-1 rounded-lg border cursor-pointer ${
+                                coche
+                                  ? 'border-accent bg-accent/10 text-accent'
+                                  : 'border-slate-700 text-slate-500 line-through'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={coche}
+                                onChange={() => basculerOngletAutorise(client, o.id)}
+                                className="mr-1"
+                              />
+                              {o.label}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span

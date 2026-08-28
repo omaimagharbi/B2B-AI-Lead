@@ -13,6 +13,7 @@ import { zonePourPays } from '@/lib/pays'
 import ValidationItem from './validation-item'
 import DropdownMultiSelect from './dropdown-multiselect'
 import ChatbotWidget from '@/components/ChatbotWidget'
+import PhoneInput, { decouperTelephone } from '@/components/PhoneInput'
 
 type Client = {
   id: string
@@ -61,6 +62,9 @@ type Client = {
   base_email_existante?: string | null
   budget_publicitaire?: string | null
   objectif_chiffre?: string | null
+  onglets_autorises?: string[] | null
+  verticals_autorises?: string[] | null
+  vertical_id?: string | null
 }
 
 type Target = {
@@ -372,13 +376,18 @@ export default function DashboardPage() {
       nom_complet: string | null
       role: string
       telephone: string | null
+      email?: string | null
       onglets_masques: string[]
       photo_url?: string | null
     }[]
   >([])
   const [mesOngletsMasques, setMesOngletsMasques] = useState<string[]>([])
   const [membreEnEdition, setMembreEnEdition] = useState<string | null>(null)
-  const [editionMembreForm, setEditionMembreForm] = useState({ nom_complet: '', telephone: '' })
+  const [editionMembreForm, setEditionMembreForm] = useState({
+    nom_complet: '',
+    indicatifTelephone: '+216',
+    telephone: '',
+  })
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteNom, setInviteNom] = useState('')
   const [inviteRole, setInviteRole] = useState<'membre' | 'directeur_commercial'>('membre')
@@ -514,7 +523,7 @@ export default function DashboardPage() {
 
     const { data: membresData } = await supabase
       .from('client_users')
-      .select('id, nom_complet, role, telephone, onglets_masques, photo_url')
+      .select('id, nom_complet, role, telephone, email, onglets_masques, photo_url')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
     setMembresEquipe((membresData ?? []) as typeof membresEquipe)
@@ -590,7 +599,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, taille_min_salaries, taille_max_salaries, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, base_email_existante, budget_publicitaire, objectif_chiffre, verticals(slug)'
+          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, taille_min_salaries, taille_max_salaries, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, base_email_existante, budget_publicitaire, objectif_chiffre, onglets_autorises, verticals_autorises, vertical_id, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -2123,10 +2132,15 @@ export default function DashboardPage() {
     { id: 'calendrier', label: '📅 Mon Calendrier', icone: '📅' },
     { id: 'stats', label: t('onglet_stats'), icone: '📈' },
     { id: 'equipe', label: t('onglet_equipe'), icone: '👥' },
-  ].filter((onglet): onglet is { id: Onglet; label: string; icone: string } => {
-    if (monRole === 'proprietaire' || monRole === 'admin') return true
-    return !mesOngletsMasques.includes(onglet.id)
-  })
+  ]
+    .filter((onglet): onglet is { id: Onglet; label: string; icone: string } => {
+      // Restriction admin (au niveau du compte entier) : s'applique a tout le
+      // monde, y compris le proprietaire - contrairement au masquage par
+      // membre ci-dessous, que le proprietaire controle lui-meme.
+      if (client?.onglets_autorises && !client.onglets_autorises.includes(onglet.id)) return false
+      if (monRole === 'proprietaire' || monRole === 'admin') return true
+      return !mesOngletsMasques.includes(onglet.id)
+    })
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col md:flex-row" dir={dir}>
@@ -3348,6 +3362,41 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {client.verticals_autorises && client.verticals_autorises.length > 1 && (
+              <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+                <h3 className="text-sm font-semibold">🗂️ Secteur actif</h3>
+                <p className="text-xs text-slate-500">
+                  L'administrateur t'a donné accès à plusieurs cartes/secteurs. Choisis celui sur
+                  lequel tu travailles actuellement — cela change le vocabulaire, les questions et
+                  les modèles utilisés par la plateforme.
+                </p>
+                <select
+                  value={verticalSlug}
+                  onChange={async (e) => {
+                    const slugChoisi = e.target.value
+                    const { data: verticalTrouve } = await supabase
+                      .from('verticals')
+                      .select('id')
+                      .eq('slug', slugChoisi)
+                      .single()
+                    if (!verticalTrouve) return
+                    await supabase
+                      .from('clients')
+                      .update({ vertical_id: verticalTrouve.id })
+                      .eq('id', client.id)
+                    window.location.reload()
+                  }}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                >
+                  {client.verticals_autorises.map((slug) => (
+                    <option key={slug} value={slug}>
+                      {slug}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <h3 className="text-sm font-semibold">🌐 Présence digitale (site web & réseaux)</h3>
               <p className="text-xs text-slate-500">
@@ -3447,9 +3496,11 @@ export default function DashboardPage() {
                                 setMembreEnEdition(null)
                               } else {
                                 setMembreEnEdition(m.id)
+                                const { indicatif, numero } = decouperTelephone(m.telephone)
                                 setEditionMembreForm({
                                   nom_complet: m.nom_complet ?? '',
-                                  telephone: m.telephone ?? '',
+                                  indicatifTelephone: indicatif,
+                                  telephone: numero,
                                 })
                               }
                             }}
@@ -3481,6 +3532,12 @@ export default function DashboardPage() {
 
                     {ouvert && (
                       <div className="border-t border-slate-800 p-3 space-y-3 bg-slate-950/60">
+                        <div>
+                          <label className="text-xs text-slate-500">Email de connexion</label>
+                          <p className="text-sm text-slate-300">
+                            {m.email || 'Non renseigné (compte créé avant cette mise à jour)'}
+                          </p>
+                        </div>
                         <div className="flex gap-2">
                           <input
                             value={editionMembreForm.nom_complet}
@@ -3490,19 +3547,26 @@ export default function DashboardPage() {
                             placeholder="Nom complet"
                             className="flex-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                           />
-                          <input
-                            value={editionMembreForm.telephone}
-                            onChange={(e) =>
-                              setEditionMembreForm({ ...editionMembreForm, telephone: e.target.value })
+                          <PhoneInput
+                            className="flex-1"
+                            indicatif={editionMembreForm.indicatifTelephone}
+                            onIndicatifChange={(v) =>
+                              setEditionMembreForm({ ...editionMembreForm, indicatifTelephone: v })
+                            }
+                            numero={editionMembreForm.telephone}
+                            onNumeroChange={(v) =>
+                              setEditionMembreForm({ ...editionMembreForm, telephone: v })
                             }
                             placeholder="Téléphone"
-                            className="flex-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                           />
                           <button
                             onClick={async () => {
+                              const telephoneFinal = editionMembreForm.telephone.trim()
+                                ? `${editionMembreForm.indicatifTelephone}${editionMembreForm.telephone.trim()}`
+                                : null
                               await modifierMembre(m.id, {
                                 nom_complet: editionMembreForm.nom_complet,
-                                telephone: editionMembreForm.telephone || null,
+                                telephone: telephoneFinal,
                               })
                               setMembreEnEdition(null)
                             }}

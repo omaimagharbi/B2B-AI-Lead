@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { PAYS_DISPONIBLES } from '@/lib/pays'
+import PhoneInput, { decouperTelephone } from '@/components/PhoneInput'
 
 type Profil = {
   id: string
@@ -65,6 +66,8 @@ export default function ProfilPage() {
   const [missions, setMissions] = useState<Mission[]>([])
   const [uploadEnCours, setUploadEnCours] = useState(false)
   const [sauvegardeEnCours, setSauvegardeEnCours] = useState(false)
+  const [indicatifTel, setIndicatifTel] = useState('+216')
+  const [numeroTel, setNumeroTel] = useState('')
 
   useEffect(() => {
     const charger = async () => {
@@ -81,7 +84,12 @@ export default function ProfilPage() {
         .eq('auth_user_id', sessionData.session.user.id)
         .single()
 
-      if (clientUser) setProfil(clientUser as Profil)
+      if (clientUser) {
+        setProfil(clientUser as Profil)
+        const { indicatif, numero } = decouperTelephone((clientUser as Profil).telephone)
+        setIndicatifTel(indicatif)
+        setNumeroTel(numero)
+      }
 
       const [resExp, resForm, resMiss] = await Promise.all([
         fetchAvecToken('/api/profil/experiences'),
@@ -188,12 +196,19 @@ export default function ProfilPage() {
             </div>
             <div>
               <label className="text-xs text-slate-400">Téléphone</label>
-              <input
-                value={profil.telephone ?? ''}
-                onChange={(e) => setProfil({ ...profil, telephone: e.target.value })}
-                onBlur={(e) => sauvegarderProfil({ telephone: e.target.value })}
-                placeholder="+216 XX XXX XXX"
-                className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              <PhoneInput
+                className="mt-1"
+                indicatif={indicatifTel}
+                onIndicatifChange={(v) => {
+                  setIndicatifTel(v)
+                  const numero = `${v}${numeroTel}`
+                  setProfil({ ...profil, telephone: numero })
+                  sauvegarderProfil({ telephone: numero })
+                }}
+                numero={numeroTel}
+                onNumeroChange={(v) => setNumeroTel(v)}
+                onNumeroBlur={(v) => sauvegarderProfil({ telephone: `${indicatifTel}${v}` })}
+                placeholder="XX XXX XXX"
               />
             </div>
             <div>
