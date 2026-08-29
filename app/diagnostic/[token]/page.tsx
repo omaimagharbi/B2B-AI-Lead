@@ -64,11 +64,18 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
     ].join('\n')
 
     try {
+      // Garde-fou cote client : si le serveur ne repond vraiment pas (au lieu
+      // d'un retour d'erreur propre), on ne laisse jamais le spinner tourner
+      // indefiniment - on coupe et on invite a reessayer.
+      const controleur = new AbortController()
+      const minuteur = setTimeout(() => controleur.abort(), 45_000)
       const res = await fetch('/api/diagnostic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: params.token, probleme }),
+        signal: controleur.signal,
       })
+      clearTimeout(minuteur)
       const data = await res.json()
 
       if (!res.ok) {
@@ -79,7 +86,7 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
 
       setEtape('termine')
     } catch {
-      setErreur('Impossible de contacter le serveur')
+      setErreur('Le serveur met trop de temps à répondre. Merci de réessayer.')
       setEtape('saisie')
     }
   }
