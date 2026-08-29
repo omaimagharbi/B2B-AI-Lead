@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { authentifierClientUser } from '@/lib/auth-api'
 
+// Meme precaution que /api/diagnostic : on plafonne la duree de la fonction et
+// chaque appel IA individuellement pour eviter un blocage si Gemini/Anthropic
+// est lent (voir commentaire detaille dans app/api/diagnostic/route.ts).
+export const maxDuration = 60
+const TIMEOUT_IA_MS = 15_000
+
 // Le chatbot ne repond QU'a partir du manuel d'utilisation redige par
 // l'admin (pas de connaissance generale hors-sujet, pas de speculation sur
 // des donnees du cabinet) - evite les reponses inventees sur une
@@ -12,14 +18,22 @@ function construirePrompt(manuel: string, question: string): string {
 
 async function repondreAvecGemini(prompt: string, apiKey: string): Promise<string> {
   const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
-    }
-  )
+  const controleur = new AbortController()
+  const minuteur = setTimeout(() => controleur.abort(), TIMEOUT_IA_MS)
+  let res: Response
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
+        signal: controleur.signal,
+      }
+    )
+  } finally {
+    clearTimeout(minuteur)
+  }
   if (!res.ok) throw new Error(`Gemini a repondu ${res.status}`)
   const data = await res.json()
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
@@ -27,7 +41,7 @@ async function repondreAvecGemini(prompt: string, apiKey: string): Promise<strin
 
 async function repondreAvecAnthropic(prompt: string, apiKey: string): Promise<string> {
   const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const anthropic = new Anthropic({ apiKey })
+  const anthropic = new Anthropic({ apiKey, timeout: TIMEOUT_IA_MS })
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-5',
     max_tokens: 800,

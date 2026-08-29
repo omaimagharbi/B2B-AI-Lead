@@ -8,9 +8,16 @@ import mammoth from 'mammoth'
 // pre-remplir le formulaire au lieu de tout retaper a la main.
 // Formats supportes : PDF, images (photo de brochure), Word (.docx), texte brut.
 
+// Meme precaution que /api/diagnostic : un catalogue PDF multi-pages avec
+// images peut prendre plusieurs secondes a analyser par l'IA - sans budget de
+// temps suffisant, la fonction serverless etait tuee avant de repondre, ce qui
+// se traduisait cote cabinet par "rien ne se lit" sans message d'erreur clair.
+export const maxDuration = 60
+const TIMEOUT_IA_MS = 45_000
+
 const CONSIGNE_EXTRACTION = `Ce document est une brochure/catalogue de formations ou de services. Il peut contenir UNE SEULE offre ou PLUSIEURS offres distinctes (catalogue complet). Repere chaque offre distincte et renvoie UNIQUEMENT du JSON valide, rien d'autre, avec ce format exact :
 {"offres": [{"nom": "...", "description": "... (2-3 phrases max)", "prix": nombre ou null, "duree": "..." ou null, "public_cible": "..." ou null, "thematique": "..." ou null, "format": "inter_entreprise" ou "intra_entreprise" ou null, "mode_delivrance": "presentiel" ou "en_ligne" ou "blended" ou null, "usp": "... (element de differenciation, 1 phrase)" ou null}, ...]}
-S'il n'y a qu'une seule offre dans le document, renvoie quand meme un tableau "offres" avec un seul element.`
+S'il n'y a qu'une seule offre dans le document, renvoie quand meme un tableau "offres" avec un seul element. Si le document contient plusieurs formations/services distincts (plusieurs titres, plusieurs pages, plusieurs photos de brochure), tu DOIS tous les repertorier individuellement dans le tableau "offres" - ne renvoie jamais un seul element si le document en presente plusieurs.`
 
 type ContenuAExtraire =
   | { nature: 'document'; base64: string; mediaType: string }
@@ -18,7 +25,7 @@ type ContenuAExtraire =
   | { nature: 'texte'; texte: string }
 
 async function extraireAvecAnthropic(contenu: ContenuAExtraire, apiKey: string) {
-  const anthropic = new Anthropic({ apiKey })
+  const anthropic = new Anthropic({ apiKey, timeout: TIMEOUT_IA_MS })
 
   const blocContenu =
     contenu.nature === 'document'
@@ -49,21 +56,29 @@ async function extraireAvecGemini(contenu: ContenuAExtraire, apiKey: string) {
       ? { text: `Voici le contenu du document :\n\n${contenu.texte}` }
       : { inline_data: { mime_type: contenu.mediaType, data: contenu.base64 } }
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [partieContenu, { text: CONSIGNE_EXTRACTION }],
-          },
-        ],
-      }),
-    }
-  )
+  const controleur = new AbortController()
+  const minuteur = setTimeout(() => controleur.abort(), TIMEOUT_IA_MS)
+  let res: Response
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [partieContenu, { text: CONSIGNE_EXTRACTION }],
+            },
+          ],
+        }),
+        signal: controleur.signal,
+      }
+    )
+  } finally {
+    clearTimeout(minuteur)
+  }
   if (!res.ok) throw new Error(`Gemini a repondu ${res.status}`)
   const data = await res.json()
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'

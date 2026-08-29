@@ -10,6 +10,16 @@ import { genererSignalIA } from '@/lib/classification'
 import { enregistrerSanteApi } from '@/lib/sante-api'
 import { enregistrerUsageIA } from '@/lib/usage-ia'
 
+// Vercel coupe une fonction serverless a 10s par defaut (plan Hobby). Un essai
+// Gemini suivi d'un essai Anthropic en secours peut largement depasser ce delai,
+// ce qui tuait la fonction AVANT la sauvegarde du diagnostic en base : le
+// prospect restait bloque sur "Transmission de votre dossier..." et rien
+// n'apparaissait cote cabinet dans Validation. On augmente le budget de la
+// fonction et on plafonne chaque appel IA individuellement (voir TIMEOUT_IA_MS)
+// pour ne jamais laisser un appel lent consommer tout le temps disponible.
+export const maxDuration = 60
+const TIMEOUT_IA_MS = 15_000
+
 function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
   // Meme en mode simule (pas de cle IA configuree), on evite le texte 100%
   // generique en reinjectant le probleme reellement decrit par le prospect
@@ -48,17 +58,25 @@ function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
 
 async function genererBrouillonGemini(probleme: string, systemPrompt: string, apiKey: string) {
   const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: probleme }] }],
-      }),
-    }
-  )
+  const controleur = new AbortController()
+  const minuteur = setTimeout(() => controleur.abort(), TIMEOUT_IA_MS)
+  let res: Response
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: probleme }] }],
+        }),
+        signal: controleur.signal,
+      }
+    )
+  } finally {
+    clearTimeout(minuteur)
+  }
 
   if (!res.ok) {
     throw new Error(`Gemini a repondu ${res.status} : ${await res.text()}`)
@@ -75,7 +93,7 @@ async function genererBrouillonGemini(probleme: string, systemPrompt: string, ap
 }
 
 async function genererBrouillonAnthropic(probleme: string, systemPrompt: string, apiKey: string) {
-  const anthropic = new Anthropic({ apiKey })
+  const anthropic = new Anthropic({ apiKey, timeout: TIMEOUT_IA_MS })
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-5',
     max_tokens: 1200,
