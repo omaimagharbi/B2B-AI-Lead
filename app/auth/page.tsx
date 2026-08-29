@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import PhoneInput from '@/components/PhoneInput'
 
 type EtapeInscription = 1 | 2 | 3 | 4
 
@@ -408,24 +409,13 @@ function AuthForm() {
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
                 <div className="flex gap-2">
-                  <select
-                    value={indicatifTelephone}
-                    onChange={(e) => setIndicatifTelephone(e.target.value)}
-                    className="rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
-                  >
-                    <option value="+216">🇹🇳 +216</option>
-                    <option value="+971">🇦🇪 +971</option>
-                    <option value="+966">🇸🇦 +966</option>
-                    <option value="+974">🇶🇦 +974</option>
-                    <option value="+33">🇫🇷 +33</option>
-                    <option value="">Autre</option>
-                  </select>
-                  <input
-                    value={telephone}
-                    onChange={(e) => setTelephone(e.target.value)}
+                  <PhoneInput
+                    className="w-full"
+                    indicatif={indicatifTelephone}
+                    onIndicatifChange={setIndicatifTelephone}
+                    numero={telephone}
+                    onNumeroChange={setTelephone}
                     placeholder="Téléphone / WhatsApp pro"
-                    type="tel"
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                   />
                 </div>
                 <label

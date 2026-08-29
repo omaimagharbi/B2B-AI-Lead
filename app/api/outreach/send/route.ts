@@ -9,13 +9,20 @@ const LIMITE_PACKS_ESSAI_GRATUIT = 3
 
 export async function POST(req: NextRequest) {
   try {
-    const { target_id, type_envoi, canal_force } = await req.json()
+    const { target_id, type_envoi, canal_force, previsualiser, diagnostic_id_existant, message_final } =
+      await req.json()
     // type_envoi : 'diagnostic' (par defaut, cree un diagnostic + lien) ou 'message'
     // (envoie juste le message personnalise du cabinet, sans creer de diagnostic)
     const typeEnvoi: 'diagnostic' | 'message' = type_envoi === 'message' ? 'message' : 'diagnostic'
     // canal_force : si 'linkedin', on ne fait AUCUN appel WhatsApp/Email - LinkedIn n'a pas
     // d'API branchee ici, donc on prepare juste le texte pret a copier-coller par le cabinet.
     const forceLinkedin = canal_force === 'linkedin'
+    // previsualiser : etape 1 (facultative) - on prepare le texte exact (avec le vrai lien
+    // de diagnostic si applicable) SANS l'envoyer, pour que le cabinet puisse le relire
+    // (et au besoin le modifier) avant confirmation. On cree bien le diagnostic des cette
+    // etape (pour avoir le vrai lien dans le texte previsualise), mais on n'envoie rien et
+    // on ne marque pas la cible comme contactee tant que ce n'est pas confirme.
+    const enPrevisualisation = previsualiser === true
 
     if (!target_id) {
       return NextResponse.json({ error: 'target_id manquant' }, { status: 400 })
@@ -80,24 +87,42 @@ export async function POST(req: NextRequest) {
 
     // On cree le diagnostic uniquement si on envoie un lien de diagnostic (statut
     // par defaut 'brouillon_ia', token auto-genere). Pour un simple message pro,
-    // pas de diagnostic cree.
+    // pas de diagnostic cree. Si on confirme un envoi deja previsualise, on reutilise
+    // le diagnostic cree a la previsualisation au lieu d'en recreer un second.
     let lien = SITE_URL
+    let diagnosticId: string | undefined
     if (typeEnvoi === 'diagnostic') {
-      const { data: diagnostic, error: diagError } = await supabaseAdmin
-        .from('diagnostics')
-        .insert({
-          target_id: target.id,
-          client_id: client.id,
-          vertical_id: client.vertical_id,
-        })
-        .select('token_acces')
-        .single()
-
-      if (diagError || !diagnostic) {
-        return NextResponse.json({ error: 'Erreur creation diagnostic' }, { status: 500 })
+      if (diagnostic_id_existant) {
+        const { data: diagExistant } = await supabaseAdmin
+          .from('diagnostics')
+          .select('token_acces')
+          .eq('id', diagnostic_id_existant)
+          .eq('target_id', target.id)
+          .single()
+        if (diagExistant) {
+          lien = `${SITE_URL}/diagnostic/${diagExistant.token_acces}`
+          diagnosticId = diagnostic_id_existant
+        }
       }
 
-      lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
+      if (lien === SITE_URL) {
+        const { data: diagnostic, error: diagError } = await supabaseAdmin
+          .from('diagnostics')
+          .insert({
+            target_id: target.id,
+            client_id: client.id,
+            vertical_id: client.vertical_id,
+          })
+          .select('id, token_acces')
+          .single()
+
+        if (diagError || !diagnostic) {
+          return NextResponse.json({ error: 'Erreur creation diagnostic' }, { status: 500 })
+        }
+
+        lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
+        diagnosticId = diagnostic.id
+      }
     }
 
     const lienDesinscription = `${SITE_URL}/desinscription/${target.token_desinscription}`
@@ -105,11 +130,27 @@ export async function POST(req: NextRequest) {
       typeEnvoi === 'diagnostic'
         ? `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}`
         : `Bonjour ${target.nom},\n\n${client.nom_entreprise} souhaitait vous contacter personnellement. N'hesitez pas a repondre a ce message si vous avez des questions.`
-    const message = construireMessage(
-      client.message_personnalise,
-      { nom: target.nom, cabinet: client.nom_entreprise, lien, lienDesinscription },
-      messageParDefaut
-    )
+    const message =
+      typeof message_final === 'string' && message_final.trim()
+        ? message_final
+        : construireMessage(
+            client.message_personnalise,
+            { nom: target.nom, cabinet: client.nom_entreprise, lien, lienDesinscription },
+            messageParDefaut
+          )
+
+    // Etape previsualisation : on renvoie le texte exact (avec le vrai lien) sans
+    // rien envoyer ni marquer la cible comme contactee - le cabinet confirme ensuite.
+    if (enPrevisualisation) {
+      return NextResponse.json({
+        succes: true,
+        previsualisation: true,
+        canal,
+        type_envoi: typeEnvoi,
+        message,
+        diagnostic_id: diagnosticId,
+      })
+    }
 
     if (forceLinkedin) {
       // Rien a envoyer automatiquement : LinkedIn n'a pas d'API branchee ici.

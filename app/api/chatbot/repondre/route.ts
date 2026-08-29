@@ -17,7 +17,7 @@ function construirePrompt(manuel: string, question: string): string {
 }
 
 async function repondreAvecGemini(prompt: string, apiKey: string): Promise<string> {
-  const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
   const controleur = new AbortController()
   const minuteur = setTimeout(() => controleur.abort(), TIMEOUT_IA_MS)
   let res: Response

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 import mammoth from 'mammoth'
+import { logErreur } from '@/lib/erreurs'
 
 // Lit un document catalogue (brochure/syllabus) uploade par le cabinet et en
 // extrait les champs (nom, description, prix, duree, public cible), pour
@@ -49,7 +50,7 @@ async function extraireAvecAnthropic(contenu: ContenuAExtraire, apiKey: string) 
 }
 
 async function extraireAvecGemini(contenu: ContenuAExtraire, apiKey: string) {
-  const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
 
   const partieContenu =
     contenu.nature === 'texte'
@@ -206,11 +207,13 @@ export async function POST(req: NextRequest) {
     const geminiKey = process.env.GEMINI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     let texteBrut: string | null = null
+    let derniereErreur: unknown = null
 
     if (geminiKey) {
       try {
         texteBrut = await extraireAvecGemini(contenu, geminiKey)
       } catch (err) {
+        derniereErreur = err
         console.error('Gemini indisponible pour extraction catalogue, on essaie la suite:', err)
       }
     }
@@ -219,11 +222,17 @@ export async function POST(req: NextRequest) {
       try {
         texteBrut = await extraireAvecAnthropic(contenu, anthropicKey)
       } catch (err) {
+        derniereErreur = err
         console.error('Anthropic indisponible pour extraction catalogue:', err)
       }
     }
 
     if (texteBrut === null) {
+      // On journalise la vraie cause (cle invalide, quota depasse, modele
+      // inexistant...) dans /admin/erreurs - le message montre au cabinet
+      // seulement un message generique, mais on peut diagnostiquer precisement
+      // en consultant les erreurs recentes cote admin.
+      if (derniereErreur) await logErreur('/api/catalogue/extraire-pdf', derniereErreur)
       return NextResponse.json(
         {
           error:

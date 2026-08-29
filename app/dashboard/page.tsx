@@ -18,6 +18,7 @@ import PhoneInput, { decouperTelephone } from '@/components/PhoneInput'
 type Client = {
   id: string
   nom_entreprise: string
+  email?: string | null
   statut_abonnement: string
   mode_ciblage: 'entreprise' | 'particulier'
   secteur_activite: string | null
@@ -317,6 +318,13 @@ export default function DashboardPage() {
   const [envoiReponseEnCours, setEnvoiReponseEnCours] = useState<string | null>(null)
   const [diagnosticsValides, setDiagnosticsValides] = useState<DiagnosticValide[]>([])
   const [messageLinkedin, setMessageLinkedin] = useState<string | null>(null)
+  const [previsualisationEnvoi, setPrevisualisationEnvoi] = useState<{
+    targetId: string
+    typeEnvoi: 'diagnostic' | 'message'
+    diagnosticId?: string
+    canal: string
+    texte: string
+  } | null>(null)
   const [estAdmin, setEstAdmin] = useState(false)
   const [monClientUserId, setMonClientUserId] = useState<string | null>(null)
   const [monRole, setMonRole] = useState<string | null>(null)
@@ -599,7 +607,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, taille_min_salaries, taille_max_salaries, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, base_email_existante, budget_publicitaire, objectif_chiffre, onglets_autorises, verticals_autorises, vertical_id, verticals(slug)'
+          'id, nom_entreprise, email, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, taille_min_salaries, taille_max_salaries, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, base_email_existante, budget_publicitaire, objectif_chiffre, onglets_autorises, verticals_autorises, vertical_id, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -608,6 +616,7 @@ export default function DashboardPage() {
         setClient(clientData as unknown as Client)
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
         const cd = clientData as unknown as Client
+        setEmailCabinet(cd.email ?? '')
         setPresenceDigitale({
           site_web: cd.site_web ?? '',
           facebook_url: cd.facebook_url ?? '',
@@ -1234,6 +1243,32 @@ export default function DashboardPage() {
   const [presenceDigitaleEnCours, setPresenceDigitaleEnCours] = useState(false)
   const [presenceDigitaleMessage, setPresenceDigitaleMessage] = useState<string | null>(null)
 
+  // Retour terrain : l'email professionnel saisi a l'inscription n'etait ensuite
+  // modifiable nulle part (ni cote cabinet, ni cote admin) - or c'est l'adresse
+  // utilisee pour les notifications (reponse positive, relance...).
+  const [emailCabinet, setEmailCabinet] = useState('')
+  const [emailCabinetEnCours, setEmailCabinetEnCours] = useState(false)
+  const [emailCabinetMessage, setEmailCabinetMessage] = useState<string | null>(null)
+
+  const enregistrerEmailCabinet = async () => {
+    if (!client) return
+    const nouveauEmail = emailCabinet.trim()
+    if (!nouveauEmail || !nouveauEmail.includes('@')) {
+      setEmailCabinetMessage('Adresse email invalide.')
+      return
+    }
+    setEmailCabinetEnCours(true)
+    setEmailCabinetMessage(null)
+    const { error } = await supabase.from('clients').update({ email: nouveauEmail }).eq('id', client.id)
+    if (error) {
+      setEmailCabinetMessage("Erreur lors de l'enregistrement.")
+    } else {
+      setClient({ ...client, email: nouveauEmail })
+      setEmailCabinetMessage('✅ Enregistré.')
+    }
+    setEmailCabinetEnCours(false)
+  }
+
   const enregistrerPresenceDigitale = async () => {
     if (!client) return
     setPresenceDigitaleEnCours(true)
@@ -1485,18 +1520,54 @@ export default function DashboardPage() {
     setCibleEditionOuverte(null)
   }
 
-  const envoyerVersTarget = async (targetId: string, typeEnvoi: 'diagnostic' | 'message') => {
+  // Retour terrain : le cabinet veut relire (et au besoin corriger) le texte
+  // exact avant qu'il ne parte au prospect - on previsualise d'abord (l'API
+  // cree le vrai lien de diagnostic mais n'envoie rien), puis on confirme.
+  const previsualiserEnvoi = async (targetId: string, typeEnvoi: 'diagnostic' | 'message') => {
     if (!client) return
     setEnvoiEnCours(targetId)
-
     try {
       const res = await fetch('/api/outreach/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_id: targetId, type_envoi: typeEnvoi }),
+        body: JSON.stringify({ target_id: targetId, type_envoi: typeEnvoi, previsualiser: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error ?? 'Erreur lors de la préparation du message')
+      } else {
+        setPrevisualisationEnvoi({
+          targetId,
+          typeEnvoi,
+          diagnosticId: data.diagnostic_id,
+          canal: data.canal,
+          texte: data.message,
+        })
+      }
+    } catch {
+      alert('Impossible de contacter le serveur')
+    }
+    setEnvoiEnCours(null)
+  }
+
+  const confirmerEnvoi = async () => {
+    if (!client || !previsualisationEnvoi) return
+    const { targetId, typeEnvoi, diagnosticId, texte } = previsualisationEnvoi
+    setEnvoiEnCours(targetId)
+    try {
+      const res = await fetch('/api/outreach/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_id: targetId,
+          type_envoi: typeEnvoi,
+          diagnostic_id_existant: diagnosticId,
+          message_final: texte,
+        }),
       })
       const data = await res.json()
       if (!res.ok) alert(data.error ?? "Erreur lors de l'envoi")
+      setPrevisualisationEnvoi(null)
       await chargerTout(client.id)
     } catch {
       alert('Impossible de contacter le serveur')
@@ -1504,8 +1575,8 @@ export default function DashboardPage() {
     setEnvoiEnCours(null)
   }
 
-  const envoyerDiagnostic = (targetId: string) => envoyerVersTarget(targetId, 'diagnostic')
-  const envoyerMessage = (targetId: string) => envoyerVersTarget(targetId, 'message')
+  const envoyerDiagnostic = (targetId: string) => previsualiserEnvoi(targetId, 'diagnostic')
+  const envoyerMessage = (targetId: string) => previsualiserEnvoi(targetId, 'message')
 
   const preparerLinkedin = async (targetId: string) => {
     if (!client) return
@@ -2144,6 +2215,42 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col md:flex-row" dir={dir}>
+      {previsualisationEnvoi && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-lg w-full space-y-3">
+            <h3 className="font-semibold text-lg">
+              {previsualisationEnvoi.typeEnvoi === 'diagnostic' ? '📋 Vérifier avant envoi' : '✉️ Vérifier avant envoi'}
+            </h3>
+            <p className="text-slate-400 text-xs">
+              Ce texte sera envoyé par{' '}
+              {previsualisationEnvoi.canal === 'whatsapp' ? 'WhatsApp' : 'Email'}. Relis-le (et modifie-le si besoin)
+              avant de confirmer.
+            </p>
+            <textarea
+              value={previsualisationEnvoi.texte}
+              onChange={(e) =>
+                setPrevisualisationEnvoi({ ...previsualisationEnvoi, texte: e.target.value })
+              }
+              className="w-full h-40 rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setPrevisualisationEnvoi(null)}
+                className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmerEnvoi}
+                disabled={envoiEnCours === previsualisationEnvoi.targetId}
+                className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
+              >
+                {envoiEnCours === previsualisationEnvoi.targetId ? 'Envoi...' : '✅ Envoyer maintenant'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {messageLinkedin && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-lg w-full space-y-3">
@@ -3396,6 +3503,31 @@ export default function DashboardPage() {
                 </select>
               </div>
             )}
+
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+              <h3 className="text-sm font-semibold">📧 Email du cabinet</h3>
+              <p className="text-xs text-slate-500">
+                Adresse utilisée pour les notifications (réponse positive, relances...) et le mot de
+                passe oublié. Modifiable ici si tu as fait une erreur à l'inscription.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={emailCabinet}
+                  onChange={(e) => setEmailCabinet(e.target.value)}
+                  placeholder="contact@cabinet.com"
+                  type="email"
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                />
+                <button
+                  onClick={enregistrerEmailCabinet}
+                  disabled={emailCabinetEnCours}
+                  className="px-4 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
+                >
+                  {emailCabinetEnCours ? '...' : 'Enregistrer'}
+                </button>
+              </div>
+              {emailCabinetMessage && <p className="text-xs text-slate-400">{emailCabinetMessage}</p>}
+            </div>
 
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <h3 className="text-sm font-semibold">🌐 Présence digitale (site web & réseaux)</h3>

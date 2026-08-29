@@ -1019,9 +1019,9 @@ export default function AdminPage() {
             className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
           >
             <option value="tous">Tous les secteurs</option>
-            {Array.from(new Set(clients.map((c) => c.vertical_slug).filter(Boolean))).map((v) => (
-              <option key={v as string} value={v as string}>
-                {v}
+            {VERTICALS_ADMIN.map((v) => (
+              <option key={v.slug} value={v.slug}>
+                {v.label}
               </option>
             ))}
           </select>

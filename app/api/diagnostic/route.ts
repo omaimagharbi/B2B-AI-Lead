@@ -57,7 +57,7 @@ function genererBrouillonSimule(probleme: string, modeCiblage: ModeCiblage) {
 }
 
 async function genererBrouillonGemini(probleme: string, systemPrompt: string, apiKey: string) {
-  const modele = process.env.GEMINI_MODEL ?? 'gemini-3.7-flash'
+  const modele = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
   const controleur = new AbortController()
   const minuteur = setTimeout(() => controleur.abort(), TIMEOUT_IA_MS)
   let res: Response
