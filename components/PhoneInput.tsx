@@ -1,11 +1,29 @@
 'use client'
 
+// Meme liste de pays que lib/pays.ts (PAYS_DISPONIBLES), avec indicatif +
+// emoji drapeau, pour que le selecteur telephone couvre tous les pays deja
+// geres ailleurs dans l'app (ciblage, zones, devise...) et pas seulement le
+// Maghreb/Golfe/France du depart.
 export const INDICATIFS_PAYS: { code: string; label: string }[] = [
-  { code: '+216', label: '🇹🇳 +216' },
-  { code: '+971', label: '🇦🇪 +971' },
-  { code: '+966', label: '🇸🇦 +966' },
-  { code: '+974', label: '🇶🇦 +974' },
-  { code: '+33', label: '🇫🇷 +33' },
+  { code: '+213', label: '🇩🇿 +213' }, // Algérie
+  { code: '+49', label: '🇩🇪 +49' }, // Allemagne
+  { code: '+966', label: '🇸🇦 +966' }, // Arabie Saoudite
+  { code: '+32', label: '🇧🇪 +32' }, // Belgique
+  { code: '+1', label: '🇨🇦 +1' }, // Canada
+  { code: '+225', label: '🇨🇮 +225' }, // Côte d'Ivoire
+  { code: '+971', label: '🇦🇪 +971' }, // Émirats Arabes Unis
+  { code: '+34', label: '🇪🇸 +34' }, // Espagne
+  { code: '+1', label: '🇺🇸 +1 (US)' }, // États-Unis
+  { code: '+33', label: '🇫🇷 +33' }, // France
+  { code: '+39', label: '🇮🇹 +39' }, // Italie
+  { code: '+352', label: '🇱🇺 +352' }, // Luxembourg
+  { code: '+212', label: '🇲🇦 +212' }, // Maroc
+  { code: '+31', label: '🇳🇱 +31' }, // Pays-Bas
+  { code: '+974', label: '🇶🇦 +974' }, // Qatar
+  { code: '+44', label: '🇬🇧 +44' }, // Royaume-Uni
+  { code: '+221', label: '🇸🇳 +221' }, // Sénégal
+  { code: '+41', label: '🇨🇭 +41' }, // Suisse
+  { code: '+216', label: '🇹🇳 +216' }, // Tunisie
   { code: '', label: 'Autre' },
 ]
 
