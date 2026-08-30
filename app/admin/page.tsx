@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { SOUS_SECTEURS_PAR_VERTICAL } from '@/lib/sous-secteurs'
 
 type ClientAdmin = {
   id: string
@@ -18,6 +19,7 @@ type ClientAdmin = {
   nb_cibles_mois_en_cours?: number
   plan_tarifaire: string | null
   vertical_slug: string | null
+  secteur_activite?: string | null
   onglets_autorises?: string[] | null
   verticals_autorises?: string[] | null
   created_at: string
@@ -98,6 +100,27 @@ export default function AdminPage() {
   const [manuelChatbotSauvegarde, setManuelChatbotSauvegarde] = useState(false)
   const [manuelChatbotImportEnCours, setManuelChatbotImportEnCours] = useState(false)
   const [manuelChatbotErreurImport, setManuelChatbotErreurImport] = useState<string | null>(null)
+
+  // Panneau de diagnostic : les echecs silencieux (IA indisponible, extraction
+  // catalogue, etc.) sont desormais journalises en base (voir logErreur) mais
+  // il n'y avait encore aucun endroit pour les consulter cote admin.
+  const [erreursLogs, setErreursLogs] = useState<
+    { id: string; route: string; message: string | null; created_at: string }[]
+  >([])
+  const [erreursOuvert, setErreursOuvert] = useState(false)
+  const [erreursChargement, setErreursChargement] = useState(false)
+
+  const chargerErreurs = async () => {
+    setErreursChargement(true)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const res = await fetch('/api/admin/erreurs', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (res.ok) setErreursLogs(data.erreurs ?? [])
+    setErreursChargement(false)
+  }
 
   const charger = async () => {
     setChargement(true)
@@ -1028,7 +1051,44 @@ export default function AdminPage() {
           <span className="text-xs text-slate-500">
             {clientsFiltres.length} / {clients.length} cabinet{clients.length > 1 ? 's' : ''}
           </span>
+          <button
+            onClick={() => {
+              setErreursOuvert(!erreursOuvert)
+              if (!erreursOuvert) chargerErreurs()
+            }}
+            className="text-xs px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:border-red-500 hover:text-red-400 ml-auto"
+          >
+            🐞 Erreurs récentes
+          </button>
         </div>
+
+        {erreursOuvert && (
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">🐞 Erreurs récentes (IA indisponible, extraction échouée...)</h3>
+              <button onClick={chargerErreurs} className="text-xs text-accent">
+                Rafraîchir
+              </button>
+            </div>
+            {erreursChargement ? (
+              <p className="text-xs text-slate-500">Chargement...</p>
+            ) : erreursLogs.length === 0 ? (
+              <p className="text-xs text-slate-500">Aucune erreur journalisée récemment.</p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {erreursLogs.map((e) => (
+                  <div key={e.id} className="text-xs border-b border-slate-800 pb-2">
+                    <div className="flex justify-between text-slate-500">
+                      <span className="font-mono">{e.route}</span>
+                      <span>{new Date(e.created_at).toLocaleString('fr-FR')}</span>
+                    </div>
+                    <p className="text-red-400 mt-1 break-words">{e.message}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-3">
           {clientsFiltres.map((client) => {
@@ -1126,6 +1186,59 @@ export default function AdminPage() {
                         })}
                       </div>
                     </div>
+                    {(() => {
+                      const secteursCoches = (
+                        client.verticals_autorises ?? (client.vertical_slug ? [client.vertical_slug] : [])
+                      ).filter((slug) => SOUS_SECTEURS_PAR_VERTICAL[slug])
+                      if (secteursCoches.length === 0) return null
+                      return (
+                        <div>
+                          <p className="text-xs font-semibold text-slate-300 mb-1">
+                            Sous-secteur précis (même liste qu'à l'inscription)
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {secteursCoches.map((slug) => (
+                              <select
+                                key={slug}
+                                value={
+                                  SOUS_SECTEURS_PAR_VERTICAL[slug].includes(client.secteur_activite ?? '')
+                                    ? client.secteur_activite ?? ''
+                                    : ''
+                                }
+                                onChange={async (e) => {
+                                  setMajEnCours(client.id)
+                                  const { data: sessionData } = await supabase.auth.getSession()
+                                  const token = sessionData.session?.access_token
+                                  await fetch('/api/admin/clients', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      Authorization: `Bearer ${token}`,
+                                    },
+                                    body: JSON.stringify({
+                                      client_id: client.id,
+                                      secteur_activite: e.target.value || null,
+                                    }),
+                                  })
+                                  await charger()
+                                  setMajEnCours(null)
+                                }}
+                                className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
+                              >
+                                <option value="">
+                                  — {VERTICALS_ADMIN.find((v) => v.slug === slug)?.label ?? slug} —
+                                </option>
+                                {SOUS_SECTEURS_PAR_VERTICAL[slug].map((s) => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </select>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
                     <div>
                       <p className="text-xs font-semibold text-slate-300 mb-1">
                         Onglets accessibles (décoche pour restreindre)

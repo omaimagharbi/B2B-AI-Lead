@@ -207,32 +207,37 @@ export async function POST(req: NextRequest) {
     const geminiKey = process.env.GEMINI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     let texteBrut: string | null = null
-    let derniereErreur: unknown = null
+    const erreurs: string[] = []
 
     if (geminiKey) {
       try {
         texteBrut = await extraireAvecGemini(contenu, geminiKey)
       } catch (err) {
-        derniereErreur = err
+        erreurs.push(`Gemini: ${err instanceof Error ? err.message : String(err)}`)
         console.error('Gemini indisponible pour extraction catalogue, on essaie la suite:', err)
       }
+    } else {
+      erreurs.push('Gemini: GEMINI_API_KEY absente')
     }
 
     if (texteBrut === null && anthropicKey) {
       try {
         texteBrut = await extraireAvecAnthropic(contenu, anthropicKey)
       } catch (err) {
-        derniereErreur = err
+        erreurs.push(`Anthropic: ${err instanceof Error ? err.message : String(err)}`)
         console.error('Anthropic indisponible pour extraction catalogue:', err)
       }
+    } else if (texteBrut === null) {
+      erreurs.push('Anthropic: ANTHROPIC_API_KEY absente')
     }
 
     if (texteBrut === null) {
       // On journalise la vraie cause (cle invalide, quota depasse, modele
       // inexistant...) dans /admin/erreurs - le message montre au cabinet
       // seulement un message generique, mais on peut diagnostiquer precisement
-      // en consultant les erreurs recentes cote admin.
-      if (derniereErreur) await logErreur('/api/catalogue/extraire-pdf', derniereErreur)
+      // en consultant les erreurs recentes cote admin (voir bouton "Erreurs
+      // recentes" en haut de la page /admin).
+      await logErreur('/api/catalogue/extraire-pdf', new Error(erreurs.join(' | ')))
       return NextResponse.json(
         {
           error:

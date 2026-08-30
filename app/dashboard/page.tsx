@@ -4,12 +4,12 @@ import { Fragment, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { PAYS_DISPONIBLES } from '@/lib/pays'
+import { zonePourPays, canalParPays } from '@/lib/pays'
 import { SECTEURS_DISPONIBLES } from '@/lib/secteurs'
 import { professionsDisponibles, PROFILS_PARTICULIER } from '@/lib/professions'
 import { traduire, type Langue } from '@/lib/i18n'
 import { templatesPourVertical } from '@/lib/templates'
 import { vocabulairePourVertical, etapesPipelinePourVertical } from '@/lib/vocabulaire'
-import { zonePourPays } from '@/lib/pays'
 import ValidationItem from './validation-item'
 import DropdownMultiSelect from './dropdown-multiselect'
 import ChatbotWidget from '@/components/ChatbotWidget'
@@ -395,6 +395,7 @@ export default function DashboardPage() {
     nom_complet: '',
     indicatifTelephone: '+216',
     telephone: '',
+    email: '',
   })
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteNom, setInviteNom] = useState('')
@@ -1328,10 +1329,12 @@ export default function DashboardPage() {
     changements: {
       nom_complet?: string
       telephone?: string | null
+      email?: string
       onglets_masques?: string[]
       photo_url?: string | null
     }
   ) => {
+    const membreAvant = membresEquipe.find((m) => m.id === id)
     setMembresEquipe((prev) =>
       prev.map((m) => (m.id === id ? { ...m, ...changements } as typeof m : m))
     )
@@ -1340,11 +1343,21 @@ export default function DashboardPage() {
     }
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData.session?.access_token
-    await fetch('/api/team/modifier', {
+    const res = await fetch('/api/team/modifier', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ id, ...changements }),
     })
+    if (!res.ok && changements.email !== undefined) {
+      // Le changement d'email peut echouer (email deja utilise, invalide...) -
+      // on revient sur l'ancien email affiche plutot que de laisser croire
+      // que le changement a ete pris en compte.
+      const data = await res.json().catch(() => ({}))
+      alert(data.error ?? "Erreur lors du changement d'email")
+      if (membreAvant) {
+        setMembresEquipe((prev) => prev.map((m) => (m.id === id ? membreAvant : m)))
+      }
+    }
   }
 
   const basculerOngletMasqueMembre = (membre: { id: string; onglets_masques: string[] }, ongletId: string) => {
@@ -3142,7 +3155,11 @@ export default function DashboardPage() {
                             disabled={envoiEnCours === target.id}
                             className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
                           >
-                            {envoiEnCours === target.id ? 'Envoi...' : '✉️ Premier contact'}
+                            {envoiEnCours === target.id
+                              ? 'Envoi...'
+                              : canalParPays(target.country ?? 'FR') === 'whatsapp'
+                              ? '💬 Premier contact (WhatsApp)'
+                              : '✉️ Premier contact (Email)'}
                           </button>
                         )}
                         <button
@@ -3633,6 +3650,7 @@ export default function DashboardPage() {
                                   nom_complet: m.nom_complet ?? '',
                                   indicatifTelephone: indicatif,
                                   telephone: numero,
+                                  email: m.email ?? '',
                                 })
                               }
                             }}
@@ -3666,8 +3684,17 @@ export default function DashboardPage() {
                       <div className="border-t border-slate-800 p-3 space-y-3 bg-slate-950/60">
                         <div>
                           <label className="text-xs text-slate-500">Email de connexion</label>
-                          <p className="text-sm text-slate-300">
-                            {m.email || 'Non renseigné (compte créé avant cette mise à jour)'}
+                          <input
+                            value={editionMembreForm.email}
+                            onChange={(e) =>
+                              setEditionMembreForm({ ...editionMembreForm, email: e.target.value })
+                            }
+                            placeholder="email@exemple.com"
+                            type="email"
+                            className="w-full mt-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+                          />
+                          <p className="text-xs text-slate-600 mt-1">
+                            Ce membre devra utiliser ce nouvel email pour se connecter la prochaine fois.
                           </p>
                         </div>
                         <div className="flex gap-2">
@@ -3696,9 +3723,13 @@ export default function DashboardPage() {
                               const telephoneFinal = editionMembreForm.telephone.trim()
                                 ? `${editionMembreForm.indicatifTelephone}${editionMembreForm.telephone.trim()}`
                                 : null
+                              const emailModifie =
+                                editionMembreForm.email.trim() &&
+                                editionMembreForm.email.trim().toLowerCase() !== (m.email ?? '').toLowerCase()
                               await modifierMembre(m.id, {
                                 nom_complet: editionMembreForm.nom_complet,
                                 telephone: telephoneFinal,
+                                ...(emailModifie ? { email: editionMembreForm.email.trim() } : {}),
                               })
                               setMembreEnEdition(null)
                             }}

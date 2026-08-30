@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const { data: clients, error } = await supabaseAdmin
     .from('clients')
-    .select('id, nom_entreprise, email, statut_abonnement, plan_tarifaire, commission_pourcentage, acces_active, montant_abonnement, devise_abonnement, statut_paiement, date_echeance_paiement, mode_paiement, quota_cibles_mensuel, onglets_autorises, verticals_autorises, created_at, verticals(slug)')
+    .select('id, nom_entreprise, email, statut_abonnement, plan_tarifaire, commission_pourcentage, acces_active, montant_abonnement, devise_abonnement, statut_paiement, date_echeance_paiement, mode_paiement, quota_cibles_mensuel, onglets_autorises, verticals_autorises, secteur_activite, created_at, verticals(slug)')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -187,6 +187,7 @@ export async function POST(req: NextRequest) {
     quota_cibles_mensuel,
     onglets_autorises,
     verticals_autorises,
+    secteur_activite,
   } = await req.json()
 
   if (!client_id) {
@@ -206,6 +207,7 @@ export async function POST(req: NextRequest) {
   if (quota_cibles_mensuel !== undefined) misAJour.quota_cibles_mensuel = quota_cibles_mensuel
   if (onglets_autorises !== undefined) misAJour.onglets_autorises = onglets_autorises
   if (verticals_autorises !== undefined) misAJour.verticals_autorises = verticals_autorises
+  if (secteur_activite !== undefined) misAJour.secteur_activite = secteur_activite
 
   const { error } = await supabaseAdmin.from('clients').update(misAJour).eq('id', client_id)
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { SOUS_SECTEURS_PAR_VERTICAL } from '@/lib/sous-secteurs'
 
 const cartes = [
   {
@@ -9,12 +10,7 @@ const cartes = [
     description: 'Recevez des prospects qualifiés, prêts à signer, sans effort de prospection.',
     dotColor: '#1F6F78',
     active: true,
-    sousSecteurs: [
-      'Cabinet de Formation Professionnelle',
-      'Organisme de Coaching Exécutif & Dirigeants',
-      'Cabinet de Recrutement & Chasseur de Têtes',
-      'Centre de Reconversion & École Privée',
-    ],
+    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['cabinet-formation'],
   },
   {
     slug: 'startup-saas',
@@ -22,11 +18,7 @@ const cartes = [
     description: 'Recevez des audits techniques qualifiés directement dans votre pipeline.',
     dotColor: '#F0CC7A',
     active: true,
-    sousSecteurs: [
-      'Éditeur de Logiciel SaaS (B2B / B2C)',
-      'Start-up Tech / DeepTech / FinTech',
-      'Plateforme Digitale / Marketplace B2B',
-    ],
+    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['startup-saas'],
   },
   {
     slug: 'pme-services',
@@ -34,11 +26,7 @@ const cartes = [
     description: 'Recevez des audits organisationnels qualifiés directement dans votre pipeline.',
     dotColor: '#0F2540',
     active: true,
-    sousSecteurs: [
-      'Constructeur & Fournisseur Industriel B2B',
-      'Entreprise de Distribution & Grossiste',
-      'Société de Services Traditionnels B2B',
-    ],
+    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['pme-services'],
   },
   {
     slug: 'investisseur-incubateur',
@@ -46,12 +34,7 @@ const cartes = [
     description: "Sourcez du dealflow qualifié : fondateurs et startups prêts à être contactés.",
     dotColor: '#1F6F78',
     active: true,
-    sousSecteurs: [
-      'Fonds de Capital-Risque (VC / Venture Capital)',
-      'Réseau de Business Angels',
-      'Incubateur & Accélérateur de Startups',
-      'Cabinet de Conseil en Levée de Fonds',
-    ],
+    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['investisseur-incubateur'],
   },
   {
     slug: 'comptable-fiscal',
@@ -59,12 +42,7 @@ const cartes = [
     description: 'Automatisez la chasse de mandats — expertise comptable, avocats d\'affaires, conformité.',
     dotColor: '#8892A0',
     active: false,
-    sousSecteurs: [
-      'Expertise Comptable',
-      "Avocats d'Affaires",
-      'Conseil Fiscal',
-      'Cabinet de Conformité',
-    ],
+    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['comptable-fiscal'],
   },
   {
     slug: 'services-generaux',
@@ -72,12 +50,7 @@ const cartes = [
     description: 'Transitaires, maintenance industrielle, facility management, événementiel B2B.',
     dotColor: '#8892A0',
     active: false,
-    sousSecteurs: [
-      'Transitaire / Transit',
-      'Maintenance Industrielle',
-      'Facility Management',
-      'Événementiel B2B',
-    ],
+    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['services-generaux'],
   },
 ]
 
