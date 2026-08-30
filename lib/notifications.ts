@@ -27,6 +27,8 @@ export function construireMessage(
   return `${base}\n\n---\nPour ne plus recevoir de message : ${variables.lienDesinscription}`
 }
 
+import { enregistrerSanteApi } from '@/lib/sante-api'
+
 export async function envoyerWhatsapp(telephone: string, message: string, logoUrl?: string | null) {
   const idInstance = process.env.GREENAPI_ID_INSTANCE
   const apiToken = process.env.GREENAPI_API_TOKEN
@@ -61,15 +63,23 @@ export async function envoyerWhatsapp(telephone: string, message: string, logoUr
   // la presence d'un identifiant de message reel, pas seulement le code HTTP.
   if (!res.ok || !data?.idMessage) {
     console.error('Erreur GreenAPI (statut ou reponse invalide):', res.status, JSON.stringify(data))
+    await enregistrerSanteApi('whatsapp', false, data?.message ?? `HTTP ${res.status}`)
     throw new Error(
       data?.message
         ? `Echec envoi WhatsApp : ${data.message}`
         : "Echec envoi WhatsApp - verifie que l'instance GreenAPI est bien autorisee (QR code scanne)"
     )
   }
+
+  await enregistrerSanteApi('whatsapp', true)
 }
 
-export async function envoyerEmail(email: string, message: string, logoUrl?: string | null) {
+export async function envoyerEmail(
+  email: string,
+  message: string,
+  logoUrl?: string | null,
+  sujet: string = 'Votre diagnostic personnalisé'
+) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) throw new Error('Configuration Resend manquante')
 
@@ -91,7 +101,7 @@ export async function envoyerEmail(email: string, message: string, logoUrl?: str
     body: JSON.stringify({
       from: fromEmail,
       to: email,
-      subject: 'Votre diagnostic personnalisé',
+      subject: sujet,
       html: `${logoHtml}<p>${message.replace(/\n/g, '<br/>')}</p>`,
     }),
   })
@@ -100,8 +110,11 @@ export async function envoyerEmail(email: string, message: string, logoUrl?: str
 
   if (!res.ok || !data?.id) {
     console.error('Erreur Resend:', res.status, JSON.stringify(data))
+    await enregistrerSanteApi('email', false, data?.message ?? `HTTP ${res.status}`)
     throw new Error(
       data?.message ? `Echec envoi Email : ${data.message}` : 'Echec envoi Email'
     )
   }
+
+  await enregistrerSanteApi('email', true)
 }

@@ -156,16 +156,69 @@ export function calculerScoreChaleur(params: {
 }
 
 // ---------------------------------------------------------------------
-// 4. RECOMMANDATIONS COMMERCIALES (usage interne cabinet, jamais montrees
-//    au prospect)
+// 3bis. EXPLICATION DU SCORE (point 37 - rendre le score actionnable) :
+// pas d'IA generative, on reconstruit simplement les regles qui ont
+// compte pour ce score precis, dans l'ordre de calculerScoreChaleur.
 // ---------------------------------------------------------------------
 
-// Questions de clarification pre-ecrites (pas d'IA generative) : a poser au prospect
-// quand le besoin reste flou (categorie "general" faute de mots-cles suffisants).
+export function genererExplicationScore(params: {
+  segment: Segment
+  nbRelancesDejaEnvoyees?: number
+  phraseProspect: string
+}): string {
+  const { segment, nbRelancesDejaEnvoyees = 0, phraseProspect } = params
+  const elements: string[] = []
+
+  const nbMots = phraseProspect.trim().split(/\s+/).filter(Boolean).length
+  elements.push(
+    nbMots >= 15 ? 'problème décrit en détail' : 'problème exprimé brièvement'
+  )
+
+  if (segment.urgence === 'haute') elements.push('urgence déclarée haute')
+  else if (segment.urgence === 'basse') elements.push('aucune urgence exprimée')
+  else elements.push('urgence déclarée moyenne')
+
+  elements.push(
+    segment.budget_mentionne ? 'budget évoqué par le prospect' : 'pas de budget précis renseigné'
+  )
+
+  if (nbRelancesDejaEnvoyees > 0) {
+    elements.push(`${nbRelancesDejaEnvoyees} relance(s) déjà nécessaire(s)`)
+  }
+
+  return `Score basé sur : ${elements.join(' + ')}.`
+}
+
+// ---------------------------------------------------------------------
+// 3ter. BESOIN SOUS-JACENT (point 38 - traduction marketing de la
+// citation brute du prospect), regle simple par categorie detectee.
+// ---------------------------------------------------------------------
+
+const BESOIN_SOUS_JACENT: Record<Categorie, string> = {
+  financier: 'Manque de visibilité ou de maîtrise sur les coûts / le retour sur investissement.',
+  humain: "Manque de méthode ou d'outils pour gérer, motiver ou structurer une équipe.",
+  strategique: "Manque de vision claire ou de plan structuré pour piloter la croissance.",
+  organisationnel: 'Manque de méthodologie de priorisation et de gestion du temps/des projets.',
+  juridique: 'Manque de sécurisation ou de maîtrise du cadre réglementaire applicable.',
+  technique: "Manque d'outillage ou de maîtrise technique pour exécuter efficacement.",
+  general: 'Manque de méthodologie de ciblage et de sourcing de leads (B2B ou B2C).',
+}
+
+export function genererBesoinSousJacent(categorie: Categorie): string {
+  return `🎯 Besoin sous-jacent : ${BESOIN_SOUS_JACENT[categorie]}`
+}
+
+
+
+// Questions de clarification pre-ecrites (pas d'IA generative) : posees
+// uniquement quand le besoin reste flou (categorie "general"). Le
+// formulaire prospect demande deja "depuis quand" et "deja essaye" (voir
+// app/diagnostic/[token]/page.tsx) - ces questions ne doivent donc JAMAIS
+// redemander la meme chose, mais aller plus loin (budget/decideur/impact
+// chiffre) pour vraiment qualifier le prospect avant l'appel.
 const QUESTIONS_CLARIFICATION: string[] = [
-  "Quel est le principal impact de ce problème aujourd'hui (temps perdu, argent, stress) ?",
-  'Depuis combien de temps cette situation dure-t-elle ?',
-  'Avez-vous déjà essayé une solution, et pourquoi ça n\'a pas suffi ?',
+  "Quel est l'objectif chiffré (chiffre d'affaires, budget, délai) impacté par ce problème ?",
+  'Qui est le décisionnaire final pour ce type de projet/budget ?',
 ]
 
 export function genererRecommandations(segment: Segment, score: number): Recommandation[] {
@@ -237,7 +290,9 @@ export function genererRecommandations(segment: Segment, score: number): Recomma
       recos.push({
         titre: 'Besoin encore flou',
         action:
-          "Poser ces questions de clarification avant de proposer une offre, le besoin n'est pas encore precis.",
+          "Le prospect a déjà renseigné sa situation (durée, solutions déjà tentées — voir sa " +
+          "réponse ci-dessus) : ne les redemandez pas. Passez directement à ces questions de " +
+          "qualification plus profondes avant de proposer une offre :",
         priorite: 'basse',
         questions: QUESTIONS_CLARIFICATION,
       })
@@ -300,9 +355,9 @@ const CONTENUS_MARKETING: Record<Categorie, ContenuMarketing> = {
     format_suggere: 'Video demo courte',
   },
   general: {
-    titre: 'Contenu de decouverte generaliste',
+    titre: "Sensibilisation au ciblage",
     accroche_linkedin: 'Un accompagnement sur-mesure commence toujours par les bonnes questions.',
-    format_suggere: 'Post LinkedIn generique',
+    format_suggere: "Publication LinkedIn d'expertise",
   },
 }
 

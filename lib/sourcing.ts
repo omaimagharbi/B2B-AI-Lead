@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { nomPays } from '@/lib/pays'
+import { enregistrerSanteApi } from '@/lib/sante-api'
 
 // =====================================================================
 // ⚠️ A ADAPTER selon les actors Apify choisis (voir onglet "Input"/"Runs"
@@ -47,9 +48,11 @@ async function appellerApify(actorId: string, input: Record<string, unknown>) {
 
   if (!res.ok) {
     const detail = await res.text()
+    await enregistrerSanteApi('sourcing', false, `${actorId}: HTTP ${res.status}`)
     throw new Error(`Erreur Apify ${actorId} (${res.status}): ${detail}`)
   }
 
+  await enregistrerSanteApi('sourcing', true, actorId)
   return (await res.json()) as Record<string, unknown>[]
 }
 
