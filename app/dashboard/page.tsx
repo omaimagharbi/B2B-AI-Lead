@@ -323,6 +323,7 @@ export default function DashboardPage() {
     typeEnvoi: 'diagnostic' | 'message'
     diagnosticId?: string
     canal: string
+    canalForce?: 'email'
     texte: string
   } | null>(null)
   const [estAdmin, setEstAdmin] = useState(false)
@@ -1536,14 +1537,23 @@ export default function DashboardPage() {
   // Retour terrain : le cabinet veut relire (et au besoin corriger) le texte
   // exact avant qu'il ne parte au prospect - on previsualise d'abord (l'API
   // cree le vrai lien de diagnostic mais n'envoie rien), puis on confirme.
-  const previsualiserEnvoi = async (targetId: string, typeEnvoi: 'diagnostic' | 'message') => {
+  const previsualiserEnvoi = async (
+    targetId: string,
+    typeEnvoi: 'diagnostic' | 'message',
+    canalForce?: 'email'
+  ) => {
     if (!client) return
     setEnvoiEnCours(targetId)
     try {
       const res = await fetch('/api/outreach/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_id: targetId, type_envoi: typeEnvoi, previsualiser: true }),
+        body: JSON.stringify({
+          target_id: targetId,
+          type_envoi: typeEnvoi,
+          previsualiser: true,
+          ...(canalForce ? { canal_force: canalForce } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -1554,6 +1564,7 @@ export default function DashboardPage() {
           typeEnvoi,
           diagnosticId: data.diagnostic_id,
           canal: data.canal,
+          canalForce,
           texte: data.message,
         })
       }
@@ -1565,7 +1576,7 @@ export default function DashboardPage() {
 
   const confirmerEnvoi = async () => {
     if (!client || !previsualisationEnvoi) return
-    const { targetId, typeEnvoi, diagnosticId, texte } = previsualisationEnvoi
+    const { targetId, typeEnvoi, diagnosticId, texte, canalForce } = previsualisationEnvoi
     setEnvoiEnCours(targetId)
     try {
       const res = await fetch('/api/outreach/send', {
@@ -1576,6 +1587,7 @@ export default function DashboardPage() {
           type_envoi: typeEnvoi,
           diagnostic_id_existant: diagnosticId,
           message_final: texte,
+          ...(canalForce ? { canal_force: canalForce } : {}),
         }),
       })
       const data = await res.json()
@@ -1588,8 +1600,10 @@ export default function DashboardPage() {
     setEnvoiEnCours(null)
   }
 
-  const envoyerDiagnostic = (targetId: string) => previsualiserEnvoi(targetId, 'diagnostic')
-  const envoyerMessage = (targetId: string) => previsualiserEnvoi(targetId, 'message')
+  const envoyerDiagnostic = (targetId: string, canalForce?: 'email') =>
+    previsualiserEnvoi(targetId, 'diagnostic', canalForce)
+  const envoyerMessage = (targetId: string, canalForce?: 'email') =>
+    previsualiserEnvoi(targetId, 'message', canalForce)
 
   const preparerLinkedin = async (targetId: string) => {
     if (!client) return
@@ -3150,17 +3164,29 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex gap-2">
                         {target.statut === 'nouveau' && (
-                          <button
-                            onClick={() => envoyerMessage(target.id)}
-                            disabled={envoiEnCours === target.id}
-                            className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
-                          >
-                            {envoiEnCours === target.id
-                              ? 'Envoi...'
-                              : canalParPays(target.country ?? 'FR') === 'whatsapp'
-                              ? '💬 Premier contact (WhatsApp)'
-                              : '✉️ Premier contact (Email)'}
-                          </button>
+                          <>
+                            <button
+                              onClick={() => envoyerMessage(target.id)}
+                              disabled={envoiEnCours === target.id}
+                              className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                            >
+                              {envoiEnCours === target.id
+                                ? 'Envoi...'
+                                : canalParPays(target.country ?? 'FR') === 'whatsapp'
+                                ? '💬 Premier contact (WhatsApp)'
+                                : '✉️ Premier contact (Email)'}
+                            </button>
+                            {canalParPays(target.country ?? 'FR') === 'whatsapp' && target.email && (
+                              <button
+                                onClick={() => envoyerMessage(target.id, 'email')}
+                                disabled={envoiEnCours === target.id}
+                                title="Forcer l'envoi par email au lieu de WhatsApp"
+                                className="text-xs px-2 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white disabled:opacity-40"
+                              >
+                                ✉️ Forcer email
+                              </button>
+                            )}
+                          </>
                         )}
                         <button
                           onClick={() => envoyerDiagnostic(target.id)}

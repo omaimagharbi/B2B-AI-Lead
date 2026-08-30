@@ -14,9 +14,12 @@ export async function POST(req: NextRequest) {
     // type_envoi : 'diagnostic' (par defaut, cree un diagnostic + lien) ou 'message'
     // (envoie juste le message personnalise du cabinet, sans creer de diagnostic)
     const typeEnvoi: 'diagnostic' | 'message' = type_envoi === 'message' ? 'message' : 'diagnostic'
-    // canal_force : si 'linkedin', on ne fait AUCUN appel WhatsApp/Email - LinkedIn n'a pas
-    // d'API branchee ici, donc on prepare juste le texte pret a copier-coller par le cabinet.
+    // canal_force : 'linkedin' -> aucun appel WhatsApp/Email (texte a copier-coller,
+    // LinkedIn n'a pas d'API branchee ici). 'email' -> force l'envoi par email meme
+    // si le pays de la cible pointe normalement vers WhatsApp (utile quand WhatsApp
+    // n'est pas encore fiable/configure - le cabinet garde la main sur le canal).
     const forceLinkedin = canal_force === 'linkedin'
+    const forceEmail = canal_force === 'email'
     // previsualiser : etape 1 (facultative) - on prepare le texte exact (avec le vrai lien
     // de diagnostic si applicable) SANS l'envoyer, pour que le cabinet puisse le relire
     // (et au besoin le modifier) avant confirmation. On cree bien le diagnostic des cette
@@ -76,7 +79,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const canal = forceLinkedin ? 'linkedin' : canalParPays(target.country ?? 'FR')
+    const canal = forceLinkedin ? 'linkedin' : forceEmail ? 'email' : canalParPays(target.country ?? 'FR')
 
     if (!forceLinkedin && canal === 'whatsapp' && !target.telephone) {
       return NextResponse.json({ error: "Cette cible n'a pas de telephone" }, { status: 400 })

@@ -5,6 +5,7 @@ const profils = [
       'Ciblage de DRH et responsables formation, diagnostic bâti sur la méthodologie ADDIE, suivi des conventions signées.',
     tag: 'Formation',
     dotColor: '#1F6F78',
+    active: true,
   },
   {
     titre: 'Startups & Éditeurs SaaS',
@@ -12,6 +13,7 @@ const profils = [
       'Qualification des prospects techniques, argumentaire adapté aux décideurs produit, pipeline commercial dédié.',
     tag: 'Tech',
     dotColor: '#F0CC7A',
+    active: true,
   },
   {
     titre: 'PME de Services',
@@ -19,6 +21,31 @@ const profils = [
       'Prospection de missions et prestations, diagnostic orienté cadrage de besoin plutôt que catalogue produit.',
     tag: 'Services',
     dotColor: '#0F2540',
+    active: true,
+  },
+  {
+    titre: 'Écosystème Entrepreneurial',
+    description:
+      'Sourcing de dealflow qualifié : fondateurs et startups prêts à être contactés par les investisseurs et incubateurs.',
+    tag: 'Investissement',
+    dotColor: '#1F6F78',
+    active: true,
+  },
+  {
+    titre: 'Cabinet Comptable, Juridique & Fiscal',
+    description:
+      "Chasse de mandats automatisée — expertise comptable, avocats d'affaires, conformité.",
+    tag: 'Conformité',
+    dotColor: '#8892A0',
+    active: false,
+  },
+  {
+    titre: 'Logistique, Transit & Services Généraux',
+    description:
+      'Transitaires, maintenance industrielle, facility management, événementiel B2B.',
+    tag: 'Logistique',
+    dotColor: '#8892A0',
+    active: false,
   },
 ]
 
@@ -42,6 +69,8 @@ export default function Home() {
           <div className="hidden md:flex gap-7 text-[14.5px] text-[#4B5768]">
             <a href="/" className="hover:text-ink">Accueil</a>
             <a href="#a-propos" className="hover:text-ink">À propos</a>
+            <a href="/formation" className="hover:text-ink">Formation</a>
+            <a href="/insights" className="hover:text-ink">Insights</a>
           </div>
           <div className="flex items-center gap-3.5">
             <span className="text-[13px] text-[#7C8794] border border-slate-300 rounded-lg px-2.5 py-1.5 hidden sm:inline-block">
@@ -92,9 +121,6 @@ export default function Home() {
                 Voir une démo
               </a>
             </div>
-            <div className="mt-8 text-[13px] text-[#8892A0] flex gap-2 items-center">
-              <span className="text-ink font-bold">Conçu par une experte terrain</span> — certifiée PMP, 12 ans d&apos;expérience commerciale &amp; formation
-            </div>
           </div>
 
           <div className="relative h-[320px] md:h-[400px]">
@@ -137,7 +163,7 @@ export default function Home() {
           <div className="max-w-[560px] mb-11">
             <span className="text-[12.5px] tracking-widest uppercase text-teal font-bold">Pour qui</span>
             <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep">
-              Un moteur, trois métiers
+              Un moteur, six métiers
             </h2>
             <p className="text-[#5B6675] text-[15.5px] leading-relaxed">
               PiloBrain s&apos;adapte au vocabulaire et à la méthodologie de votre secteur —
@@ -149,8 +175,13 @@ export default function Home() {
             {profils.map((profil) => (
               <div
                 key={profil.titre}
-                className="border border-slate-100 rounded-2xl p-6 bg-white transition hover:border-slate-300"
+                className="relative border border-slate-100 rounded-2xl p-6 bg-white transition hover:border-slate-300"
               >
+                {!profil.active && (
+                  <span className="absolute top-5 right-5 text-[10.5px] font-bold uppercase tracking-wide text-[#8892A0] bg-slate-100 px-2 py-1 rounded-full">
+                    Bientôt
+                  </span>
+                )}
                 <div
                   className="w-[11px] h-[11px] rounded-[3px] mb-4"
                   style={{ background: profil.dotColor }}

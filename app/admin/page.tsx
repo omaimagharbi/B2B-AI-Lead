@@ -979,12 +979,17 @@ export default function AdminPage() {
               placeholder="Nom du contact (optionnel)"
               className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
             />
-            <input
+            <select
               value={nouveauVertical}
               onChange={(e) => setNouveauVertical(e.target.value)}
-              placeholder="cabinet-formation"
               className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
-            />
+            >
+              {VERTICALS_ADMIN.map((v) => (
+                <option key={v.slug} value={v.slug}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
           </div>
           <button
             onClick={() => creerCabinet()}
