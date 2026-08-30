@@ -73,6 +73,7 @@ export default function AdminPage() {
   const [nouvelEmail, setNouvelEmail] = useState('')
   const [nouveauContact, setNouveauContact] = useState('')
   const [nouveauVertical, setNouveauVertical] = useState('cabinet-formation')
+  const [nouveauSousSecteur, setNouveauSousSecteur] = useState('')
   const [demandeBetaEnConversion, setDemandeBetaEnConversion] = useState<string | null>(null)
   const [creationEnCours, setCreationEnCours] = useState(false)
   const [resultatCreation, setResultatCreation] = useState<{
@@ -528,12 +529,14 @@ export default function AdminPage() {
     email?: string
     contact?: string
     vertical?: string
+    sousSecteur?: string
     demandeBetaId?: string | null
   }) => {
     const nom = overrides?.nom ?? nouveauNom
     const email = overrides?.email ?? nouvelEmail
     const contact = overrides?.contact ?? nouveauContact
     const vertical = overrides?.vertical ?? nouveauVertical
+    const sousSecteur = overrides?.sousSecteur ?? nouveauSousSecteur
     const demandeId = overrides?.demandeBetaId !== undefined ? overrides.demandeBetaId : demandeBetaEnConversion
 
     if (!nom.trim() || !email.trim()) return
@@ -552,6 +555,7 @@ export default function AdminPage() {
         email: email,
         nom_complet: contact,
         vertical_slug: vertical,
+        sous_secteur: sousSecteur || undefined,
       }),
     })
     const data = await res.json()
@@ -981,7 +985,10 @@ export default function AdminPage() {
             />
             <select
               value={nouveauVertical}
-              onChange={(e) => setNouveauVertical(e.target.value)}
+              onChange={(e) => {
+                setNouveauVertical(e.target.value)
+                setNouveauSousSecteur('')
+              }}
               className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
             >
               {VERTICALS_ADMIN.map((v) => (
@@ -990,6 +997,20 @@ export default function AdminPage() {
                 </option>
               ))}
             </select>
+            {SOUS_SECTEURS_PAR_VERTICAL[nouveauVertical] && (
+              <select
+                value={nouveauSousSecteur}
+                onChange={(e) => setNouveauSousSecteur(e.target.value)}
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              >
+                <option value="">— Sous-secteur précis (optionnel) —</option>
+                {SOUS_SECTEURS_PAR_VERTICAL[nouveauVertical].map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <button
             onClick={() => creerCabinet()}

@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     // n'est pas encore fiable/configure - le cabinet garde la main sur le canal).
     const forceLinkedin = canal_force === 'linkedin'
     const forceEmail = canal_force === 'email'
+    const forceWhatsapp = canal_force === 'whatsapp'
     // previsualiser : etape 1 (facultative) - on prepare le texte exact (avec le vrai lien
     // de diagnostic si applicable) SANS l'envoyer, pour que le cabinet puisse le relire
     // (et au besoin le modifier) avant confirmation. On cree bien le diagnostic des cette
@@ -79,7 +80,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const canal = forceLinkedin ? 'linkedin' : forceEmail ? 'email' : canalParPays(target.country ?? 'FR')
+    const canal = forceLinkedin
+      ? 'linkedin'
+      : forceEmail
+      ? 'email'
+      : forceWhatsapp
+      ? 'whatsapp'
+      : canalParPays(target.country ?? 'FR')
 
     if (!forceLinkedin && canal === 'whatsapp' && !target.telephone) {
       return NextResponse.json({ error: "Cette cible n'a pas de telephone" }, { status: 400 })

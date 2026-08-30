@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { nom_entreprise, email, nom_complet, vertical_slug } = await req.json()
+    const { nom_entreprise, email, nom_complet, vertical_slug, sous_secteur } = await req.json()
 
     if (!nom_entreprise?.trim() || !email?.trim()) {
       return NextResponse.json({ error: 'Nom du cabinet et email requis' }, { status: 400 })
@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
         nom_entreprise: nom_entreprise.trim(),
         nom_complet: nom_complet?.trim() ?? '',
         vertical_slug: vertical_slug?.trim() || 'cabinet-formation',
+        sous_secteur: sous_secteur?.trim() || null,
         cree_par_admin: true,
       },
     })

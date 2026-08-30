@@ -323,7 +323,7 @@ export default function DashboardPage() {
     typeEnvoi: 'diagnostic' | 'message'
     diagnosticId?: string
     canal: string
-    canalForce?: 'email'
+    canalForce?: 'email' | 'whatsapp'
     texte: string
   } | null>(null)
   const [estAdmin, setEstAdmin] = useState(false)
@@ -371,6 +371,11 @@ export default function DashboardPage() {
   const [calendrierEnCours, setCalendrierEnCours] = useState(false)
   const [erreurCalendrier, setErreurCalendrier] = useState<string | null>(null)
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null)
+  // Retour terrain : le choix automatique du canal (selon le pays) ne
+  // convenait pas toujours - la cabinet veut pouvoir choisir explicitement
+  // WhatsApp ou Email par cible, via un selecteur (Facebook pas encore
+  // branche - aucune integration API existante pour ce canal).
+  const [canalParTarget, setCanalParTarget] = useState<Record<string, 'whatsapp' | 'email'>>({})
   const [lancementEnCours, setLancementEnCours] = useState(false)
   const [lancementResultat, setLancementResultat] = useState<Record<string, unknown>[] | null>(
     null
@@ -1540,7 +1545,7 @@ export default function DashboardPage() {
   const previsualiserEnvoi = async (
     targetId: string,
     typeEnvoi: 'diagnostic' | 'message',
-    canalForce?: 'email'
+    canalForce?: 'email' | 'whatsapp'
   ) => {
     if (!client) return
     setEnvoiEnCours(targetId)
@@ -1600,9 +1605,9 @@ export default function DashboardPage() {
     setEnvoiEnCours(null)
   }
 
-  const envoyerDiagnostic = (targetId: string, canalForce?: 'email') =>
+  const envoyerDiagnostic = (targetId: string, canalForce?: 'email' | 'whatsapp') =>
     previsualiserEnvoi(targetId, 'diagnostic', canalForce)
-  const envoyerMessage = (targetId: string, canalForce?: 'email') =>
+  const envoyerMessage = (targetId: string, canalForce?: 'email' | 'whatsapp') =>
     previsualiserEnvoi(targetId, 'message', canalForce)
 
   const preparerLinkedin = async (targetId: string) => {
@@ -3162,30 +3167,38 @@ export default function DashboardPage() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center flex-wrap">
                         {target.statut === 'nouveau' && (
                           <>
+                            <select
+                              value={canalParTarget[target.id] ?? canalParPays(target.country ?? 'FR')}
+                              onChange={(e) =>
+                                setCanalParTarget({
+                                  ...canalParTarget,
+                                  [target.id]: e.target.value as 'whatsapp' | 'email',
+                                })
+                              }
+                              title="Canal utilisé pour le premier contact"
+                              className="text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
+                            >
+                              <option value="whatsapp">💬 WhatsApp</option>
+                              <option value="email">✉️ Email</option>
+                              <option value="facebook" disabled>
+                                📘 Facebook (bientôt)
+                              </option>
+                            </select>
                             <button
-                              onClick={() => envoyerMessage(target.id)}
+                              onClick={() =>
+                                envoyerMessage(
+                                  target.id,
+                                  canalParTarget[target.id] ?? canalParPays(target.country ?? 'FR')
+                                )
+                              }
                               disabled={envoiEnCours === target.id}
                               className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
                             >
-                              {envoiEnCours === target.id
-                                ? 'Envoi...'
-                                : canalParPays(target.country ?? 'FR') === 'whatsapp'
-                                ? '💬 Premier contact (WhatsApp)'
-                                : '✉️ Premier contact (Email)'}
+                              {envoiEnCours === target.id ? 'Envoi...' : '📤 Premier contact'}
                             </button>
-                            {canalParPays(target.country ?? 'FR') === 'whatsapp' && target.email && (
-                              <button
-                                onClick={() => envoyerMessage(target.id, 'email')}
-                                disabled={envoiEnCours === target.id}
-                                title="Forcer l'envoi par email au lieu de WhatsApp"
-                                className="text-xs px-2 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white disabled:opacity-40"
-                              >
-                                ✉️ Forcer email
-                              </button>
-                            )}
                           </>
                         )}
                         <button
