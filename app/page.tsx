@@ -49,6 +49,57 @@ const profils = [
   },
 ]
 
+const valeurs = [
+  {
+    emoji: '⚓',
+    titre: 'Résilience',
+    definition: "La capacité à traverser l'épreuve sans s'éteindre.",
+    pourquoi: "C'est notre valeur signature — la force de rebond que nous transmettons à travers chaque diagnostic et chaque accompagnement.",
+  },
+  {
+    emoji: '🍃',
+    titre: 'Authenticité',
+    definition: 'Être vrai, sans masque, dans l\'accompagnement.',
+    pourquoi: 'Nos cabinets partenaires choisissent une approche humaine avant une méthode. L\'authenticité crée une confiance immédiate et casse le jargon corporate impersonnel.',
+  },
+  {
+    emoji: '⚖️',
+    titre: 'Responsabilité',
+    definition: 'Assumer ses choix et leurs conséquences.',
+    pourquoi: 'Elle prouve que nous assumons nos engagements, et pousse chaque cabinet à rester acteur de sa propre trajectoire commerciale.',
+  },
+  {
+    emoji: '🎯',
+    titre: 'Impact',
+    definition: 'Des résultats concrets, mesurables et durables.',
+    pourquoi: "Nous ne sommes pas là pour échanger, mais pour générer une vraie valeur ajoutée et une performance commerciale visible.",
+  },
+  {
+    emoji: '🚀',
+    titre: 'Transformation',
+    definition: 'Faire évoluer une situation, une personne, une organisation.',
+    pourquoi: "C'est notre promesse : un véritable avant/après dans la façon dont nos cabinets partenaires prospectent.",
+  },
+  {
+    emoji: '🌱',
+    titre: 'Engagement Humain',
+    definition: "S'investir réellement dans la réussite de l'autre.",
+    pourquoi: 'Nos partenariats ne sont pas de simples transactions — c\'est un engagement de fond dans la réussite de chaque cabinet.',
+  },
+  {
+    emoji: '🛡️',
+    titre: 'Éthique',
+    definition: 'Respecter scrupuleusement la déontologie et la confidentialité des données.',
+    pourquoi: 'Le signal fort envoyé à chaque cabinet et chaque prospect : un espace de travail protégé, sain et réglementé.',
+  },
+  {
+    emoji: '💎',
+    titre: 'Intégrité',
+    definition: 'Agir de façon honnête, transparente et alignée avec ses principes.',
+    pourquoi: 'Nous ne masquons jamais un diagnostic difficile — nous agissons avec une clarté totale, à chaque étape.',
+  },
+]
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-ink font-sans antialiased">
@@ -197,6 +248,31 @@ export default function Home() {
             ))}
           </div>
         </section>
+
+        {/* NOS VALEURS */}
+        <section className="py-14 md:py-[70px] border-t border-slate-100">
+          <div className="max-w-[560px] mb-11">
+            <span className="text-[12.5px] tracking-widest uppercase text-teal font-bold">Nos valeurs</span>
+            <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep">
+              Ce qui guide chaque accompagnement
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {valeurs.map((v) => (
+              <div
+                key={v.titre}
+                className="border border-slate-100 rounded-2xl p-6 bg-white transition hover:border-slate-300"
+              >
+                <h3 className="font-serif text-[17px] font-semibold mb-1.5 text-navy-deep">
+                  {v.emoji} {v.titre}
+                </h3>
+                <p className="text-sm text-[#4B5768] mb-2 italic">{v.definition}</p>
+                <p className="text-sm leading-relaxed text-[#5B6675]">{v.pourquoi}</p>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
 
       {/* FOOTER */}
@@ -204,7 +280,7 @@ export default function Home() {
         <footer className="bg-navy-deep text-[#EAF0F5] rounded-[28px] my-10 px-6 py-12 md:px-12 md:py-16">
           <div className="text-center max-w-[640px] mx-auto">
             <h2 className="font-serif italic font-medium text-[26px] md:text-[32px] mb-4">
-              Prêt à structurer votre prospection ?
+              Prêt à propulser vos revenus ?
             </h2>
             <p className="text-[#9FB0C2] text-[15px] leading-relaxed mb-7">
               Un diagnostic généré en quelques minutes, validé par votre expertise avant chaque envoi.
@@ -217,33 +293,55 @@ export default function Home() {
             </a>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4.5 my-14 pt-10 border-t border-white/10">
-            <div className="text-[13.5px] text-[#B9C6D4]">
-              <b className="block text-white text-[14.5px] mb-1 font-serif font-semibold">Formation &amp; Consulting</b>
-              Ciblage DRH, diagnostic ADDIE, suivi de conventions.
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 my-14 pt-10 border-t border-white/10 text-[13.5px] text-[#B9C6D4]">
+            <div>
+              <b className="block text-white text-[14.5px] mb-3 font-serif font-semibold">Plateforme</b>
+              <ul className="space-y-2">
+                <li><a href="/" className="hover:text-white">Accueil</a></li>
+                <li><a href="#a-propos" className="hover:text-white">À propos de nous</a></li>
+                <li><a href="/formation" className="hover:text-white">Formation</a></li>
+                <li><a href="/insights" className="hover:text-white">Insights</a></li>
+              </ul>
             </div>
-            <div className="text-[13.5px] text-[#B9C6D4]">
-              <b className="block text-white text-[14.5px] mb-1 font-serif font-semibold">Startups &amp; SaaS</b>
-              Qualification technique et pipeline dédié.
+            <div>
+              <b className="block text-white text-[14.5px] mb-3 font-serif font-semibold">Secteurs</b>
+              <ul className="space-y-2">
+                {profils.map((p) => (
+                  <li key={p.titre} className="flex items-center gap-2">
+                    <span
+                      className="w-[6px] h-[6px] rounded-full shrink-0"
+                      style={{ background: p.active ? '#4ADE80' : '#5B6675' }}
+                    />
+                    {p.titre}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="text-[13.5px] text-[#B9C6D4]">
-              <b className="block text-white text-[14.5px] mb-1 font-serif font-semibold">PME de Services</b>
-              Cadrage de besoin et suivi de missions.
+            <div>
+              <b className="block text-white text-[14.5px] mb-3 font-serif font-semibold">Ressources</b>
+              <ul className="space-y-2">
+                <li>
+                  <a href="/politique-confidentialite" className="hover:text-white">
+                    Politique de confidentialité
+                  </a>
+                </li>
+                <li>
+                  <a href="/cgu" className="hover:text-white">
+                    Conditions d&apos;utilisation
+                  </a>
+                </li>
+                <li>
+                  <a href="/mentions-legales" className="hover:text-white">
+                    Mentions légales
+                  </a>
+                </li>
+              </ul>
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-between items-center text-[12.5px] text-[#7488A0] pt-5 border-t border-white/10">
-            <span>© PiloBrain — De l&apos;épreuve à l&apos;élan</span>
-            <span className="space-x-4">
-              <a href="/mentions-legales" className="hover:text-white underline">
-                Mentions légales
-              </a>
-              <a href="/cgu" className="hover:text-white underline">
-                CGU
-              </a>
-              <a href="/politique-confidentialite" className="hover:text-white underline">
-                Politique de confidentialité
-              </a>
+            <span>
+              © {new Date().getFullYear()} PiloBrain — Tous droits réservés — De l&apos;épreuve à l&apos;élan
             </span>
           </div>
         </footer>
