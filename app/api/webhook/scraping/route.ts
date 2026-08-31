@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { genererSignalIA } from '@/lib/classification'
 import { quotaCiblesDisponible } from '@/lib/quotas'
+import { genererSignalDepuisContexte } from '@/lib/signal-ia'
+
+// Meme precaution "timeout" que les autres routes IA de la plateforme (voir
+// app/api/diagnostic/route.ts) : l'appel IA du signal peut prendre quelques
+// secondes, on donne un budget de temps suffisant a la fonction.
+export const maxDuration = 60
 
 // Ce webhook est fait pour etre appele par Apify, PhantomBuster, ou tout autre
 // outil de scraping, une fois le scraping termine (via leur systeme de "webhook"
@@ -50,6 +55,9 @@ export async function POST(req: NextRequest) {
         email?: string
         linkedin_url?: string
         country?: string
+        // Optionnel : bio/activite recente/posts, si l'outil de scraping tiers
+        // les fournit - permet un signal genere par IA plutot que recompose.
+        contexte_brut?: string
       }>
     }
 
@@ -76,24 +84,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ succes: true, nombre_ajoute: 0, doublons_ignores: nombreDoublons })
     }
 
-    const lignes = contactsFiltres.map((c) => ({
-      client_id,
-      nom: c.nom,
-      entreprise_ou_objectif: c.entreprise_ou_objectif ?? null,
-      poste_ou_budget: c.poste_ou_budget ?? null,
-      telephone: c.telephone ?? null,
-      email: c.email ?? null,
-      linkedin_url: c.linkedin_url ?? null,
-      country: c.country ?? null,
-      source_scraping: 'apify_phantombuster',
-      statut: 'nouveau',
-      signal_ia: genererSignalIA({
-        poste: c.poste_ou_budget ?? null,
-        entreprise: c.entreprise_ou_objectif ?? null,
-        segmentCategorie: null,
-        segmentUrgence: null,
-      }),
-    }))
+    const { data: clientData } = await supabaseAdmin
+      .from('clients')
+      .select('mode_ciblage')
+      .eq('id', client_id)
+      .single()
+    const modeCiblage = clientData?.mode_ciblage === 'particulier' ? 'particulier' : 'entreprise'
+
+    const lignes = await Promise.all(
+      contactsFiltres.map(async (c) => ({
+        client_id,
+        nom: c.nom,
+        entreprise_ou_objectif: c.entreprise_ou_objectif ?? null,
+        poste_ou_budget: c.poste_ou_budget ?? null,
+        telephone: c.telephone ?? null,
+        email: c.email ?? null,
+        linkedin_url: c.linkedin_url ?? null,
+        country: c.country ?? null,
+        source_scraping: 'apify_phantombuster',
+        statut: 'nouveau',
+        contexte_brut_scraping: c.contexte_brut ?? null,
+        signal_ia: await genererSignalDepuisContexte({
+          contexteBrut: c.contexte_brut ?? null,
+          poste: c.poste_ou_budget ?? null,
+          entreprise: c.entreprise_ou_objectif ?? null,
+          modeCiblage,
+          segmentCategorie: null,
+          segmentUrgence: null,
+        }),
+      }))
+    )
 
     // Le scraping est un process automatise (cron) : plutot que de tout
     // rejeter si le quota est depasse, on tronque a ce qu'il reste de

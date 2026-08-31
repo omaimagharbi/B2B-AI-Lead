@@ -37,6 +37,7 @@ export default function AdminPage() {
   const [filtreAbonnement, setFiltreAbonnement] = useState<'tous' | 'payant' | 'essai'>('tous')
   const [filtreAcces, setFiltreAcces] = useState<'tous' | 'actif' | 'inactif'>('tous')
   const [filtreVertical, setFiltreVertical] = useState<string>('tous')
+  const [filtreSousSecteur, setFiltreSousSecteur] = useState<string>('tous')
   const [monitoring, setMonitoring] = useState<{
     sante: Record<
       string,
@@ -651,6 +652,7 @@ export default function AdminPage() {
     if (filtreAcces === 'actif' && !c.acces_active) return false
     if (filtreAcces === 'inactif' && c.acces_active) return false
     if (filtreVertical !== 'tous' && c.vertical_slug !== filtreVertical) return false
+    if (filtreSousSecteur !== 'tous' && c.secteur_activite !== filtreSousSecteur) return false
     return true
   })
 
@@ -1064,7 +1066,10 @@ export default function AdminPage() {
           </select>
           <select
             value={filtreVertical}
-            onChange={(e) => setFiltreVertical(e.target.value)}
+            onChange={(e) => {
+              setFiltreVertical(e.target.value)
+              setFiltreSousSecteur('tous')
+            }}
             className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
           >
             <option value="tous">Tous les secteurs</option>
@@ -1074,6 +1079,20 @@ export default function AdminPage() {
               </option>
             ))}
           </select>
+          {SOUS_SECTEURS_PAR_VERTICAL[filtreVertical] && (
+            <select
+              value={filtreSousSecteur}
+              onChange={(e) => setFiltreSousSecteur(e.target.value)}
+              className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            >
+              <option value="tous">Tous les sous-secteurs</option>
+              {SOUS_SECTEURS_PAR_VERTICAL[filtreVertical].map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          )}
           <span className="text-xs text-slate-500">
             {clientsFiltres.length} / {clients.length} cabinet{clients.length > 1 ? 's' : ''}
           </span>

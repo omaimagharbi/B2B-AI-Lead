@@ -98,7 +98,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     month: 'long',
     year: 'numeric',
   })
-  const dashboardUrl = `${(process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')}/dashboard`
+  const reservationUrl = `${(process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')}/reserver/${params.token}`
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -234,7 +234,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
         : ''
     }
 
-    <a href="${dashboardUrl}" class="cta">👉 Bloquer un créneau d'échange</a>
+    <a href="${reservationUrl}" class="cta">👉 Bloquer un créneau d'échange</a>
   </div>
 </body>
 </html>`

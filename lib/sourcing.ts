@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { nomPays } from '@/lib/pays'
 import { enregistrerSanteApi } from '@/lib/sante-api'
+import { genererSignalDepuisContexte } from '@/lib/signal-ia'
 
 // =====================================================================
 // ⚠️ A ADAPTER selon les actors Apify choisis (voir onglet "Input"/"Runs"
@@ -29,6 +30,7 @@ type ProfilTrouve = {
   linkedin_url: string | null
   email: string | null
   telephone: string | null
+  contexte_brut: string | null
 }
 
 // =====================================================================
@@ -73,6 +75,13 @@ async function chercherLinkedIn(motsCles: string, pays: string, limite: number):
     linkedin_url: (item.profileUrl ?? item.url ?? item.linkedinUrl ?? null) as string | null,
     email: (item.email ?? null) as string | null,
     telephone: (item.phone ?? null) as string | null,
+    // Contexte brut pour le signal IA (voir lib/signal-ia.ts) : bio/about,
+    // et si l'actor choisi les fournit, activite recente / offres d'emploi
+    // publiees (embauches en cours). Noms de champs a verifier/ajuster une
+    // fois l'actor reellement choisi (cf. avertissement en tete de fichier).
+    contexte_brut: ([item.about, item.summary, item.recentActivity, item.jobOpenings]
+      .filter(Boolean)
+      .join(' | ') || null) as string | null,
   }))
 }
 
@@ -94,6 +103,7 @@ async function chercherGoogleMaps(motsCles: string, pays: string, limite: number
     linkedin_url: (item.website ?? item.url ?? null) as string | null, // on reutilise ce champ pour le site web / dedoublonnage
     email: (item.email ?? null) as string | null,
     telephone: (item.phone ?? item.phoneNumber ?? null) as string | null,
+    contexte_brut: null, // Google Maps n'expose pas d'activite recente exploitable
   }))
 }
 
@@ -113,6 +123,12 @@ async function chercherFacebook(motsCles: string, pays: string, limite: number):
     linkedin_url: (item.pageUrl ?? item.url ?? null) as string | null,
     email: (item.email ?? null) as string | null,
     telephone: (item.phone ?? null) as string | null,
+    // Contexte brut : posts recents de la page, si l'actor choisi les fournit
+    // (cf. avertissement en tete de fichier sur les noms de champs a verifier).
+    contexte_brut: ([item.about, item.recentPosts, item.posts]
+      .filter(Boolean)
+      .map((v) => (Array.isArray(v) ? v.join(' | ') : v))
+      .join(' | ') || null) as string | null,
   }))
 }
 
@@ -134,6 +150,7 @@ async function chercherWeb(motsCles: string, pays: string, limite: number): Prom
     linkedin_url: (item.url ?? null) as string | null,
     email: null, // necessiterait un crawl de la page pour extraire un email, non fait ici
     telephone: null,
+    contexte_brut: null,
   }))
 }
 
@@ -244,8 +261,25 @@ export async function lancerSourcingPourClient(clientId: string) {
         )
 
         if (nouveauxProfils.length > 0) {
+          // Signal IA genere a partir du contexte brut scrape (bio, activite
+          // recente...) quand disponible - sinon repli automatique sur la
+          // recomposition simple de champs deja connus (voir signal-ia.ts).
+          const profilsAvecSignal = await Promise.all(
+            nouveauxProfils.map(async (p) => ({
+              ...p,
+              signal_ia: await genererSignalDepuisContexte({
+                contexteBrut: p.contexte_brut,
+                poste: p.poste_ou_budget,
+                entreprise: p.entreprise_ou_objectif,
+                modeCiblage: typedClient.mode_ciblage === 'particulier' ? 'particulier' : 'entreprise',
+                segmentCategorie: null,
+                segmentUrgence: null,
+              }),
+            }))
+          )
+
           await supabaseAdmin.from('targets').insert(
-            nouveauxProfils.map((p) => ({
+            profilsAvecSignal.map((p) => ({
               client_id: clientId,
               nom: p.nom,
               entreprise_ou_objectif: p.entreprise_ou_objectif,
@@ -256,6 +290,8 @@ export async function lancerSourcingPourClient(clientId: string) {
               country: country_code,
               source_scraping: `apify_${sourceNom}`,
               statut: 'nouveau',
+              contexte_brut_scraping: p.contexte_brut,
+              signal_ia: p.signal_ia,
             }))
           )
         }

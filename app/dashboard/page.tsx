@@ -19,6 +19,11 @@ type Client = {
   id: string
   nom_entreprise: string
   email?: string | null
+  google_calendar_connecte?: boolean
+  google_calendar_email?: string | null
+  reservation_duree_minutes?: number | null
+  reservation_heure_debut?: string | null
+  reservation_heure_fin?: string | null
   statut_abonnement: string
   mode_ciblage: 'entreprise' | 'particulier'
   secteur_activite: string | null
@@ -614,7 +619,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, email, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, taille_min_salaries, taille_max_salaries, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, base_email_existante, budget_publicitaire, objectif_chiffre, onglets_autorises, verticals_autorises, vertical_id, verticals(slug)'
+          'id, nom_entreprise, email, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, taille_min_salaries, taille_max_salaries, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, base_email_existante, budget_publicitaire, objectif_chiffre, onglets_autorises, verticals_autorises, vertical_id, google_calendar_connecte, google_calendar_email, reservation_duree_minutes, reservation_heure_debut, reservation_heure_fin, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -3178,7 +3183,7 @@ export default function DashboardPage() {
                                   [target.id]: e.target.value as 'whatsapp' | 'email',
                                 })
                               }
-                              title="Canal utilisé pour le premier contact"
+                              title="Canal utilisé pour le premier contact et le diagnostic"
                               className="text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
                             >
                               <option value="whatsapp">💬 WhatsApp</option>
@@ -3202,7 +3207,12 @@ export default function DashboardPage() {
                           </>
                         )}
                         <button
-                          onClick={() => envoyerDiagnostic(target.id)}
+                          onClick={() =>
+                            envoyerDiagnostic(
+                              target.id,
+                              canalParTarget[target.id] ?? canalParPays(target.country ?? 'FR')
+                            )
+                          }
                           disabled={
                             target.statut !== 'nouveau' ||
                             envoiEnCours === target.id ||
@@ -5412,6 +5422,81 @@ export default function DashboardPage() {
         {/* ===================== ONGLET CALENDRIER ===================== */}
         {ongletActif === 'calendrier' && (
           <section className="space-y-4">
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+              <h3 className="text-sm font-semibold">🔗 Connexion Google Calendar</h3>
+              <p className="text-xs text-slate-500">
+                Une fois connecté, le bouton "Bloquer un créneau d'échange" envoyé aux prospects leur
+                montre tes vraies disponibilités et crée directement l'événement dans ton agenda Google.
+              </p>
+              {client?.google_calendar_connecte ? (
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-sm text-emerald-400">
+                    ✅ Connecté{client.google_calendar_email ? ` (${client.google_calendar_email})` : ''}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      const { data: sessionData } = await supabase.auth.getSession()
+                      const token = sessionData.session?.access_token
+                      await fetch('/api/calendrier/google/deconnecter', {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` },
+                      })
+                      await chargerTout(client.id)
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-red-900 text-red-400 hover:bg-red-950"
+                  >
+                    Déconnecter
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={async () => {
+                    const { data: sessionData } = await supabase.auth.getSession()
+                    const token = sessionData.session?.access_token
+                    const res = await fetch('/api/calendrier/google/connecter', {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${token}` },
+                    })
+                    const data = await res.json()
+                    if (data.url) {
+                      window.location.href = data.url
+                    } else {
+                      alert(data.error ?? 'Erreur de connexion à Google Calendar')
+                    }
+                  }}
+                  className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold"
+                >
+                  Connecter Google Calendar
+                </button>
+              )}
+              {client?.google_calendar_connecte && (
+                <div className="flex flex-wrap gap-3 pt-2 border-t border-slate-800 text-xs">
+                  <label className="flex items-center gap-1.5 text-slate-400">
+                    Durée d'un créneau :
+                    <select
+                      defaultValue={client.reservation_duree_minutes ?? 30}
+                      onChange={async (e) => {
+                        const { data: sessionData } = await supabase.auth.getSession()
+                        const token = sessionData.session?.access_token
+                        await fetch('/api/calendrier/google/reglages', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ duree_minutes: Number(e.target.value) }),
+                        })
+                      }}
+                      className="rounded bg-slate-800 border border-slate-700 px-2 py-1"
+                    >
+                      <option value={15}>15 min</option>
+                      <option value={30}>30 min</option>
+                      <option value={45}>45 min</option>
+                      <option value={60}>1h</option>
+                    </select>
+                  </label>
+                  <span className="text-slate-500">Créneaux proposés entre 9h et 18h, jours ouvrés.</span>
+                </div>
+              )}
+            </div>
+
             <p className="text-slate-400 text-sm">
               Rendez-vous clients, événements repérés, appels d'offres — ajoutés manuellement.
               Rien ici n'est lié automatiquement à tes cibles.
