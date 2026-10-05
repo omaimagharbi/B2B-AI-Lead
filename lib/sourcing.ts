@@ -169,6 +169,7 @@ type ClientPourSourcing = {
   taille_entreprise: string | null
   canal_sourcing: string | null
   profil_particulier: string | null
+  vertical_id: string | null
 }
 
 // Lance le sourcing pour UN client precis, sur tous ses pays selectionnes,
@@ -181,7 +182,7 @@ export async function lancerSourcingPourClient(clientId: string) {
   const { data: client, error: clientError } = await supabaseAdmin
     .from('clients')
     .select(
-      'id, nom_entreprise, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier'
+      'id, nom_entreprise, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, vertical_id'
     )
     .eq('id', clientId)
     .single()
@@ -281,6 +282,7 @@ export async function lancerSourcingPourClient(clientId: string) {
           await supabaseAdmin.from('targets').insert(
             profilsAvecSignal.map((p) => ({
               client_id: clientId,
+              vertical_id: typedClient.vertical_id,
               nom: p.nom,
               entreprise_ou_objectif: p.entreprise_ou_objectif,
               poste_ou_budget: p.poste_ou_budget,

@@ -43,6 +43,18 @@ export const TEMPLATES_PAR_VERTICAL: Record<string, { titre: string; texte: stri
         "Bonjour {nom},\n\n{cabinet} aide les PME à structurer leur croissance sans perdre en agilité. Curieux de voir où sont vos marges de progrès ?\n{lien}",
     },
   ],
+  immobilier: [
+    {
+      titre: 'Direct - invitation diagnostic',
+      texte:
+        'Bonjour {nom},\n\n{cabinet} accompagne acheteurs, vendeurs et investisseurs dans leurs projets immobiliers. Décrivez votre projet en 30 secondes, un expert étudie votre dossier :\n{lien}',
+    },
+    {
+      titre: 'Orienté estimation',
+      texte:
+        'Bonjour {nom},\n\n{cabinet} peut vous donner une estimation réaliste de votre bien ou de votre budget en quelques minutes. Intéressé ?\n{lien}',
+    },
+  ],
 }
 
 export function templatesPourVertical(verticalSlug: string) {

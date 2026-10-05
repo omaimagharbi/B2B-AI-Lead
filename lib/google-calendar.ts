@@ -145,47 +145,79 @@ export async function creerEvenementGoogle(
   return data.id as string
 }
 
-/** Calcule les creneaux disponibles (non occupes) sur les prochains jours ouvres.
- *
- * IMPORTANT - fuseau horaire : les fonctions serverless (Vercel) tournent en UTC,
- * pas dans le fuseau du cabinet. Sans correction, "9h-18h" configure par le
- * cabinet serait interprete comme 9h-18h UTC (donc 10h-19h heure de Tunis),
- * ce qui decalait tous les creneaux affiches d'une heure. On applique donc un
- * decalage explicite. Limite actuelle : ce decalage est fixe (heure de
- * Tunisie, UTC+1 toute l'annee, pas de changement d'heure ete/hiver) - s'il
- * faut gerer des cabinets dans d'autres fuseaux, il faudra stocker le fuseau
- * par cabinet plutot qu'une constante.
+/**
+ * Renvoie le decalage (en minutes, positif = en avance sur UTC) entre UTC et
+ * le fuseau IANA donne, A L'INSTANT precis fourni. Necessaire car un meme
+ * fuseau peut avoir un decalage different selon la saison (heure ete/hiver
+ * en Europe par exemple) - on ne peut pas utiliser une constante fixe.
+ * Implementation native (Intl), sans dependance externe.
  */
-const DECALAGE_HEURES_TUNISIE = 1 // UTC+1
+function decalageMinutes(timeZone: string, instant: Date): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+  const parts = dtf.formatToParts(instant)
+  const val = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0')
+  const commeUTC = Date.UTC(val('year'), val('month') - 1, val('day'), val('hour'), val('minute'), val('second'))
+  return Math.round((commeUTC - instant.getTime()) / 60_000)
+}
 
+/** Construit le Date UTC correspondant a une heure "murale" locale donnee, dans un fuseau. */
+function heureLocaleVersUtc(annee: number, mois: number, jour: number, heure: number, minute: number, timeZone: string): Date {
+  // Premiere estimation en traitant l'heure demandee comme si elle etait deja en UTC,
+  // puis on corrige avec le vrai decalage du fuseau a cet instant (une iteration
+  // suffit dans l'immense majorite des cas, y compris pres des changements d'heure).
+  const estimation = new Date(Date.UTC(annee, mois, jour, heure, minute, 0, 0))
+  const decalage = decalageMinutes(timeZone, estimation)
+  return new Date(estimation.getTime() - decalage * 60_000)
+}
+
+/** Calcule les creneaux disponibles (non occupes) sur les prochains jours ouvres,
+ * dans le fuseau horaire du cabinet (gere aussi l'heure ete/hiver automatiquement).
+ */
 export function calculerCreneauxDisponibles(params: {
   busy: { start: string; end: string }[]
   joursAVenir: number
   heureDebut: string // "09:00"
   heureFin: string // "18:00"
   dureeMinutes: number
+  fuseauHoraire: string // ex: "Africa/Tunis"
 }): { debut: Date; fin: Date }[] {
-  const { busy, joursAVenir, heureDebut, heureFin, dureeMinutes } = params
+  const { busy, joursAVenir, heureDebut, heureFin, dureeMinutes, fuseauHoraire } = params
   const [hD, mD] = heureDebut.split(':').map(Number)
   const [hF, mF] = heureFin.split(':').map(Number)
   const creneaux: { debut: Date; fin: Date }[] = []
   const maintenant = new Date()
 
-  for (let j = 0; j < joursAVenir; j++) {
-    const jour = new Date(maintenant)
-    jour.setUTCDate(jour.getUTCDate() + j)
-    // Le jour de la semaine doit lui aussi etre lu dans le fuseau du cabinet,
-    // pas en UTC, sinon un creneau tard le vendredi soir (heure de Tunis)
-    // pourrait etre lu comme samedi en UTC et exclu a tort.
-    const jourLocal = new Date(jour.getTime() + DECALAGE_HEURES_TUNISIE * 60 * 60_000)
-    if (jourLocal.getUTCDay() === 0 || jourLocal.getUTCDay() === 6) continue // week-end exclu
+  // Jour/mois/annee "vus" depuis le fuseau du cabinet (pas UTC), pour que le
+  // jour de la semaine (week-end exclu) soit correct de son point de vue.
+  const dtfJour = new Intl.DateTimeFormat('en-CA', {
+    timeZone: fuseauHoraire,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+  })
 
-    const debutJournee = new Date(
-      Date.UTC(jour.getUTCFullYear(), jour.getUTCMonth(), jour.getUTCDate(), hD - DECALAGE_HEURES_TUNISIE, mD, 0, 0)
-    )
-    const finJournee = new Date(
-      Date.UTC(jour.getUTCFullYear(), jour.getUTCMonth(), jour.getUTCDate(), hF - DECALAGE_HEURES_TUNISIE, mF, 0, 0)
-    )
+  for (let j = 0; j < joursAVenir; j++) {
+    const instantApprox = new Date(maintenant.getTime() + j * 24 * 60 * 60_000)
+    const parts = dtfJour.formatToParts(instantApprox)
+    const val = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+    const annee = Number(val('year'))
+    const mois = Number(val('month')) - 1
+    const jourDuMois = Number(val('day'))
+    const jourSemaine = val('weekday') // "Sat"/"Sun" en anglais avec en-CA
+    if (jourSemaine === 'Sat' || jourSemaine === 'Sun') continue // week-end exclu
+
+    const debutJournee = heureLocaleVersUtc(annee, mois, jourDuMois, hD, mD, fuseauHoraire)
+    const finJournee = heureLocaleVersUtc(annee, mois, jourDuMois, hF, mF, fuseauHoraire)
 
     for (
       let curseur = new Date(debutJournee);
@@ -202,4 +234,20 @@ export function calculerCreneauxDisponibles(params: {
   }
 
   return creneaux
+}
+
+/** Formate un instant UTC en heure murale "HH:MM" et date "YYYY-MM-DD" dans un fuseau donne. */
+export function heureEtDateLocale(instant: Date, timeZone: string): { date: string; heure: string } {
+  const dtf = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+  const parts = dtf.formatToParts(instant)
+  const val = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return { date: `${val('year')}-${val('month')}-${val('day')}`, heure: `${val('hour')}:${val('minute')}` }
 }
