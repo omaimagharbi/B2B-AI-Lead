@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { recupererCreneauxOccupes, creerEvenementGoogle, calculerCreneauxDisponibles } from '@/lib/google-calendar'
+import {
+  recupererCreneauxOccupes,
+  creerEvenementGoogle,
+  calculerCreneauxDisponibles,
+  heureEtDateLocale,
+} from '@/lib/google-calendar'
 import { envoyerEmail } from '@/lib/notifications'
 import { logErreur } from '@/lib/erreurs'
 
@@ -8,7 +13,7 @@ async function chargerContexte(token: string) {
   const { data: diagnostic } = await supabaseAdmin
     .from('diagnostics')
     .select(
-      'id, client_id, target_id, targets(nom, email), clients(id, nom_entreprise, email, google_calendar_connecte, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, google_calendar_id, reservation_duree_minutes, reservation_heure_debut, reservation_heure_fin)'
+      'id, client_id, target_id, targets(nom, email), clients(id, nom_entreprise, email, google_calendar_connecte, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, google_calendar_id, reservation_duree_minutes, reservation_heure_debut, reservation_heure_fin, fuseau_horaire)'
     )
     .eq('token_acces', token)
     .single()
@@ -27,6 +32,7 @@ async function chargerContexte(token: string) {
     reservation_duree_minutes: number | null
     reservation_heure_debut: string | null
     reservation_heure_fin: string | null
+    fuseau_horaire: string
   }
   type TargetRow = { nom: string; email: string | null }
 
@@ -56,6 +62,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
       heureDebut: client.reservation_heure_debut ?? '09:00',
       heureFin: client.reservation_heure_fin ?? '18:00',
       dureeMinutes: client.reservation_duree_minutes ?? 30,
+      fuseauHoraire: client.fuseau_horaire || 'Africa/Tunis',
     })
     return NextResponse.json({
       connecte: true,
@@ -103,16 +110,19 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       emailInvite: target?.email ?? undefined,
     })
 
-    // Meme decalage que dans calculerCreneauxDisponibles (lib/google-calendar.ts) :
-    // date_evenement/heure_debut doivent refleter l'heure de Tunisie affichee au
-    // cabinet dans "Mon Calendrier", pas l'heure UTC du serveur.
-    const dateDebutTunis = new Date(dateDebut.getTime() + 60 * 60_000)
+    // Meme fuseau que dans calculerCreneauxDisponibles (lib/google-calendar.ts) :
+    // date_evenement/heure_debut doivent refleter l'heure locale du cabinet, pas
+    // l'heure UTC du serveur.
+    const { date: dateLocale, heure: heureLocale } = heureEtDateLocale(
+      dateDebut,
+      client.fuseau_horaire || 'Africa/Tunis'
+    )
     await supabaseAdmin.from('calendrier_entrees').insert({
       client_id: client.id,
       titre: `Échange avec ${target?.nom ?? 'un prospect'}`,
       description: 'Réservé en ligne par le prospect suite au diagnostic.',
-      date_evenement: dateDebutTunis.toISOString().slice(0, 10),
-      heure_debut: dateDebutTunis.toISOString().slice(11, 16),
+      date_evenement: dateLocale,
+      heure_debut: heureLocale,
       duree_minutes: dureeMinutes,
       type: 'rdv',
       target_id: contexte.diagnostic.target_id,

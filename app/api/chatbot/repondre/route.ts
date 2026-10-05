@@ -12,8 +12,14 @@ const TIMEOUT_IA_MS = 15_000
 // l'admin (pas de connaissance generale hors-sujet, pas de speculation sur
 // des donnees du cabinet) - evite les reponses inventees sur une
 // plateforme en evolution constante.
-function construirePrompt(manuel: string, question: string): string {
-  return `Tu es l'assistant support de la plateforme. Reponds UNIQUEMENT en te basant sur le manuel d'utilisation ci-dessous. Si la reponse n'y figure pas, dis clairement que tu ne sais pas et invite a contacter le support - n'invente jamais de fonctionnalite.\n\n--- MANUEL D'UTILISATION ---\n${manuel}\n--- FIN DU MANUEL ---\n\nQuestion de l'utilisateur : ${question}\n\nReponds en francais, de facon concise et directe.`
+function construirePrompt(manuel: string, question: string, langue: string): string {
+  const consigneLangue =
+    langue === 'en'
+      ? 'Respond in English, concisely and directly.'
+      : langue === 'ar'
+      ? 'أجب باللغة العربية، بإيجاز ووضوح.'
+      : 'Reponds en francais, de facon concise et directe.'
+  return `Tu es l'assistant support de la plateforme. Reponds UNIQUEMENT en te basant sur le manuel d'utilisation ci-dessous. Si la reponse n'y figure pas, dis clairement que tu ne sais pas et invite a contacter le support - n'invente jamais de fonctionnalite.\n\n--- MANUEL D'UTILISATION ---\n${manuel}\n--- FIN DU MANUEL ---\n\nQuestion de l'utilisateur : ${question}\n\n${consigneLangue}`
 }
 
 async function repondreAvecGemini(prompt: string, apiKey: string): Promise<string> {
@@ -95,19 +101,32 @@ export async function POST(req: NextRequest) {
     .eq('id', 1)
     .single()
 
+  const { data: clientData } = await supabaseAdmin
+    .from('clients')
+    .select('langue_preferee')
+    .eq('id', auth.clientId)
+    .single()
+  const langue = clientData?.langue_preferee ?? 'fr'
+
   const emailSupport = process.env.SUPPORT_EMAIL || (process.env.ADMIN_EMAILS ?? '').split(',')[0]?.trim()
 
   const manuel = config?.manuel_utilisation ?? ''
   if (!manuel.trim()) {
-    return enregistrerEtRepondre(
-      "Le manuel d'utilisation n'a pas encore été configuré par l'équipe PiloBrain." +
-        (emailSupport
-          ? ` Contacte directement le support à ${emailSupport} en attendant.`
-          : ' Contacte directement le support en attendant.')
-    )
+    const messageManuelAbsent =
+      langue === 'en'
+        ? "The user manual hasn't been configured by the PiloBrain team yet." +
+          (emailSupport ? ` Contact support directly at ${emailSupport} in the meantime.` : ' Contact support directly in the meantime.')
+        : langue === 'ar'
+        ? 'لم يتم إعداد دليل الاستخدام بعد من قبل فريق PiloBrain.' +
+          (emailSupport ? ` تواصل مباشرة مع الدعم على ${emailSupport} في غضون ذلك.` : ' تواصل مباشرة مع الدعم في غضون ذلك.')
+        : "Le manuel d'utilisation n'a pas encore été configuré par l'équipe PiloBrain." +
+          (emailSupport
+            ? ` Contacte directement le support à ${emailSupport} en attendant.`
+            : ' Contacte directement le support en attendant.')
+    return enregistrerEtRepondre(messageManuelAbsent)
   }
 
-  const prompt = construirePrompt(manuel, question)
+  const prompt = construirePrompt(manuel, question, langue)
   const geminiKey = process.env.GEMINI_API_KEY
   const anthropicKey = process.env.ANTHROPIC_API_KEY
 
@@ -129,8 +148,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return enregistrerEtRepondre(
-    'Le service IA est momentanément indisponible. Réessaie dans quelques instants.' +
-      (emailSupport ? ` Si le problème persiste, contacte le support à ${emailSupport}.` : '')
-  )
+  const messageIaIndisponible =
+    langue === 'en'
+      ? 'The AI service is temporarily unavailable. Please try again shortly.' +
+        (emailSupport ? ` If the issue persists, contact support at ${emailSupport}.` : '')
+      : langue === 'ar'
+      ? 'خدمة الذكاء الاصطناعي غير متاحة مؤقتًا. يرجى إعادة المحاولة خلال لحظات.' +
+        (emailSupport ? ` إذا استمرت المشكلة، تواصل مع الدعم على ${emailSupport}.` : '')
+      : 'Le service IA est momentanément indisponible. Réessaie dans quelques instants.' +
+        (emailSupport ? ` Si le problème persiste, contacte le support à ${emailSupport}.` : '')
+  return enregistrerEtRepondre(messageIaIndisponible)
 }

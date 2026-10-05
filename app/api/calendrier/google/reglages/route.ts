@@ -10,11 +10,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 })
   }
 
-  const { duree_minutes, heure_debut, heure_fin } = await req.json()
+  const { duree_minutes, heure_debut, heure_fin, fuseau_horaire } = await req.json()
   const maj: Record<string, unknown> = {}
   if (duree_minutes !== undefined) maj.reservation_duree_minutes = duree_minutes
   if (heure_debut !== undefined) maj.reservation_heure_debut = heure_debut
   if (heure_fin !== undefined) maj.reservation_heure_fin = heure_fin
+  if (fuseau_horaire !== undefined) maj.fuseau_horaire = fuseau_horaire
 
   if (Object.keys(maj).length === 0) {
     return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 })

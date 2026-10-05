@@ -4,16 +4,36 @@ import { Fragment, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { PAYS_DISPONIBLES } from '@/lib/pays'
-import { zonePourPays, canalParPays } from '@/lib/pays'
+import { zonePourPays, canalParPays, TIMEZONES_DISPONIBLES } from '@/lib/pays'
 import { SECTEURS_DISPONIBLES } from '@/lib/secteurs'
 import { professionsDisponibles, PROFILS_PARTICULIER } from '@/lib/professions'
 import { traduire, type Langue } from '@/lib/i18n'
 import { templatesPourVertical } from '@/lib/templates'
-import { vocabulairePourVertical, etapesPipelinePourVertical } from '@/lib/vocabulaire'
+import { vocabulairePourVertical, etapesPipelinePourVertical, descriptionEtape } from '@/lib/vocabulaire'
+import { labelPourSlugVertical } from '@/lib/verticals-labels'
 import ValidationItem from './validation-item'
 import DropdownMultiSelect from './dropdown-multiselect'
 import ChatbotWidget from '@/components/ChatbotWidget'
 import PhoneInput, { decouperTelephone } from '@/components/PhoneInput'
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts'
+
+const ROLE_LABELS: Record<string, string> = {
+  proprietaire: 'Propriétaire',
+  admin: 'Admin',
+  directeur_commercial: 'Directeur commercial',
+  membre: 'Membre',
+}
 
 type Client = {
   id: string
@@ -22,6 +42,7 @@ type Client = {
   google_calendar_connecte?: boolean
   google_calendar_email?: string | null
   reservation_duree_minutes?: number | null
+  fuseau_horaire?: string | null
   reservation_heure_debut?: string | null
   reservation_heure_fin?: string | null
   statut_abonnement: string
@@ -95,6 +116,7 @@ type Target = {
   reponse_a_traiter?: boolean
   motif_refus?: string | null
   dernier_canal_contact?: string | null
+  vertical_id?: string | null
 }
 
 type DiagnosticEnAttente = {
@@ -105,6 +127,7 @@ type DiagnosticEnAttente = {
   recommandations_json: any
   lien_ouvert_at: string | null
   commentaire_expert?: string | null
+  vertical_id?: string | null
   targets: { nom: string } | { nom: string }[] | null
 }
 
@@ -114,6 +137,7 @@ type DiagnosticValide = {
   created_at: string
   target_id: string
   recommandations_json: any
+  vertical_id?: string | null
   targets: { nom: string } | { nom: string }[] | null
 }
 
@@ -189,6 +213,70 @@ export default function DashboardPage() {
   const [paysSelectionnes, setPaysSelectionnes] = useState<Set<string>>(new Set())
   const [professionsSelectionnees, setProfessionsSelectionnees] = useState<Set<string>>(new Set())
   const [targets, setTargets] = useState<Target[]>([])
+  const [outreachHistorique, setOutreachHistorique] = useState<{ created_at: string }[]>([])
+  // Cabinet multi-secteurs : correspondance vertical_id -> slug, pour afficher
+  // un badge secteur sur les cibles et filtrer (targets.vertical_id ne stocke
+  // que l'id technique, pas le slug lisible).
+  const [verticalsIdVersSlug, setVerticalsIdVersSlug] = useState<Record<string, string>>({})
+  const [filtreSecteurCibles, setFiltreSecteurCibles] = useState<string>('tous')
+  const [filtreSecteurValidation, setFiltreSecteurValidation] = useState<string>('tous')
+  const [filtreSecteurPipeline, setFiltreSecteurPipeline] = useState<string>('tous')
+  // Fiche detail cliquable (Cibles + Pipeline) : ouvre une case avec les
+  // coordonnees completes et le "parcours" (chemin) reel de la cible -
+  // reconstruit a partir des tables outreach_campaigns / diagnostics /
+  // messages_recus, pas juste le statut actuel.
+  const [detailCible, setDetailCible] = useState<Target | null>(null)
+  const [detailCibleParcours, setDetailCibleParcours] = useState<
+    { type: string; date: string; detail?: string }[]
+  >([])
+  const [detailCibleChargement, setDetailCibleChargement] = useState(false)
+
+  const ouvrirDetailCible = async (target: Target) => {
+    setDetailCible(target)
+    setDetailCibleChargement(true)
+    setDetailCibleParcours([])
+
+    const [{ data: envois }, { data: diags }, { data: recus }] = await Promise.all([
+      supabase
+        .from('outreach_campaigns')
+        .select('canal, statut, date_envoi, created_at')
+        .eq('target_id', target.id),
+      supabase
+        .from('diagnostics')
+        .select('created_at, lien_ouvert_at, statut_validation')
+        .eq('target_id', target.id),
+      supabase.from('messages_recus').select('created_at, canal').eq('target_id', target.id),
+    ])
+
+    const evenements: { type: string; date: string; detail?: string }[] = []
+    if (target.created_at) {
+      evenements.push({ type: 'evt_cible_ajoutee', date: target.created_at })
+    }
+    for (const e of envois ?? []) {
+      evenements.push({
+        type: 'evt_message_envoye',
+        date: e.date_envoi ?? e.created_at,
+        detail: e.canal,
+      })
+    }
+    for (const r of recus ?? []) {
+      evenements.push({ type: 'evt_message_recu', date: r.created_at, detail: r.canal })
+    }
+    for (const d of diags ?? []) {
+      evenements.push({ type: 'evt_diagnostic_cree', date: d.created_at })
+      if (d.lien_ouvert_at) {
+        evenements.push({ type: 'evt_diagnostic_ouvert', date: d.lien_ouvert_at })
+      }
+      if (d.statut_validation === 'valide_par_expert') {
+        evenements.push({ type: 'evt_diagnostic_valide', date: d.created_at })
+      }
+    }
+    evenements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    setDetailCibleParcours(evenements)
+    setDetailCibleChargement(false)
+  }
+
   const [diagnosticsEnAttente, setDiagnosticsEnAttente] = useState<DiagnosticEnAttente[]>([])
   const [messagesRecus, setMessagesRecus] = useState<MessageRecu[]>([])
   const [catalogue, setCatalogue] = useState<OffreCatalogue[]>([])
@@ -367,6 +455,8 @@ export default function DashboardPage() {
   const [inputsStrategiquesEnCours, setInputsStrategiquesEnCours] = useState(false)
   const [analyseCabinetEnCours, setAnalyseCabinetEnCours] = useState(false)
   const [erreurAnalyseCabinet, setErreurAnalyseCabinet] = useState<string | null>(null)
+  const [analyseReseauxEnCours, setAnalyseReseauxEnCours] = useState(false)
+  const [erreurAnalyseReseaux, setErreurAnalyseReseaux] = useState<string | null>(null)
   const [calendrierEditorial, setCalendrierEditorial] = useState<
     { id: string; semaine: number; theme: string; format_suggere: string; angle_accroche: string; statut: string }[]
   >([])
@@ -445,6 +535,7 @@ export default function DashboardPage() {
     entreprise_ou_objectif: '',
     poste_ou_budget: '',
     telephone: '',
+    indicatifTelephone: '+216',
     email: '',
     country: 'TN',
   })
@@ -454,6 +545,9 @@ export default function DashboardPage() {
 
   const langue: Langue = client?.langue_preferee ?? 'fr'
   const t = (cle: string) => traduire(langue, cle)
+  // Locale utilisee pour les noms de mois/jours affiches (calendrier, dates...) -
+  // suit la langue choisie plutot que d'etre figee en francais.
+  const localeAffichage = langue === 'en' ? 'en-US' : langue === 'ar' ? 'ar-TN' : 'fr-FR'
   // Le proprietaire et le directeur commercial voient/gerent toute l'equipe ;
   // un simple commercial ("membre") ne voit que son propre suivi.
   const peutSuperviser = monRole === 'proprietaire' || monRole === 'admin' || monRole === 'directeur_commercial'
@@ -474,7 +568,7 @@ export default function DashboardPage() {
     const { data: targetsData } = await supabase
       .from('targets')
       .select(
-        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, etape_pipeline, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a, signal_ia, reponse_sentiment, reponse_a_traiter, motif_refus, dernier_canal_contact'
+        'id, nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, statut, etape_pipeline, segment_categorie, segment_urgence, score_chaleur, nb_relances, derniere_relance_at, created_at, assigne_a, signal_ia, reponse_sentiment, reponse_a_traiter, motif_refus, dernier_canal_contact, vertical_id'
       )
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
@@ -483,7 +577,7 @@ export default function DashboardPage() {
     const { data: diagData } = await supabase
       .from('diagnostics')
       .select(
-        'id, token_acces, phrase_brute_prospect, json_ia_brouillon, recommandations_json, lien_ouvert_at, commentaire_expert, targets(nom)'
+        'id, token_acces, phrase_brute_prospect, json_ia_brouillon, recommandations_json, lien_ouvert_at, commentaire_expert, vertical_id, targets(nom)'
       )
       .eq('client_id', clientId)
       .eq('statut_validation', 'en_attente_validation')
@@ -492,7 +586,7 @@ export default function DashboardPage() {
 
     const { data: diagValidesData } = await supabase
       .from('diagnostics')
-      .select('id, token_acces, created_at, target_id, recommandations_json, targets(nom)')
+      .select('id, token_acces, created_at, target_id, recommandations_json, vertical_id, targets(nom)')
       .eq('client_id', clientId)
       .eq('statut_validation', 'valide_par_expert')
       .order('created_at', { ascending: false })
@@ -553,6 +647,16 @@ export default function DashboardPage() {
       .from('outreach_campaigns')
       .select('*', { count: 'exact', head: true })
       .eq('client_id', clientId)
+
+    // Historique dates pour la courbe "Premier contact" des 30 derniers jours
+    // (voir onglet Statistiques). Meme table que le comptage ci-dessus, mais
+    // avec les dates cette fois plutot qu'un simple total.
+    const { data: outreachData } = await supabase
+      .from('outreach_campaigns')
+      .select('created_at')
+      .eq('client_id', clientId)
+      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+    setOutreachHistorique(outreachData ?? [])
 
     const { count: nbReponses } = await supabase
       .from('diagnostics')
@@ -619,7 +723,7 @@ export default function DashboardPage() {
       const { data: clientData } = await supabase
         .from('clients')
         .select(
-          'id, nom_entreprise, email, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, taille_min_salaries, taille_max_salaries, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, base_email_existante, budget_publicitaire, objectif_chiffre, onglets_autorises, verticals_autorises, vertical_id, google_calendar_connecte, google_calendar_email, reservation_duree_minutes, reservation_heure_debut, reservation_heure_fin, verticals(slug)'
+          'id, nom_entreprise, email, statut_abonnement, mode_ciblage, secteur_activite, taille_entreprise, canal_sourcing, profil_particulier, message_personnalise, logo_url, langue_preferee, imap_host, imap_port, imap_utilisateur, imap_secure, imap_actif, imap_derniere_sync_at, imap_derniere_erreur, acces_active, onboarding_complete, whatsapp_directeur, whatsapp_equipe, facebook_url, instagram_url, linkedin_url, site_web, onglets_masques_equipe, taux_closing_historique, mots_cles_expertise, idees_recues_marche, motifs_rejet_passes, canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, derniere_analyse_cabinet_at, token_badge_public, taille_min_salaries, taille_max_salaries, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, base_email_existante, budget_publicitaire, objectif_chiffre, onglets_autorises, verticals_autorises, vertical_id, google_calendar_connecte, google_calendar_email, reservation_duree_minutes, reservation_heure_debut, reservation_heure_fin, fuseau_horaire, verticals(slug)'
         )
         .eq('id', clientUser.client_id)
         .single()
@@ -629,6 +733,12 @@ export default function DashboardPage() {
         setSecteurInput((clientData as unknown as Client).secteur_activite ?? '')
         const cd = clientData as unknown as Client
         setEmailCabinet(cd.email ?? '')
+        if (cd.verticals_autorises && cd.verticals_autorises.length > 1) {
+          const { data: verticalsData } = await supabase.from('verticals').select('id, slug')
+          setVerticalsIdVersSlug(
+            Object.fromEntries((verticalsData ?? []).map((v) => [v.id, v.slug]))
+          )
+        }
         setPresenceDigitale({
           site_web: cd.site_web ?? '',
           facebook_url: cd.facebook_url ?? '',
@@ -774,6 +884,25 @@ export default function DashboardPage() {
       })
     }
     setAnalyseCabinetEnCours(false)
+  }
+
+  const analyserReseauxCabinet = async () => {
+    if (!client) return
+    setAnalyseReseauxEnCours(true)
+    setErreurAnalyseReseaux(null)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const res = await fetch('/api/cabinet/analyser-reseaux', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setErreurAnalyseReseaux(data.error ?? "Erreur lors de l'analyse")
+    } else {
+      setClient({ ...client, ligne_editoriale_reseaux: data.ligne_editoriale_reseaux })
+    }
+    setAnalyseReseauxEnCours(false)
   }
 
   const chargerCalendrierEditorial = async () => {
@@ -922,12 +1051,17 @@ export default function DashboardPage() {
     if (!client || !nouvelleCible.nom.trim()) return
     setMaj(true)
 
+    const telephoneFinal = nouvelleCible.telephone.trim()
+      ? `${nouvelleCible.indicatifTelephone}${nouvelleCible.telephone.trim()}`
+      : null
+
     await supabase.from('targets').insert({
       client_id: client.id,
+      vertical_id: client.vertical_id,
       nom: nouvelleCible.nom,
       entreprise_ou_objectif: nouvelleCible.entreprise_ou_objectif || null,
       poste_ou_budget: nouvelleCible.poste_ou_budget || null,
-      telephone: nouvelleCible.telephone || null,
+      telephone: telephoneFinal,
       email: nouvelleCible.email || null,
       country: nouvelleCible.country,
       statut: 'nouveau',
@@ -938,6 +1072,7 @@ export default function DashboardPage() {
       entreprise_ou_objectif: '',
       poste_ou_budget: '',
       telephone: '',
+      indicatifTelephone: '+216',
       email: '',
       country: 'TN',
     })
@@ -1544,6 +1679,20 @@ export default function DashboardPage() {
     setCibleEditionOuverte(null)
   }
 
+  // Retour terrain : aucune facon de supprimer une cible ajoutee par erreur
+  // (doublon, mauvais contact, test...) - confirmation obligatoire pour
+  // eviter une suppression accidentelle, suppression definitive (pas de
+  // corbeille) donc on previent clairement dans le message.
+  const supprimerCible = async (targetId: string, nom: string) => {
+    if (!confirm(`Supprimer définitivement "${nom}" ? Cette action est irréversible.`)) return
+    const { error } = await supabase.from('targets').delete().eq('id', targetId)
+    if (error) {
+      alert("Erreur lors de la suppression : " + error.message)
+      return
+    }
+    setTargets((prev) => prev.filter((tg) => tg.id !== targetId))
+  }
+
   // Retour terrain : le cabinet veut relire (et au besoin corriger) le texte
   // exact avant qu'il ne parte au prospect - on previsualise d'abord (l'API
   // cree le vrai lien de diagnostic mais n'envoie rien), puis on confirme.
@@ -1615,7 +1764,7 @@ export default function DashboardPage() {
   const envoyerMessage = (targetId: string, canalForce?: 'email' | 'whatsapp') =>
     previsualiserEnvoi(targetId, 'message', canalForce)
 
-  const preparerLinkedin = async (targetId: string) => {
+  const preparerLienManuel = async (targetId: string, canal: 'linkedin' | 'facebook') => {
     if (!client) return
     setEnvoiEnCours(targetId)
 
@@ -1623,7 +1772,7 @@ export default function DashboardPage() {
       const res = await fetch('/api/outreach/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_id: targetId, type_envoi: 'diagnostic', canal_force: 'linkedin' }),
+        body: JSON.stringify({ target_id: targetId, type_envoi: 'diagnostic', canal_force: canal }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -2184,8 +2333,8 @@ export default function DashboardPage() {
                   }}
                   className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                 >
-                  <option value="membre">👤 Commercial</option>
-                  <option value="directeur_commercial">🧭 Directeur commercial</option>
+                  <option value="membre">{t('role_commercial')}</option>
+                  <option value="directeur_commercial">{t('role_directeur')}</option>
                 </select>
               </div>
             ))}
@@ -2233,7 +2382,7 @@ export default function DashboardPage() {
     { id: 'pipeline', label: 'Pipeline', icone: '📊' },
     {
       id: 'catalogue_strategie',
-      label: `📦 ${vocabulairePourVertical(verticalSlug).labelCatalogue} / Stratégie`,
+      label: `📦 ${vocabulairePourVertical(verticalSlug, langue).labelCatalogue} / Stratégie`,
       icone: '📦',
     },
     { id: 'collaboration', label: '💬 Collaboration & Tâches', icone: '💬' },
@@ -2252,6 +2401,110 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col md:flex-row" dir={dir}>
+      {detailCible && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-lg w-full space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-lg">{t('fiche_detail_titre')}</h3>
+              <button
+                onClick={() => setDetailCible(null)}
+                className="text-slate-400 hover:text-white text-xl leading-none"
+                title={t('fermer_x')}
+              >
+                ×
+              </button>
+            </div>
+
+            <div>
+              <p className="font-semibold text-base">{detailCible.nom}</p>
+              {detailCible.entreprise_ou_objectif && (
+                <p className="text-sm text-slate-400">{detailCible.entreprise_ou_objectif}</p>
+              )}
+            </div>
+
+            <div className="space-y-1 text-sm">
+              <p className="text-xs text-slate-500 uppercase font-semibold">{t('coordonnees_titre')}</p>
+              <p>📞 {detailCible.telephone ?? '—'}</p>
+              <p>✉️ {detailCible.email ?? '—'}</p>
+              <p>🌍 {detailCible.country ?? '—'}</p>
+              {detailCible.assigne_a && (
+                <p>
+                  👤 {t('assigne_a_label')} :{' '}
+                  {membresEquipe.find((m) => m.id === detailCible.assigne_a)?.nom_complet ?? '—'}
+                </p>
+              )}
+            </div>
+
+            {(detailCible.segment_categorie || typeof detailCible.score_chaleur === 'number') && (
+              <div className="flex gap-2 flex-wrap text-xs">
+                {detailCible.segment_categorie && (
+                  <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                    {t('segment_label')} : {detailCible.segment_categorie}
+                  </span>
+                )}
+                {detailCible.segment_urgence && (
+                  <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                    {t('urgence_label')} : {detailCible.segment_urgence}
+                  </span>
+                )}
+                {typeof detailCible.score_chaleur === 'number' && (
+                  <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                    🔥 {detailCible.score_chaleur}/100
+                  </span>
+                )}
+              </div>
+            )}
+
+            {detailCible.signal_ia && (
+              <div>
+                <p className="text-xs text-slate-500 uppercase font-semibold mb-1">{t('signal_ia_titre')}</p>
+                <p className="text-sm text-sky-400">{detailCible.signal_ia}</p>
+              </div>
+            )}
+
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-semibold mb-2">{t('parcours_titre')}</p>
+              {detailCibleChargement ? (
+                <p className="text-sm text-slate-500">{t('chargement')}</p>
+              ) : detailCibleParcours.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">{t('parcours_vide')}</p>
+              ) : (
+                <ol className="space-y-2 border-l border-slate-700 pl-3">
+                  {detailCibleParcours.map((evt, i) => (
+                    <li key={i} className="text-sm">
+                      <p className="text-slate-200">
+                        {t(evt.type)}
+                        {evt.detail && (
+                          <span className="text-slate-500">
+                            {' '}
+                            {t('via_label')} {evt.detail}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {new Date(evt.date).toLocaleString(localeAffichage)}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+
+            {notesCibles[detailCible.id] && notesCibles[detailCible.id].length > 0 && (
+              <div>
+                <p className="text-xs text-slate-500 uppercase font-semibold mb-1">{t('notes_titre')}</p>
+                <div className="space-y-1">
+                  {notesCibles[detailCible.id].map((n, i) => (
+                    <p key={i} className="text-sm text-slate-300 bg-slate-950 rounded p-2">
+                      {n.contenu}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {previsualisationEnvoi && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-lg w-full space-y-3">
@@ -2323,8 +2576,27 @@ export default function DashboardPage() {
       {/* BARRE LATERALE GAUCHE */}
       <aside className="md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col">
         <div className="px-5 py-4 border-b border-slate-800">
-          <h1 className="text-lg font-bold leading-tight">{client.nom_entreprise}</h1>
-          <p className="text-slate-400 text-xs mt-1">
+          {client.logo_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={client.logo_url}
+              alt={client.nom_entreprise}
+              className="w-8 h-8 rounded-full object-cover border border-slate-700 mb-2.5"
+            />
+          )}
+          <div className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-800 rounded-2xl px-3 py-2.5 mb-3">
+            <div className="w-9 h-9 rounded-full bg-accent/20 text-accent border border-accent/40 flex items-center justify-center text-sm font-bold shrink-0">
+              {client.nom_entreprise?.charAt(0).toUpperCase() || '?'}
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-sm font-bold leading-tight truncate">{client.nom_entreprise}</h1>
+              <p className="text-slate-500 text-[11px] truncate">
+                {monRole ? (ROLE_LABELS[monRole] ?? monRole) : ''}
+                {client.email ? ` · ${client.email}` : ''}
+              </p>
+            </div>
+          </div>
+          <p className="text-slate-400 text-xs">
             {t('statut')} : <span className="text-accent">{client.statut_abonnement}</span>
           </p>
           {estAdmin && (
@@ -2439,7 +2711,7 @@ export default function DashboardPage() {
         {ongletActif === 'catalogue_strategie' && (
           <div className="flex gap-2 border-b border-slate-800 pb-2 -mb-6 flex-wrap">
             {[
-              { id: 'catalogue' as const, label: `📦 ${vocabulairePourVertical(verticalSlug).labelCatalogue}` },
+              { id: 'catalogue' as const, label: `📦 ${vocabulairePourVertical(verticalSlug, langue).labelCatalogue}` },
               { id: 'strategie' as const, label: '🧭 Stratégie' },
               { id: 'idees' as const, label: '📣 Idées marketing' },
             ].map((so) => (
@@ -2498,7 +2770,7 @@ export default function DashboardPage() {
                   options={PAYS_DISPONIBLES.map((p) => ({ value: p.code, label: p.nom }))}
                   selectionnes={paysSelectionnes}
                   onToggle={togglePays}
-                  placeholder="Sélectionner des pays..."
+                  placeholder={t('selectionner_pays')}
                   disabled={maj}
                 />
               </div>
@@ -2514,7 +2786,7 @@ export default function DashboardPage() {
                         disabled={maj}
                         className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                       >
-                        <option value="">Indifférent</option>
+                        <option value="">{t('indifferent')}</option>
                         {SECTEURS_DISPONIBLES.map((s) => (
                           <option key={s} value={s}>
                             {s}
@@ -2531,10 +2803,10 @@ export default function DashboardPage() {
                         disabled={maj}
                         className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                       >
-                        <option value="indifferent">Indifférent</option>
-                        <option value="startup">Startup / Jeune pousse</option>
-                        <option value="pme">PME</option>
-                        <option value="grande_entreprise">Grande entreprise / Groupe</option>
+                        <option value="indifferent">{t('indifferent')}</option>
+                        <option value="startup">{t('startup_option')}</option>
+                        <option value="pme">{t('pme_option')}</option>
+                        <option value="grande_entreprise">{t('grande_entreprise_option')}</option>
                       </select>
                     </div>
                   </div>
@@ -2549,7 +2821,7 @@ export default function DashboardPage() {
                       }))}
                       selectionnes={professionsSelectionnees}
                       onToggle={toggleProfession}
-                      placeholder="Sélectionner des postes..."
+                      placeholder={t('selectionner_postes')}
                       disabled={maj}
                     />
                   </div>
@@ -2563,7 +2835,7 @@ export default function DashboardPage() {
                     disabled={maj}
                     className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                   >
-                    <option value="">Sélectionner un profil</option>
+                    <option value="">{t('selectionner_profil')}</option>
                     {PROFILS_PARTICULIER.map((p) => (
                       <option key={p} value={p}>
                         {p}
@@ -2582,11 +2854,11 @@ export default function DashboardPage() {
                   disabled={maj}
                   className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                 >
-                  <option value="linkedin">LinkedIn</option>
-                  <option value="google_maps">Google Maps / Google Business</option>
-                  <option value="facebook">Facebook Pages</option>
-                  <option value="web">Recherche Web générale</option>
-                  <option value="tous">Toutes les sources combinées</option>
+                  <option value="linkedin">{t('source_linkedin')}</option>
+                  <option value="google_maps">{t('source_gmaps')}</option>
+                  <option value="facebook">{t('source_facebook')}</option>
+                  <option value="web">{t('source_web')}</option>
+                  <option value="tous">{t('source_toutes')}</option>
                 </select>
                 <p className="text-slate-600 text-xs">
                   💡 En Tunisie, beaucoup de PME sont plus présentes sur Google Maps/Facebook que
@@ -2712,7 +2984,7 @@ export default function DashboardPage() {
               <input
                 value={nouvelleCible.nom}
                 onChange={(e) => setNouvelleCible({ ...nouvelleCible, nom: e.target.value })}
-                placeholder="Nom"
+                placeholder={t('champ_nom')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <input
@@ -2720,19 +2992,20 @@ export default function DashboardPage() {
                 onChange={(e) =>
                   setNouvelleCible({ ...nouvelleCible, entreprise_ou_objectif: e.target.value })
                 }
-                placeholder={client.mode_ciblage === 'particulier' ? 'Objectif' : 'Entreprise'}
+                placeholder={client.mode_ciblage === 'particulier' ? 'Objectif' : t('champ_entreprise')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
-              <input
-                value={nouvelleCible.telephone}
-                onChange={(e) => setNouvelleCible({ ...nouvelleCible, telephone: e.target.value })}
-                placeholder="Téléphone"
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              <PhoneInput
+                indicatif={nouvelleCible.indicatifTelephone}
+                onIndicatifChange={(v) => setNouvelleCible({ ...nouvelleCible, indicatifTelephone: v })}
+                numero={nouvelleCible.telephone}
+                onNumeroChange={(v) => setNouvelleCible({ ...nouvelleCible, telephone: v })}
+                placeholder={t('champ_telephone')}
               />
               <input
                 value={nouvelleCible.email}
                 onChange={(e) => setNouvelleCible({ ...nouvelleCible, email: e.target.value })}
-                placeholder="Email"
+                placeholder={t('champ_email')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <select
@@ -2768,7 +3041,7 @@ export default function DashboardPage() {
                 disabled={importCSVEnCours}
                 className="text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-accent disabled:opacity-50"
               >
-                {importCSVEnCours ? 'Import en cours...' : '📁 Importer une liste (CSV)'}
+                {importCSVEnCours ? 'Import en cours...' : `📁 ${t('importer_liste')}`}
               </button>
               <span className="text-xs text-slate-500">
                 Colonnes : nom, telephone, email, entreprise, pays — et pour l'historique
@@ -2794,7 +3067,7 @@ export default function DashboardPage() {
                           : 'bg-slate-900 text-slate-400 border-slate-700'
                       }`}
                     >
-                      Toutes les cibles ({targets.filter((tg) => tg.statut === 'nouveau').length})
+                      {t('toutes_les_cibles')} ({targets.filter((tg) => tg.statut === 'nouveau').length})
                     </button>
                     <button
                       onClick={() => setFiltreAssignation('mes-cibles')}
@@ -2804,7 +3077,7 @@ export default function DashboardPage() {
                           : 'bg-slate-900 text-slate-400 border-slate-700'
                       }`}
                     >
-                      Mes cibles (
+                      {t('mes_cibles')} (
                       {
                         targets.filter(
                           (tg) => tg.statut === 'nouveau' && tg.assigne_a === monClientUserId
@@ -2812,6 +3085,24 @@ export default function DashboardPage() {
                       }
                       )
                     </button>
+                  </div>
+                )}
+
+                {client.verticals_autorises && client.verticals_autorises.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-400">{t('filtrer_par_secteur')}</label>
+                    <select
+                      value={filtreSecteurCibles}
+                      onChange={(e) => setFiltreSecteurCibles(e.target.value)}
+                      className="text-xs rounded-lg bg-slate-900 border border-slate-700 px-2 py-1"
+                    >
+                      <option value="tous">{t('tous_les_secteurs')}</option>
+                      {client.verticals_autorises.map((slug) => (
+                        <option key={slug} value={slug}>
+                          {labelPourSlugVertical(slug)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
 
@@ -2856,6 +3147,11 @@ export default function DashboardPage() {
                   {targets
                     .filter((tg) => tg.statut === 'nouveau')
                     .filter((tg) => filtreAssignation === 'toutes' || tg.assigne_a === monClientUserId)
+                    .filter(
+                      (tg) =>
+                        filtreSecteurCibles === 'tous' ||
+                        (tg.vertical_id && verticalsIdVersSlug[tg.vertical_id] === filtreSecteurCibles)
+                    )
                     .map((target) => {
                       const estPriseParAutre = Boolean(
                         target.assigne_a && target.assigne_a !== monClientUserId
@@ -2886,7 +3182,12 @@ export default function DashboardPage() {
                         />
                         <div>
                           <p className="font-semibold">
-                            {target.nom}{' '}
+                            <button
+                              onClick={() => ouvrirDetailCible(target)}
+                              className="hover:underline hover:text-accent text-left"
+                            >
+                              {target.nom}
+                            </button>{' '}
                             {target.entreprise_ou_objectif && (
                               <span className="text-slate-400 font-normal">
                                 — {target.entreprise_ou_objectif}
@@ -2900,9 +3201,17 @@ export default function DashboardPage() {
                               }
                               disabled={estPriseParAutre && !peutSuperviser}
                               className="text-xs text-slate-400 hover:text-white disabled:opacity-40"
-                              title="Modifier"
+                              title={t('modifier')}
                             >
                               ✏️
+                            </button>{' '}
+                            <button
+                              onClick={() => supprimerCible(target.id, target.nom)}
+                              disabled={estPriseParAutre && !peutSuperviser}
+                              className="text-xs text-slate-500 hover:text-red-400 disabled:opacity-40"
+                              title="Supprimer définitivement cette cible"
+                            >
+                              🗑️
                             </button>
                           </p>
                           <p className="text-slate-400 text-sm flex items-center flex-wrap gap-x-1">
@@ -2924,6 +3233,14 @@ export default function DashboardPage() {
                             <span>
                               · <span className="text-accent">{target.statut}</span>
                             </span>
+                            {client.verticals_autorises &&
+                              client.verticals_autorises.length > 1 &&
+                              target.vertical_id &&
+                              verticalsIdVersSlug[target.vertical_id] && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
+                                  🗂️ {labelPourSlugVertical(verticalsIdVersSlug[target.vertical_id])}
+                                </span>
+                              )}
                           </p>
                           {target.signal_ia && (
                             <p className="text-xs text-sky-400 mt-1">{target.signal_ia}</p>
@@ -2977,13 +3294,13 @@ export default function DashboardPage() {
                               disabled={estPriseParAutre && !peutSuperviser}
                               className="mt-2 text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1 disabled:opacity-50"
                             >
-                              <option value="">Non assigné</option>
+                              <option value="">{t('non_assigne')}</option>
                               {(peutSuperviser
                                 ? membresEquipe
                                 : membresEquipe.filter((m) => m.id === monClientUserId)
                               ).map((m) => (
                                 <option key={m.id} value={m.id}>
-                                  👤 {m.nom_complet || '(sans nom)'}
+                                  👤 {m.nom_complet || t('nom_non_renseigne')}
                                 </option>
                               ))}
                             </select>
@@ -2995,7 +3312,7 @@ export default function DashboardPage() {
                               className="text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
                             >
                               <option value="nouveau">🆕 Nouveau</option>
-                              {etapesPipelinePourVertical(verticalSlug).map((e) => (
+                              {etapesPipelinePourVertical(verticalSlug, langue).map((e) => (
                                 <option key={e.etape} value={e.etape}>
                                   {e.label}
                                 </option>
@@ -3009,7 +3326,7 @@ export default function DashboardPage() {
                               }
                               className="text-xs text-slate-400 underline"
                             >
-                              📝 Notes ({(notesCibles[target.id] ?? []).length})
+                              📝 {t('notes')} ({(notesCibles[target.id] ?? []).length})
                             </button>
                             {target.dernier_canal_contact && (
                               <span className="text-xs text-slate-500">
@@ -3188,9 +3505,6 @@ export default function DashboardPage() {
                             >
                               <option value="whatsapp">💬 WhatsApp</option>
                               <option value="email">✉️ Email</option>
-                              <option value="facebook" disabled>
-                                📘 Facebook (bientôt)
-                              </option>
                             </select>
                             <button
                               onClick={() =>
@@ -3202,7 +3516,7 @@ export default function DashboardPage() {
                               disabled={envoiEnCours === target.id}
                               className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
                             >
-                              {envoiEnCours === target.id ? 'Envoi...' : '📤 Premier contact'}
+                              {envoiEnCours === target.id ? 'Envoi...' : `📤 ${t('premier_contact')}`}
                             </button>
                           </>
                         )}
@@ -3223,16 +3537,26 @@ export default function DashboardPage() {
                           {envoiEnCours === target.id
                             ? 'Envoi...'
                             : target.statut === 'nouveau'
-                            ? '📋 Diagnostic'
+                            ? `📋 ${t('diagnostic')}`
                             : 'Déjà envoyé'}
                         </button>
                         {target.statut === 'nouveau' && (
                           <button
-                            onClick={() => preparerLinkedin(target.id)}
+                            onClick={() => preparerLienManuel(target.id, 'linkedin')}
                             disabled={envoiEnCours === target.id}
                             className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
                           >
                             {envoiEnCours === target.id ? '...' : '🔗 LinkedIn'}
+                          </button>
+                        )}
+                        {target.statut === 'nouveau' && (
+                          <button
+                            onClick={() => preparerLienManuel(target.id, 'facebook')}
+                            disabled={envoiEnCours === target.id}
+                            title="Facebook n'autorise pas l'envoi automatique à froid - le texte est préparé pour copier-coller"
+                            className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
+                          >
+                            {envoiEnCours === target.id ? '...' : '📘 Facebook'}
                           </button>
                         )}
                       </div>
@@ -3249,16 +3573,36 @@ export default function DashboardPage() {
         {ongletActif === 'pipeline' && (
           <section className="space-y-4">
             {(() => {
-              const cibleEnCours = targets.filter((tg) => tg.statut !== 'nouveau')
-              const colonnes = etapesPipelinePourVertical(verticalSlug)
+              const cibleEnCours = targets
+                .filter((tg) => tg.statut !== 'nouveau')
+                .filter(
+                  (tg) =>
+                    filtreSecteurPipeline === 'tous' ||
+                    (tg.vertical_id && verticalsIdVersSlug[tg.vertical_id] === filtreSecteurPipeline)
+                )
+              const colonnes = etapesPipelinePourVertical(verticalSlug, langue)
 
               return (
                 <div className="space-y-3">
+                  {client.verticals_autorises && client.verticals_autorises.length > 1 && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-slate-400">{t('filtrer_par_secteur')}</label>
+                      <select
+                        value={filtreSecteurPipeline}
+                        onChange={(e) => setFiltreSecteurPipeline(e.target.value)}
+                        className="text-xs rounded-lg bg-slate-900 border border-slate-700 px-2 py-1"
+                      >
+                        <option value="tous">{t('tous_les_secteurs')}</option>
+                        {client.verticals_autorises.map((slug) => (
+                          <option key={slug} value={slug}>
+                            {labelPourSlugVertical(slug)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   {cibleEnCours.length === 0 && (
-                    <p className="text-slate-500 text-sm italic">
-                      Aucun prospect en cours pour le moment. Les prospects contactés depuis
-                      l'onglet Cibles apparaîtront ici.
-                    </p>
+                    <p className="text-slate-500 text-sm italic">{t('aucun_prospect_en_cours')}</p>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-7 gap-3">
                   {colonnes.map((colonne) => {
@@ -3278,8 +3622,19 @@ export default function DashboardPage() {
                         }}
                         className="rounded-xl border border-slate-700 bg-slate-900/60 p-2 min-h-[200px] space-y-2"
                       >
-                        <p className="text-xs font-semibold text-slate-300 px-1 pb-1 border-b border-slate-800">
-                          {colonne.label} ({cartes.length})
+                        <p className="text-xs font-semibold text-slate-300 px-1 pb-1 border-b border-slate-800 min-h-[2.4rem] flex items-start gap-1">
+                          <span className="flex-1">
+                            {colonne.label} ({cartes.length})
+                          </span>
+                          <span
+                            className="shrink-0 text-slate-500 hover:text-accent cursor-help"
+                            title={
+                              descriptionEtape(colonne.etape, langue) ??
+                              t('glisser_carte_ici')
+                            }
+                          >
+                            ⓘ
+                          </span>
                         </p>
                         {cartes.map((carte) => (
                           <div
@@ -3295,7 +3650,25 @@ export default function DashboardPage() {
                             }}
                             className="rounded-lg border border-slate-700 bg-slate-950 p-2 cursor-grab active:cursor-grabbing space-y-1"
                           >
-                            <p className="text-sm font-semibold">{carte.nom}</p>
+                            <p className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  ouvrirDetailCible(carte)
+                                }}
+                                className="hover:underline"
+                              >
+                                {carte.nom}
+                              </button>
+                              {client.verticals_autorises &&
+                                client.verticals_autorises.length > 1 &&
+                                carte.vertical_id &&
+                                verticalsIdVersSlug[carte.vertical_id] && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 font-normal">
+                                    🗂️ {labelPourSlugVertical(verticalsIdVersSlug[carte.vertical_id])}
+                                  </span>
+                                )}
+                            </p>
                             {carte.entreprise_ou_objectif && (
                               <p className="text-xs text-slate-400">
                                 {carte.entreprise_ou_objectif}
@@ -3303,7 +3676,7 @@ export default function DashboardPage() {
                             )}
                             {carte.reponse_a_traiter && (
                               <p className="text-xs font-semibold text-emerald-400">
-                                🎯 Réponse positive à traiter
+                                {t('reponse_positive_a_traiter')}
                               </p>
                             )}
                             {typeof carte.score_chaleur === 'number' && (
@@ -3335,7 +3708,7 @@ export default function DashboardPage() {
                               <p className="text-xs text-accent">
                                 👤{' '}
                                 {membresEquipe.find((m) => m.id === carte.assigne_a)?.nom_complet ??
-                                  'Assigné'}
+                                  t('assigne_defaut')}
                               </p>
                             )}
 
@@ -3344,9 +3717,7 @@ export default function DashboardPage() {
                                 onClick={(e) => e.stopPropagation()}
                                 className="mt-2 bg-amber-950/40 border border-amber-900 rounded-lg p-2 cursor-default"
                               >
-                                <p className="text-xs text-amber-400 mb-1">
-                                  Pourquoi ce prospect a-t-il refusé ?
-                                </p>
+                                <p className="text-xs text-amber-400 mb-1">{t('pourquoi_refuse')}</p>
                                 <select
                                   defaultValue=""
                                   onChange={(e) => {
@@ -3356,20 +3727,20 @@ export default function DashboardPage() {
                                   className="w-full text-xs rounded-lg bg-slate-900 border border-amber-800 px-2 py-1"
                                 >
                                   <option value="" disabled>
-                                    Choisir un motif...
+                                    {t('choisir_motif')}
                                   </option>
-                                  <option value="Pas de budget">Pas de budget (relance dans 90j)</option>
-                                  <option value="Pas le moment">Pas le moment (relance dans 30j)</option>
+                                  <option value="Pas de budget">{t('pas_de_budget_relance')}</option>
+                                  <option value="Pas le moment">{t('pas_le_moment_relance')}</option>
                                   <option value="Plus le bon interlocuteur">
-                                    Plus le bon interlocuteur (relance dans 60j)
+                                    {t('plus_bon_interlocuteur')}
                                   </option>
-                                  <option value="Autre">Autre (relance dans 60j)</option>
+                                  <option value="Autre">{t('autre_relance')}</option>
                                 </select>
                               </div>
                             )}
                             {carte.motif_refus && (
                               <p className="text-xs text-slate-500 mt-1">
-                                Motif : {carte.motif_refus} — relance planifiée
+                                {t('motif_refus_prefixe')} {carte.motif_refus} {t('relance_planifiee')}
                               </p>
                             )}
 
@@ -3378,9 +3749,7 @@ export default function DashboardPage() {
                                 onClick={(e) => e.stopPropagation()}
                                 className="mt-2 bg-slate-900 border border-accent/40 rounded-lg p-2 space-y-2 cursor-default"
                               >
-                                <p className="text-xs font-semibold text-slate-300">
-                                  Assigner & donner une consigne
-                                </p>
+                                <p className="text-xs font-semibold text-slate-300">{t('assigner_consigne')}</p>
                                 <select
                                   value={popoverPipelineForm.assigne_a}
                                   onChange={(e) =>
@@ -3391,7 +3760,7 @@ export default function DashboardPage() {
                                   }
                                   className="w-full text-xs rounded-lg bg-slate-950 border border-slate-700 p-1.5"
                                 >
-                                  <option value="">Assigner à...</option>
+                                  <option value="">{t('assigner_a')}</option>
                                   {membresEquipe.map((m) => (
                                     <option key={m.id} value={m.id}>
                                       👤 {m.nom_complet || '(sans nom)'}
@@ -3406,7 +3775,7 @@ export default function DashboardPage() {
                                       consigne: e.target.value,
                                     })
                                   }
-                                  placeholder="Ex: Rappeler ce vendredi à 14h suite à son message WhatsApp"
+                                  placeholder={t('consigne_placeholder')}
                                   className="w-full text-xs rounded-lg bg-slate-950 border border-slate-700 p-1.5"
                                   rows={2}
                                 />
@@ -3415,13 +3784,13 @@ export default function DashboardPage() {
                                     onClick={() => validerPopoverPipeline(carte)}
                                     className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold"
                                   >
-                                    Valider
+                                    {t('valider')}
                                   </button>
                                   <button
                                     onClick={() => setPopoverPipelineOuvert(null)}
                                     className="text-xs px-3 py-1 rounded-lg border border-slate-700"
                                   >
-                                    Annuler
+                                    {t('annuler')}
                                   </button>
                                 </div>
                               </div>
@@ -3441,37 +3810,92 @@ export default function DashboardPage() {
         {/* ===================== ONGLET VALIDATION ===================== */}
         {ongletActif === 'validation' && (
           <section className="space-y-6">
+            {client.verticals_autorises && client.verticals_autorises.length > 1 && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-400">{t('filtrer_par_secteur')}</label>
+                <select
+                  value={filtreSecteurValidation}
+                  onChange={(e) => setFiltreSecteurValidation(e.target.value)}
+                  className="text-xs rounded-lg bg-slate-900 border border-slate-700 px-2 py-1"
+                >
+                  <option value="tous">{t('tous_les_secteurs')}</option>
+                  {client.verticals_autorises.map((slug) => (
+                    <option key={slug} value={slug}>
+                      {labelPourSlugVertical(slug)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="space-y-4">
               <h2 className="text-lg font-semibold">🔔 {t('validation_titre')}</h2>
-              {diagnosticsEnAttente.length === 0 ? (
-                <p className="text-slate-500 text-sm italic">Rien à valider pour le moment.</p>
+              {diagnosticsEnAttente.filter(
+                (d) =>
+                  filtreSecteurValidation === 'tous' ||
+                  (d.vertical_id && verticalsIdVersSlug[d.vertical_id] === filtreSecteurValidation)
+              ).length === 0 ? (
+                <p className="text-slate-500 text-sm italic">{t('rien_a_valider')}</p>
               ) : (
                 <div className="space-y-2">
-                  {diagnosticsEnAttente.map((d) => (
-                    <ValidationItem key={d.id} diagnostic={d} onValide={() => chargerTout(client.id)} />
-                  ))}
+                  {diagnosticsEnAttente
+                    .filter(
+                      (d) =>
+                        filtreSecteurValidation === 'tous' ||
+                        (d.vertical_id && verticalsIdVersSlug[d.vertical_id] === filtreSecteurValidation)
+                    )
+                    .map((d) => (
+                      <ValidationItem
+                        key={d.id}
+                        diagnostic={d}
+                        onValide={() => chargerTout(client.id)}
+                        langue={langue}
+                        secteurBadge={
+                          client.verticals_autorises && client.verticals_autorises.length > 1 && d.vertical_id
+                            ? labelPourSlugVertical(verticalsIdVersSlug[d.vertical_id])
+                            : undefined
+                        }
+                      />
+                    ))}
                 </div>
               )}
             </div>
 
             <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-slate-400">📁 Déjà validés</h2>
-              {diagnosticsValides.length === 0 ? (
-                <p className="text-slate-600 text-sm italic">Aucun diagnostic validé pour le moment.</p>
+              <h2 className="text-lg font-semibold text-slate-400">📁 {t('deja_valides')}</h2>
+              {diagnosticsValides.filter(
+                (d) =>
+                  filtreSecteurValidation === 'tous' ||
+                  (d.vertical_id && verticalsIdVersSlug[d.vertical_id] === filtreSecteurValidation)
+              ).length === 0 ? (
+                <p className="text-slate-600 text-sm italic">{t('aucun_diagnostic_valide')}</p>
               ) : (
                 <div className="space-y-2">
-                  {diagnosticsValides.map((d) => {
+                  {diagnosticsValides
+                    .filter(
+                      (d) =>
+                        filtreSecteurValidation === 'tous' ||
+                        (d.vertical_id && verticalsIdVersSlug[d.vertical_id] === filtreSecteurValidation)
+                    )
+                    .map((d) => {
                     const nomCible = Array.isArray(d.targets) ? d.targets[0]?.nom : d.targets?.nom
                     return (
                       <div
                         key={d.id}
                         className="flex items-center justify-between rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
                       >
-                        <span>
+                        <span className="flex items-center gap-2 flex-wrap">
                           {nomCible ?? 'Prospect'}{' '}
                           <span className="text-slate-500 text-xs">
-                            · {new Date(d.created_at).toLocaleDateString('fr-FR')}
+                            · {new Date(d.created_at).toLocaleDateString(localeAffichage)}
                           </span>
+                          {client.verticals_autorises &&
+                            client.verticals_autorises.length > 1 &&
+                            d.vertical_id &&
+                            verticalsIdVersSlug[d.vertical_id] && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
+                                🗂️ {labelPourSlugVertical(verticalsIdVersSlug[d.vertical_id])}
+                              </span>
+                            )}
                         </span>
                         <a
                           href={`/api/rapport/${d.token_acces}`}
@@ -3479,7 +3903,7 @@ export default function DashboardPage() {
                           rel="noopener noreferrer"
                           className="text-accent underline text-xs"
                         >
-                          📄 Voir le rapport
+                          📄 {t('voir_rapport')}
                         </a>
                       </div>
                     )
@@ -3496,7 +3920,7 @@ export default function DashboardPage() {
             <h2 className="text-lg font-semibold">{t('equipe_titre')}</h2>
 
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
-              <h3 className="text-sm font-semibold">📱 Numéros WhatsApp de l'équipe</h3>
+              <h3 className="text-sm font-semibold">{t('whatsapp_equipe_titre')}</h3>
               <div className="flex flex-wrap gap-2">
                 {(client.whatsapp_equipe ?? []).map((numero) => (
                   <span
@@ -3513,7 +3937,7 @@ export default function DashboardPage() {
                   </span>
                 ))}
                 {(client.whatsapp_equipe ?? []).length === 0 && (
-                  <span className="text-xs text-slate-500 italic">Aucun numéro ajouté.</span>
+                  <span className="text-xs text-slate-500 italic">{t('aucun_numero_ajoute')}</span>
                 )}
               </div>
               <div className="flex gap-2">
@@ -3530,19 +3954,15 @@ export default function DashboardPage() {
                   }}
                   className="text-sm px-4 rounded-lg bg-accent text-slate-950 font-semibold"
                 >
-                  Ajouter
+                  {t('ajouter')}
                 </button>
               </div>
             </div>
 
             {client.verticals_autorises && client.verticals_autorises.length > 1 && (
               <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
-                <h3 className="text-sm font-semibold">🗂️ Secteur actif</h3>
-                <p className="text-xs text-slate-500">
-                  L'administrateur t'a donné accès à plusieurs cartes/secteurs. Choisis celui sur
-                  lequel tu travailles actuellement — cela change le vocabulaire, les questions et
-                  les modèles utilisés par la plateforme.
-                </p>
+                <h3 className="text-sm font-semibold">{t('secteur_actif_titre')}</h3>
+                <p className="text-xs text-slate-500">{t('secteur_actif_desc')}</p>
                 <select
                   value={verticalSlug}
                   onChange={async (e) => {
@@ -3552,7 +3972,12 @@ export default function DashboardPage() {
                       .select('id')
                       .eq('slug', slugChoisi)
                       .single()
-                    if (!verticalTrouve) return
+                    if (!verticalTrouve) {
+                      alert(
+                        `Secteur "${slugChoisi}" introuvable en base — contacte l'administrateur pour qu'il exécute la migration 67_verticals_seed_complet.sql.`
+                      )
+                      return
+                    }
                     await supabase
                       .from('clients')
                       .update({ vertical_id: verticalTrouve.id })
@@ -3563,7 +3988,7 @@ export default function DashboardPage() {
                 >
                   {client.verticals_autorises.map((slug) => (
                     <option key={slug} value={slug}>
-                      {slug}
+                      {labelPourSlugVertical(slug)}
                     </option>
                   ))}
                 </select>
@@ -3571,11 +3996,8 @@ export default function DashboardPage() {
             )}
 
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
-              <h3 className="text-sm font-semibold">📧 Email du cabinet</h3>
-              <p className="text-xs text-slate-500">
-                Adresse utilisée pour les notifications (réponse positive, relances...) et le mot de
-                passe oublié. Modifiable ici si tu as fait une erreur à l'inscription.
-              </p>
+              <h3 className="text-sm font-semibold">{t('email_cabinet_titre')}</h3>
+              <p className="text-xs text-slate-500">{t('email_cabinet_desc')}</p>
               <div className="flex gap-2">
                 <input
                   value={emailCabinet}
@@ -3589,41 +4011,38 @@ export default function DashboardPage() {
                   disabled={emailCabinetEnCours}
                   className="px-4 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
                 >
-                  {emailCabinetEnCours ? '...' : 'Enregistrer'}
+                  {emailCabinetEnCours ? '...' : t('enregistrer')}
                 </button>
               </div>
               {emailCabinetMessage && <p className="text-xs text-slate-400">{emailCabinetMessage}</p>}
             </div>
 
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
-              <h3 className="text-sm font-semibold">🌐 Présence digitale (site web & réseaux)</h3>
-              <p className="text-xs text-slate-500">
-                Utilisé pour l'analyse auto du positionnement et le scraping du cabinet. Modifiable à
-                tout moment, pas seulement à l'inscription.
-              </p>
+              <h3 className="text-sm font-semibold">{t('presence_digitale_reseaux_titre')}</h3>
+              <p className="text-xs text-slate-500">{t('presence_digitale_reseaux_desc')}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input
                   value={presenceDigitale.site_web}
                   onChange={(e) => setPresenceDigitale({ ...presenceDigitale, site_web: e.target.value })}
-                  placeholder="Site web (https://...)"
+                  placeholder={t('site_web_placeholder')}
                   className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 />
                 <input
                   value={presenceDigitale.linkedin_url}
                   onChange={(e) => setPresenceDigitale({ ...presenceDigitale, linkedin_url: e.target.value })}
-                  placeholder="Page LinkedIn entreprise"
+                  placeholder={t('page_linkedin_placeholder')}
                   className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 />
                 <input
                   value={presenceDigitale.facebook_url}
                   onChange={(e) => setPresenceDigitale({ ...presenceDigitale, facebook_url: e.target.value })}
-                  placeholder="Page Facebook"
+                  placeholder={t('page_facebook_placeholder')}
                   className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 />
                 <input
                   value={presenceDigitale.instagram_url}
                   onChange={(e) => setPresenceDigitale({ ...presenceDigitale, instagram_url: e.target.value })}
-                  placeholder="Instagram"
+                  placeholder={t('instagram_placeholder')}
                   className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 />
               </div>
@@ -3632,7 +4051,7 @@ export default function DashboardPage() {
                 disabled={presenceDigitaleEnCours}
                 className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
               >
-                {presenceDigitaleEnCours ? 'Enregistrement...' : 'Enregistrer'}
+                {presenceDigitaleEnCours ? t('enregistrement_en_cours') : t('enregistrer')}
               </button>
               {presenceDigitaleMessage && (
                 <p className="text-xs text-slate-400">{presenceDigitaleMessage}</p>
@@ -3668,7 +4087,7 @@ export default function DashboardPage() {
                               {m.photo_url ? (
                                 <img
                                   src={m.photo_url}
-                                  alt={m.nom_complet ?? 'Photo de profil'}
+                                  alt={m.nom_complet ?? t('photo_de_profil')}
                                   className="w-7 h-7 rounded-full object-cover border border-slate-600"
                                 />
                               ) : (
@@ -3685,7 +4104,7 @@ export default function DashboardPage() {
                             className="w-7 h-7 rounded-full object-cover border border-slate-600 shrink-0"
                           />
                         ) : null}
-                        {m.nom_complet || '(nom non renseigné)'}
+                        {m.nom_complet || t('nom_non_renseigne')}
                         {m.telephone ? ` · ${m.telephone}` : ''}
                         {peutEditer && (
                           <button
@@ -3703,7 +4122,7 @@ export default function DashboardPage() {
                                 })
                               }
                             }}
-                            title="Modifier le nom / téléphone"
+                            title={t('modifier_nom_telephone')}
                             className="text-accent hover:text-accent/80"
                           >
                             ✏️
@@ -3713,17 +4132,17 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-3">
                         <span className="text-accent text-xs uppercase">
                           {estProprietaire
-                            ? '👑 Propriétaire du cabinet'
+                            ? t('role_proprietaire')
                             : m.role === 'directeur_commercial'
-                            ? '🧭 Directeur commercial'
-                            : '👤 Commercial'}
+                            ? t('role_directeur')
+                            : t('role_commercial')}
                         </span>
                         {peutSuperviser && !estProprietaire && m.id !== monClientUserId && (
                           <button
                             onClick={() => supprimerMembre(m.id, m.nom_complet)}
                             className="text-xs text-red-400 hover:text-red-300 underline"
                           >
-                            Retirer
+                            {t('retirer')}
                           </button>
                         )}
                       </div>
@@ -3732,7 +4151,7 @@ export default function DashboardPage() {
                     {ouvert && (
                       <div className="border-t border-slate-800 p-3 space-y-3 bg-slate-950/60">
                         <div>
-                          <label className="text-xs text-slate-500">Email de connexion</label>
+                          <label className="text-xs text-slate-500">{t('email_connexion_label')}</label>
                           <input
                             value={editionMembreForm.email}
                             onChange={(e) =>
@@ -3742,9 +4161,7 @@ export default function DashboardPage() {
                             type="email"
                             className="w-full mt-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                           />
-                          <p className="text-xs text-slate-600 mt-1">
-                            Ce membre devra utiliser ce nouvel email pour se connecter la prochaine fois.
-                          </p>
+                          <p className="text-xs text-slate-600 mt-1">{t('email_connexion_desc')}</p>
                         </div>
                         <div className="flex gap-2">
                           <input
@@ -3752,7 +4169,7 @@ export default function DashboardPage() {
                             onChange={(e) =>
                               setEditionMembreForm({ ...editionMembreForm, nom_complet: e.target.value })
                             }
-                            placeholder="Nom complet"
+                            placeholder={t('nom_complet_placeholder')}
                             className="flex-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                           />
                           <PhoneInput
@@ -3765,7 +4182,7 @@ export default function DashboardPage() {
                             onNumeroChange={(v) =>
                               setEditionMembreForm({ ...editionMembreForm, telephone: v })
                             }
-                            placeholder="Téléphone"
+                            placeholder={t('champ_telephone')}
                           />
                           <button
                             onClick={async () => {
@@ -3784,14 +4201,14 @@ export default function DashboardPage() {
                             }}
                             className="text-sm px-3 rounded-lg bg-accent text-slate-950 font-semibold"
                           >
-                            Enregistrer
+                            {t('enregistrer')}
                           </button>
                         </div>
 
                         {peutSuperviser && !estProprietaire && (
                           <div>
                             <p className="text-xs font-semibold text-slate-400 mb-2">
-                              👑 Onglets visibles pour ce membre
+                              {t('onglets_visibles_membre')}
                             </p>
                             <div className="flex flex-wrap gap-2">
                               {ONGLETS.filter((o) => o.id !== 'equipe').map((onglet) => {
@@ -3811,9 +4228,7 @@ export default function DashboardPage() {
                                 )
                               })}
                             </div>
-                            <p className="text-xs text-slate-500 mt-2">
-                              Les onglets barrés sont masqués pour ce membre uniquement.
-                            </p>
+                            <p className="text-xs text-slate-500 mt-2">{t('onglets_barres_desc')}</p>
                           </div>
                         )}
                       </div>
@@ -3825,7 +4240,7 @@ export default function DashboardPage() {
 
             {peutSuperviser && membresEquipe.length > 1 && (
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-slate-300">📊 Suivi de l'équipe</h3>
+                <h3 className="text-sm font-semibold text-slate-300">{t('suivi_equipe_titre')}</h3>
                 <div className="space-y-2">
                   {membresEquipe
                     .filter((m) => m.role !== 'proprietaire' && m.role !== 'admin')
@@ -3852,23 +4267,22 @@ export default function DashboardPage() {
                           className="rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm flex items-center justify-between flex-wrap gap-2"
                         >
                           <span>
-                            👤 {m.nom_complet || '(sans nom)'}{' '}
+                            👤 {m.nom_complet || t('nom_non_renseigne')}{' '}
                             {m.role === 'directeur_commercial' && (
-                              <span className="text-accent text-xs">— directeur commercial</span>
+                              <span className="text-accent text-xs">{t('directeur_commercial_suffixe')}</span>
                             )}
                           </span>
                           <span className="text-slate-400 text-xs">
-                            {ciblesDuMembre.length} cible(s) · {ciblesContacteesDuMembre.length}{' '}
-                            contactée(s) · {diagnosticsValidesDuMembre.length} diagnostic(s) validé(s) ·{' '}
-                            {packsDuMembre.length} pack(s) vendu(s) ({montantDuMembre} TND/EUR)
+                            {ciblesDuMembre.length} {t('cible_s')} · {ciblesContacteesDuMembre.length}{' '}
+                            {t('contactee_s')} · {diagnosticsValidesDuMembre.length} {t('diagnostic_s_valide_s')} ·{' '}
+                            {packsDuMembre.length} {t('pack_s_vendu_s')} ({montantDuMembre} TND/EUR)
                           </span>
                         </div>
                       )
                     })}
                   {targets.filter((tg) => !tg.assigne_a).length > 0 && (
                     <p className="text-slate-500 text-xs italic">
-                      {targets.filter((tg) => !tg.assigne_a).length} cible(s) pas encore assignée(s)
-                      à un commercial.
+                      {targets.filter((tg) => !tg.assigne_a).length} {t('cibles_pas_assignees_suffixe')}
                     </p>
                   )}
                 </div>
@@ -3877,7 +4291,7 @@ export default function DashboardPage() {
 
             <div className="pt-2">
               <a href="/admin" className="text-xs text-slate-600 hover:text-slate-400 underline">
-                Vous êtes PiloBrain ? Accès administration plateforme →
+                {t('lien_admin_pilobrain')}
               </a>
             </div>
 
@@ -3885,13 +4299,13 @@ export default function DashboardPage() {
               <input
                 value={inviteNom}
                 onChange={(e) => setInviteNom(e.target.value)}
-                placeholder="Nom du collègue"
+                placeholder={t('nom_du_collegue')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <input
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="Email du collègue"
+                placeholder={t('email_du_collegue')}
                 type="email"
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
@@ -3980,44 +4394,38 @@ export default function DashboardPage() {
         {/* ===================== ONGLET BOITE DE RECEPTION ===================== */}
         {ongletActif === 'inbox' && (
           <section className="space-y-4">
-            <p className="text-slate-400 text-sm">
-              Réponses des prospects par WhatsApp ou Email. Tu peux répondre directement d'ici.
-            </p>
+            <p className="text-slate-400 text-sm">{t('inbox_intro')}</p>
 
             <details className="rounded-xl border border-slate-700 bg-slate-900 p-4">
               <summary className="cursor-pointer text-sm font-semibold">
-                ⚙️ Synchroniser ma boîte mail pro (IMAP){' '}
+                {t('sync_boite_mail')}{' '}
                 {client?.imap_actif && (
-                  <span className="text-xs text-emerald-400 font-normal">— activée</span>
+                  <span className="text-xs text-emerald-400 font-normal">{t('activee_label')}</span>
                 )}
               </summary>
               <div className="mt-4 space-y-3">
-                <p className="text-xs text-slate-500">
-                  En plus de la réception automatique déjà active, tu peux brancher directement
-                  ta boîte mail professionnelle (Gmail, Outlook, etc.) pour que les réponses
-                  arrivées là-bas soient importées ici aussi, toutes les heures.
-                </p>
+                <p className="text-xs text-slate-500">{t('imap_desc')}</p>
                 {client?.imap_derniere_erreur && (
                   <p className="text-xs text-red-400">
-                    ⚠️ Dernière erreur de synchro : {client.imap_derniere_erreur}
+                    {t('derniere_erreur_synchro')} {client.imap_derniere_erreur}
                   </p>
                 )}
                 {client?.imap_derniere_sync_at && (
                   <p className="text-xs text-slate-500">
-                    Dernière synchro réussie :{' '}
-                    {new Date(client.imap_derniere_sync_at).toLocaleString('fr-FR')}
+                    {t('derniere_synchro_reussie')}{' '}
+                    {new Date(client.imap_derniere_sync_at).toLocaleString(localeAffichage)}
                   </p>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <input
-                    placeholder="Serveur IMAP (ex: imap.gmail.com)"
+                    placeholder={t('serveur_imap_placeholder')}
                     value={imapForm.imap_host}
                     onChange={(e) => setImapForm({ ...imapForm, imap_host: e.target.value })}
                     className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                   />
                   <input
                     type="number"
-                    placeholder="Port (993 par défaut)"
+                    placeholder={t('port_placeholder')}
                     value={imapForm.imap_port}
                     onChange={(e) =>
                       setImapForm({ ...imapForm, imap_port: Number(e.target.value) })
@@ -4025,7 +4433,7 @@ export default function DashboardPage() {
                     className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                   />
                   <input
-                    placeholder="Adresse email"
+                    placeholder={t('adresse_email_placeholder')}
                     value={imapForm.imap_utilisateur}
                     onChange={(e) =>
                       setImapForm({ ...imapForm, imap_utilisateur: e.target.value })
@@ -4034,7 +4442,7 @@ export default function DashboardPage() {
                   />
                   <input
                     type="password"
-                    placeholder="Mot de passe (laisser vide pour ne pas changer)"
+                    placeholder={t('mot_de_passe_placeholder')}
                     value={imapForm.imap_mot_de_passe}
                     onChange={(e) =>
                       setImapForm({ ...imapForm, imap_mot_de_passe: e.target.value })
@@ -4048,7 +4456,7 @@ export default function DashboardPage() {
                     checked={imapForm.imap_actif}
                     onChange={(e) => setImapForm({ ...imapForm, imap_actif: e.target.checked })}
                   />
-                  Activer la synchronisation automatique
+                  {t('activer_sync_auto')}
                 </label>
                 <div className="flex items-center gap-3">
                   <button
@@ -4056,7 +4464,7 @@ export default function DashboardPage() {
                     disabled={imapEnregistrement}
                     className="text-xs px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
                   >
-                    {imapEnregistrement ? 'Enregistrement...' : 'Enregistrer'}
+                    {imapEnregistrement ? t('enregistrement_en_cours') : t('enregistrer')}
                   </button>
                   {imapMessage && <span className="text-xs">{imapMessage}</span>}
                 </div>
@@ -4064,9 +4472,7 @@ export default function DashboardPage() {
             </details>
 
             {messagesRecus.length === 0 ? (
-              <p className="text-slate-500 text-sm italic">
-                Aucun message reçu pour le moment.
-              </p>
+              <p className="text-slate-500 text-sm italic">{t('aucun_message_recu')}</p>
             ) : (
               <div className="space-y-3">
                 {messagesRecus.map((m) => {
@@ -4084,16 +4490,16 @@ export default function DashboardPage() {
                             {m.canal === 'whatsapp' ? '💬 WhatsApp' : '✉️ Email'}
                           </span>
                           <span className="font-semibold text-sm">
-                            {nomCible ?? m.expediteur ?? 'Inconnu'}
+                            {nomCible ?? m.expediteur ?? t('inconnu_label')}
                           </span>
                           {!m.lu && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-slate-950 font-semibold">
-                              Nouveau
+                              {t('nouveau_badge')}
                             </span>
                           )}
                         </div>
                         <span className="text-slate-500 text-xs">
-                          {new Date(m.created_at).toLocaleString('fr-FR')}
+                          {new Date(m.created_at).toLocaleString(localeAffichage)}
                         </span>
                       </div>
                       <p className="text-slate-300 text-sm whitespace-pre-wrap">{m.contenu}</p>
@@ -4103,7 +4509,7 @@ export default function DashboardPage() {
                           onClick={() => marquerCommeLu(m.id)}
                           className="text-xs text-slate-400 underline"
                         >
-                          Marquer comme lu
+                          {t('marquer_comme_lu')}
                         </button>
                       )}
 
@@ -4117,7 +4523,7 @@ export default function DashboardPage() {
                             onKeyDown={(e) =>
                               e.key === 'Enter' && repondreMessage(m.id, m.target_id!, m.canal)
                             }
-                            placeholder="Écrire une réponse..."
+                            placeholder={t('ecrire_reponse_placeholder')}
                             className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                           />
                           <button
@@ -4127,7 +4533,7 @@ export default function DashboardPage() {
                             }
                             className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
                           >
-                            {envoiReponseEnCours === m.id ? '...' : 'Envoyer'}
+                            {envoiReponseEnCours === m.id ? '...' : t('envoyer')}
                           </button>
                         </div>
                       )}
@@ -4144,9 +4550,9 @@ export default function DashboardPage() {
           <section className="space-y-4">
             <div className="flex gap-2 border-b border-slate-800 pb-2">
               {[
-                { id: 'donnees' as const, label: '📝 Remplir les données' },
-                { id: 'commercial' as const, label: '📈 Stratégie commerciale' },
-                { id: 'marketing' as const, label: '📣 Stratégie marketing' },
+                { id: 'donnees' as const, label: t('remplir_donnees') },
+                { id: 'commercial' as const, label: t('strategie_commerciale') },
+                { id: 'marketing' as const, label: t('strategie_marketing') },
               ].map((so) => (
                 <button
                   key={so.id}
@@ -4164,13 +4570,11 @@ export default function DashboardPage() {
 
             {sousOngletStrategie === 'donnees' && (
               <div className="space-y-3">
-                <p className="text-slate-400 text-sm">
-                  L'IA se base sur deux sources déjà remplies ailleurs dans la plateforme :
-                </p>
+                <p className="text-slate-400 text-sm">{t('sources_ia_intro')}</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-1">
                     <p className="text-sm font-semibold">
-                      📚 {vocabulairePourVertical(verticalSlug).labelCatalogue}
+                      📚 {vocabulairePourVertical(verticalSlug, langue).labelCatalogue}
                     </p>
                     <p className="text-xs text-slate-500">
                       {catalogue.length} offre{catalogue.length > 1 ? 's' : ''} renseignée
@@ -4183,11 +4587,11 @@ export default function DashboardPage() {
                       }}
                       className="text-xs text-accent underline"
                     >
-                      Aller au catalogue →
+                      {t('aller_au_catalogue')}
                     </button>
                   </div>
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-1">
-                    <p className="text-sm font-semibold">🎯 Historique de cibles</p>
+                    <p className="text-sm font-semibold">{t('historique_cibles')}</p>
                     <p className="text-xs text-slate-500">
                       {targets.length} cible{targets.length > 1 ? 's' : ''} au total — plus il y a
                       de résultats connus (gagné/perdu), plus l'analyse est fiable.
@@ -4196,21 +4600,19 @@ export default function DashboardPage() {
                       onClick={() => setOngletActif('cibles')}
                       className="text-xs text-accent underline"
                     >
-                      Aller aux cibles →
+                      {t('aller_aux_cibles')}
                     </button>
                   </div>
                 </div>
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
-                  <p className="text-sm font-semibold">🧠 Vos inputs stratégiques</p>
-                  <p className="text-xs text-slate-500">
-                    Ces infos nourrissent le prompt IA (diagnostics, stratégie) : elles ne bloquent
-                    ni ne brident rien techniquement, mais orientent les recommandations générées.
-                  </p>
+                  <p className="text-sm font-semibold">{t('inputs_strategiques')}</p>
+                  <p className="text-xs text-slate-500">{t('inputs_strategiques_intro')}</p>
                   <div>
                     <label className="text-xs text-slate-400">
-                      Taux de closing historique (%, avant la plateforme)
+                      {t('taux_closing_label')}
                     </label>
+                    <p className="text-[11px] text-slate-600 mt-0.5">{t('taux_closing_aide')}</p>
                     <input
                       value={inputsStrategiques.taux_closing_historique}
                       onChange={(e) =>
@@ -4226,8 +4628,9 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <label className="text-xs text-slate-400">
-                      Mots-clés d'expertise métier (séparés par une virgule)
+                      {t('mots_cles_expertise_label')}
                     </label>
+                    <p className="text-[11px] text-slate-600 mt-0.5">{t('mots_cles_expertise_aide')}</p>
                     <input
                       value={inputsStrategiques.mots_cles_expertise}
                       onChange={(e) =>
@@ -4242,8 +4645,9 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <label className="text-xs text-slate-400">
-                      Idées reçues du marché sur votre expertise
+                      {t('idees_recues_label')}
                     </label>
+                    <p className="text-[11px] text-slate-600 mt-0.5">{t('idees_recues_aide')}</p>
                     <textarea
                       value={inputsStrategiques.idees_recues_marche}
                       onChange={(e) =>
@@ -4261,6 +4665,7 @@ export default function DashboardPage() {
                     <label className="text-xs text-slate-400">
                       Objections et motifs de rejet récurrents du passé
                     </label>
+                    <p className="text-[11px] text-slate-600 mt-0.5">{t('motifs_rejet_aide')}</p>
                     <textarea
                       value={inputsStrategiques.motifs_rejet_passes}
                       onChange={(e) =>
@@ -4269,15 +4674,16 @@ export default function DashboardPage() {
                           motifs_rejet_passes: e.target.value,
                         })
                       }
-                      placeholder="Ex: Les prospects trouvent souvent nos tarifs trop élevés ou disent en cours de route qu'ils n'ont plus de budget."
+                      placeholder={t('motifs_rejet_placeholder')}
                       className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                       rows={2}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-400">
-                      Canaux de prospection déjà tentés sans succès
+                      {t('canaux_echoues_label')}
                     </label>
+                    <p className="text-[11px] text-slate-600 mt-0.5">{t('canaux_echoues_aide')}</p>
                     <textarea
                       value={inputsStrategiques.canaux_echoues}
                       onChange={(e) =>
@@ -4286,15 +4692,16 @@ export default function DashboardPage() {
                           canaux_echoues: e.target.value,
                         })
                       }
-                      placeholder="Ex: 6 mois de publicité Facebook Ads sans signer aucun client B2B."
+                      placeholder={t('canaux_echoues_placeholder')}
                       className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                       rows={2}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-400">
-                      Volume de travail actuel de votre équipe commerciale
+                      {t('volume_equipe_label')}
                     </label>
+                    <p className="text-[11px] text-slate-600 mt-0.5">{t('volume_equipe_aide')}</p>
                     <textarea
                       value={inputsStrategiques.volume_equipe_commerciale}
                       onChange={(e) =>
@@ -4303,7 +4710,7 @@ export default function DashboardPage() {
                           volume_equipe_commerciale: e.target.value,
                         })
                       }
-                      placeholder="Ex: 2 commerciaux, ~3h/jour à chercher des contacts, ~15 e-mails manuels par jour."
+                      placeholder={t('volume_equipe_placeholder')}
                       className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                       rows={2}
                     />
@@ -4311,12 +4718,12 @@ export default function DashboardPage() {
 
                   <div className="pt-2 border-t border-slate-800 space-y-3">
                     <p className="text-xs font-semibold text-slate-300">
-                      Profil de ciblage précis
+                      {t('profil_ciblage_precis')}
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="text-xs text-slate-400">
-                          Taille min (nb salariés)
+                          {t('taille_min_salaries_label')}
                         </label>
                         <input
                           value={inputsStrategiques.taille_min_salaries}
@@ -4327,13 +4734,13 @@ export default function DashboardPage() {
                             })
                           }
                           type="number"
-                          placeholder="Ex: 20"
+                          placeholder="20"
                           className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                         />
                       </div>
                       <div>
                         <label className="text-xs text-slate-400">
-                          Taille max (nb salariés)
+                          {t('taille_max_salaries_label')}
                         </label>
                         <input
                           value={inputsStrategiques.taille_max_salaries}
@@ -4344,13 +4751,13 @@ export default function DashboardPage() {
                             })
                           }
                           type="number"
-                          placeholder="Ex: 100"
+                          placeholder="100"
                           className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400">Portée géographique</label>
+                      <label className="text-xs text-slate-400">{t('portee_geo_label')}</label>
                       <select
                         value={inputsStrategiques.portee_geographique}
                         onChange={(e) =>
@@ -4361,16 +4768,16 @@ export default function DashboardPage() {
                         }
                         className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                       >
-                        <option value="">Non précisé</option>
-                        <option value="local">Local</option>
-                        <option value="national">National</option>
-                        <option value="international">International</option>
+                        <option value="">{t('non_precise')}</option>
+                        <option value="local">{t('local')}</option>
+                        <option value="national">{t('national')}</option>
+                        <option value="international">{t('international')}</option>
                       </select>
                     </div>
                     {inputsStrategiques.portee_geographique === 'local' && (
                       <div>
                         <label className="text-xs text-slate-400">
-                          Villes ciblées (séparées par une virgule)
+                          {t('villes_ciblees_label')}
                         </label>
                         <input
                           value={inputsStrategiques.villes_ciblees}
@@ -4380,7 +4787,7 @@ export default function DashboardPage() {
                               villes_ciblees: e.target.value,
                             })
                           }
-                          placeholder="Ex: Tunis, Sfax, Sousse"
+                          placeholder="Tunis, Sfax, Sousse"
                           className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                         />
                       </div>
@@ -4389,7 +4796,7 @@ export default function DashboardPage() {
 
                   <div className="pt-2 border-t border-slate-800 space-y-3">
                     <p className="text-xs font-semibold text-slate-300">
-                      Présence digitale
+                      {t('presence_digitale_titre')}
                     </p>
                     <div className="flex flex-wrap gap-4">
                       <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -4403,7 +4810,7 @@ export default function DashboardPage() {
                             })
                           }
                         />
-                        Page LinkedIn entreprise active
+                        {t('linkedin_actif_label')}
                       </label>
                       <label className="flex items-center gap-2 text-sm text-slate-300">
                         <input
@@ -4416,7 +4823,7 @@ export default function DashboardPage() {
                             })
                           }
                         />
-                        Page Facebook active
+                        {t('facebook_actif_label')}
                       </label>
                       <label className="flex items-center gap-2 text-sm text-slate-300">
                         <input
@@ -4429,7 +4836,7 @@ export default function DashboardPage() {
                             })
                           }
                         />
-                        Instagram actif
+                        {t('instagram_actif_label')}
                       </label>
                       <label className="flex items-center gap-2 text-sm text-slate-300">
                         <input
@@ -4442,12 +4849,12 @@ export default function DashboardPage() {
                             })
                           }
                         />
-                        Site avec blog
+                        {t('blog_actif_label')}
                       </label>
                     </div>
                     <div>
                       <label className="text-xs text-slate-400">
-                        Base de données e-mail existante ?
+                        {t('base_email_label')}
                       </label>
                       <input
                         value={inputsStrategiques.base_email_existante}
@@ -4457,12 +4864,12 @@ export default function DashboardPage() {
                             base_email_existante: e.target.value,
                           })
                         }
-                        placeholder="Ex: Oui, ~500 contacts. Laisser vide si non."
+                        placeholder={t('base_email_placeholder')}
                         className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400">Budget publicitaire</label>
+                      <label className="text-xs text-slate-400">{t('budget_pub_label')}</label>
                       <select
                         value={inputsStrategiques.budget_publicitaire}
                         onChange={(e) =>
@@ -4473,15 +4880,15 @@ export default function DashboardPage() {
                         }
                         className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                       >
-                        <option value="">Non précisé</option>
-                        <option value="organique">Organique uniquement (gratuit)</option>
-                        <option value="payant">Prêt à faire de la pub payante (Facebook/LinkedIn Ads)</option>
-                        <option value="mixte">Les deux</option>
+                        <option value="">{t('non_precise')}</option>
+                        <option value="organique">{t('organique_uniquement')}</option>
+                        <option value="payant">{t('pret_pub_payante')}</option>
+                        <option value="mixte">{t('les_deux')}</option>
                       </select>
                     </div>
                     <div>
                       <label className="text-xs text-slate-400">
-                        Objectifs chiffrés (conventions/mois ou CA visé)
+                        {t('objectifs_chiffres_label')}
                       </label>
                       <input
                         value={inputsStrategiques.objectif_chiffre}
@@ -4491,17 +4898,16 @@ export default function DashboardPage() {
                             objectif_chiffre: e.target.value,
                           })
                         }
-                        placeholder="Ex: 5 conventions/mois, ou 50k TND ce trimestre"
+                        placeholder={t('objectifs_chiffres_placeholder')}
                         className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                       />
                     </div>
                   </div>
 
                   <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
-                    <p className="text-xs font-semibold">🌐 Analyse auto du positionnement</p>
+                    <p className="text-xs font-semibold">{t('analyse_positionnement_titre')}</p>
                     <p className="text-[11px] text-slate-500">
-                      Scanne le site web renseigné dans Équipe & Paramètres (description,
-                      expertises, références clients) via l'IA.
+                      {t('analyse_positionnement_desc')}
                     </p>
                     {client.positionnement_site && (
                       <p className="text-xs text-slate-300 whitespace-pre-line bg-slate-900 rounded-lg p-2 border border-slate-700">
@@ -4510,7 +4916,7 @@ export default function DashboardPage() {
                     )}
                     {client.ligne_editoriale_reseaux && (
                       <p className="text-xs text-slate-300 whitespace-pre-line bg-slate-900 rounded-lg p-2 border border-slate-700">
-                        🔗 Réseaux : {client.ligne_editoriale_reseaux}
+                        🔗 {t('reseaux_label')} : {client.ligne_editoriale_reseaux}
                       </p>
                     )}
                     {erreurAnalyseCabinet && <p className="text-xs text-red-400">{erreurAnalyseCabinet}</p>}
@@ -4520,23 +4926,54 @@ export default function DashboardPage() {
                       className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 disabled:opacity-40"
                     >
                       {analyseCabinetEnCours
-                        ? 'Analyse en cours...'
+                        ? t('analyse_en_cours')
                         : client.positionnement_site
-                        ? 'Relancer l\'analyse'
-                        : 'Analyser mon site'}
+                        ? t('relancer_analyse')
+                        : t('analyser_mon_site')}
                     </button>
                     {!client.site_web && (
                       <p className="text-[11px] text-amber-400">
-                        Ajoute d'abord ton site web dans Équipe & Paramètres.
+                        {t('ajouter_site_web_dabord')}
                       </p>
                     )}
+
+                    {erreurAnalyseReseaux && (
+                      <p className="text-xs text-red-400">{erreurAnalyseReseaux}</p>
+                    )}
+                    <button
+                      onClick={analyserReseauxCabinet}
+                      disabled={analyseReseauxEnCours || (!client.linkedin_url && !client.facebook_url)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 disabled:opacity-40"
+                    >
+                      {analyseReseauxEnCours
+                        ? t('analyse_en_cours')
+                        : client.ligne_editoriale_reseaux
+                        ? t('relancer_analyse_reseaux')
+                        : t('analyser_mes_reseaux')}
+                    </button>
+                    {!client.linkedin_url && !client.facebook_url && (
+                      <p className="text-[11px] text-amber-400">{t('ajouter_reseau_dabord')}</p>
+                    )}
+                    <p className="text-[11px] text-slate-500 mt-1">{t('ou_remplir_manuellement')}</p>
+                    <textarea
+                      value={client.ligne_editoriale_reseaux ?? ''}
+                      onChange={(e) => setClient({ ...client, ligne_editoriale_reseaux: e.target.value })}
+                      onBlur={async (e) => {
+                        await supabase
+                          .from('clients')
+                          .update({ ligne_editoriale_reseaux: e.target.value || null })
+                          .eq('id', client.id)
+                      }}
+                      placeholder={t('ligne_editoriale_placeholder')}
+                      className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs h-16"
+                    />
                   </div>
                   <button
                     onClick={enregistrerInputsStrategiques}
                     disabled={inputsStrategiquesEnCours}
                     className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
                   >
-                    {inputsStrategiquesEnCours ? 'Enregistrement...' : 'Enregistrer'}
+                    {inputsStrategiquesEnCours ? t('enregistrement_en_cours') : t('enregistrer')}
                   </button>
                 </div>
 
@@ -4545,7 +4982,7 @@ export default function DashboardPage() {
                   disabled={strategieEnCours}
                   className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-50"
                 >
-                  {strategieEnCours ? 'Analyse en cours...' : '🧭 Générer ma stratégie'}
+                  {strategieEnCours ? t('analyse_en_cours') : t('generer_ma_strategie')}
                 </button>
               </div>
             )}
@@ -4554,12 +4991,12 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 {!strategieResultat ? (
                   <p className="text-slate-500 text-sm italic">
-                    Génère d'abord ta stratégie depuis l'onglet "Remplir les données".
+                    {t('generer_dabord_strategie')}
                   </p>
                 ) : (
                   <>
                     <div className="rounded-xl border border-accent/40 bg-slate-900 p-4 space-y-2">
-                      <p className="text-xs text-accent font-semibold uppercase">📈 Commerciale</p>
+                      <p className="text-xs text-accent font-semibold uppercase">{t('label_commerciale')}</p>
                       <p className="text-sm text-slate-200 whitespace-pre-wrap">
                         {strategieResultat.recommandationCommerciale}
                       </p>
@@ -4568,24 +5005,24 @@ export default function DashboardPage() {
                     {strategieResultat.filtresRecommandes && (
                       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
                         <p className="text-xs text-slate-400 font-semibold uppercase">
-                          🎯 Plan de chasse recommandé
+                          {t('plan_chasse_recommande')}
                         </p>
                         <div className="text-sm text-slate-200 space-y-1">
                           {strategieResultat.filtresRecommandes.postes.length > 0 && (
                             <p>
-                              <span className="text-slate-400">Postes :</span>{' '}
+                              <span className="text-slate-400">{t('postes_label')} :</span>{' '}
                               {strategieResultat.filtresRecommandes.postes.join(', ')}
                             </p>
                           )}
                           {strategieResultat.filtresRecommandes.secteur && (
                             <p>
-                              <span className="text-slate-400">Secteur :</span>{' '}
+                              <span className="text-slate-400">{t('secteur_label')} :</span>{' '}
                               {strategieResultat.filtresRecommandes.secteur}
                             </p>
                           )}
                           {strategieResultat.filtresRecommandes.taille && (
                             <p>
-                              <span className="text-slate-400">Taille :</span>{' '}
+                              <span className="text-slate-400">{t('taille_label')} :</span>{' '}
                               {strategieResultat.filtresRecommandes.taille}
                             </p>
                           )}
@@ -4595,7 +5032,7 @@ export default function DashboardPage() {
                           disabled={filtresAppliquesEnCours}
                           className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
                         >
-                          {filtresAppliquesEnCours ? 'Application...' : "Appliquer à l'onglet Ciblage"}
+                          {filtresAppliquesEnCours ? t('application_en_cours') : t('appliquer_onglet_ciblage')}
                         </button>
                         {filtresAppliquesMessage && (
                           <p className="text-xs text-slate-400">{filtresAppliquesMessage}</p>
@@ -4606,7 +5043,7 @@ export default function DashboardPage() {
                     {strategieResultat.scriptAppel && (
                       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
                         <p className="text-xs text-slate-400 font-semibold uppercase">
-                          📞 Script d'appel
+                          {t('script_appel')}
                         </p>
                         <p className="text-sm text-slate-200 whitespace-pre-wrap">
                           {strategieResultat.scriptAppel}
@@ -4617,7 +5054,7 @@ export default function DashboardPage() {
                     {strategieResultat.scriptLinkedin && (
                       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
                         <p className="text-xs text-slate-400 font-semibold uppercase">
-                          💬 Message LinkedIn
+                          {t('message_linkedin')}
                         </p>
                         <p className="text-sm text-slate-200 whitespace-pre-wrap">
                           {strategieResultat.scriptLinkedin}
@@ -4628,7 +5065,7 @@ export default function DashboardPage() {
                     {strategieResultat.guideQualification.length > 0 && (
                       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
                         <p className="text-xs text-slate-400 font-semibold uppercase">
-                          ❓ Guide de qualification (1er RDV)
+                          {t('guide_qualification')}
                         </p>
                         <ul className="text-sm text-slate-200 list-disc list-inside space-y-1">
                           {strategieResultat.guideQualification.map((q, i) => (
@@ -4641,7 +5078,7 @@ export default function DashboardPage() {
                     {strategieResultat.parCanal.length > 0 && (
                       <div className="space-y-2">
                         <h3 className="text-sm font-semibold text-slate-300">
-                          Taux de conversion par canal
+                          {t('conversion_par_canal')}
                         </h3>
                         {strategieResultat.parCanal.map((a) => (
                           <div
@@ -4660,7 +5097,7 @@ export default function DashboardPage() {
                     {strategieResultat.parSegment.length > 0 && (
                       <div className="space-y-2">
                         <h3 className="text-sm font-semibold text-slate-300">
-                          Taux de conversion par segment
+                          {t('conversion_par_segment')}
                         </h3>
                         {strategieResultat.parSegment.map((a) => (
                           <div
@@ -4678,7 +5115,7 @@ export default function DashboardPage() {
 
                     {strategieResultat.historique.length > 0 && (
                       <div className="space-y-2 pt-2 border-t border-slate-800">
-                        <h3 className="text-sm font-semibold text-slate-300">🕓 Historique</h3>
+                        <h3 className="text-sm font-semibold text-slate-300">{t('historique_label')}</h3>
                         {strategieResultat.historique.map((h) => (
                           <details
                             key={h.id}
@@ -4690,7 +5127,7 @@ export default function DashboardPage() {
                             <div className="mt-2 space-y-1 text-sm">
                               {h.recommandation_commerciale && (
                                 <p>
-                                  <span className="text-accent">Commercial :</span>{' '}
+                                  <span className="text-accent">{t('commercial_label')} :</span>{' '}
                                   {h.recommandation_commerciale}
                                 </p>
                               )}
@@ -4708,11 +5145,11 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 {!strategieResultat?.recommandationMarketing ? (
                   <p className="text-slate-500 text-sm italic">
-                    Génère d'abord ta stratégie depuis l'onglet "Remplir les données".
+                    {t('generer_dabord_strategie')}
                   </p>
                 ) : (
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
-                    <p className="text-xs text-slate-400 font-semibold uppercase">📣 Marketing</p>
+                    <p className="text-xs text-slate-400 font-semibold uppercase">{t('label_marketing')}</p>
                     <p className="text-sm text-slate-200 whitespace-pre-wrap">
                       {strategieResultat.recommandationMarketing}
                     </p>
@@ -4722,7 +5159,7 @@ export default function DashboardPage() {
                 {strategieResultat?.ligneEditoriale && (
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
                     <p className="text-xs text-slate-400 font-semibold uppercase">
-                      🖊️ Ligne éditoriale
+                      {t('ligne_editoriale')}
                     </p>
                     <p className="text-sm text-slate-200 whitespace-pre-wrap">
                       {strategieResultat.ligneEditoriale}
@@ -4733,7 +5170,7 @@ export default function DashboardPage() {
                 {strategieResultat && strategieResultat.leadMagnets.length > 0 && (
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
                     <p className="text-xs text-slate-400 font-semibold uppercase">
-                      🧲 Idées de lead magnets
+                      {t('idees_lead_magnets')}
                     </p>
                     <ul className="text-sm text-slate-200 list-disc list-inside space-y-1">
                       {strategieResultat.leadMagnets.map((m, i) => (
@@ -4745,24 +5182,27 @@ export default function DashboardPage() {
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-400 font-semibold uppercase">
-                      🗓️ Calendrier éditorial du mois
-                    </p>
+                    <div>
+                      <p className="text-xs text-slate-400 font-semibold uppercase">
+                        {t('calendrier_editorial_mois')}
+                      </p>
+                      <p className="text-[11px] text-slate-600 mt-0.5">{t('calendrier_editorial_aide')}</p>
+                    </div>
                     <button
                       onClick={genererCalendrierEditorial}
                       disabled={calendrierEnCours}
                       className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50"
                     >
                       {calendrierEnCours
-                        ? 'Génération...'
+                        ? t('generation_en_cours')
                         : calendrierEditorial.length > 0
-                        ? 'Régénérer'
-                        : 'Générer le calendrier'}
+                        ? t('regenerer')
+                        : t('generer_calendrier')}
                     </button>
                   </div>
                   {erreurCalendrier && <p className="text-xs text-red-400">{erreurCalendrier}</p>}
                   {calendrierEditorial.length === 0 ? (
-                    <p className="text-slate-500 text-sm italic">Pas encore de calendrier généré.</p>
+                    <p className="text-slate-500 text-sm italic">{t('pas_de_calendrier')}</p>
                   ) : (
                     <div className="space-y-2">
                       {calendrierEditorial.map((e) => (
@@ -4771,7 +5211,7 @@ export default function DashboardPage() {
                           className="rounded-lg border border-slate-800 p-3 flex items-start justify-between gap-3"
                         >
                           <div>
-                            <p className="text-xs text-accent font-semibold">Semaine {e.semaine}</p>
+                            <p className="text-xs text-accent font-semibold">{t('semaine_label')} {e.semaine}</p>
                             <p className="text-sm font-medium">{e.theme}</p>
                             <p className="text-xs text-slate-400">{e.format_suggere}</p>
                             {e.angle_accroche && (
@@ -4786,7 +5226,7 @@ export default function DashboardPage() {
                                 : 'bg-slate-800 text-slate-400'
                             }`}
                           >
-                            {e.statut === 'publie' ? '✓ Publié' : 'À faire'}
+                            {e.statut === 'publie' ? t('publie_label') : t('a_faire_label')}
                           </button>
                         </div>
                       ))}
@@ -4796,19 +5236,20 @@ export default function DashboardPage() {
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
                   <p className="text-xs text-slate-400 font-semibold uppercase">
-                    🛡️ Matrice de contre-objection
+                    {t('matrice_contre_objection')}
                   </p>
+                  <p className="text-[11px] text-slate-600 -mt-2">{t('matrice_contre_objection_aide')}</p>
                   {matriceContreObjection.length === 0 ? (
                     <p className="text-slate-500 text-sm italic">
-                      Génère le calendrier éditorial ci-dessus pour l'obtenir en même temps.
+                      {t('generer_calendrier_pour_obtenir')}
                     </p>
                   ) : (
                     <div className="space-y-2">
                       {matriceContreObjection.map((m) => (
                         <div key={m.id} className="rounded-lg border border-slate-800 p-3">
-                          <p className="text-xs text-slate-500">Idée reçue :</p>
+                          <p className="text-xs text-slate-500">{t('idee_recue_label')} :</p>
                           <p className="text-sm font-medium">{m.objection}</p>
-                          <p className="text-xs text-slate-500 mt-2">Angle de contenu :</p>
+                          <p className="text-xs text-slate-500 mt-2">{t('angle_contenu_label')} :</p>
                           <p className="text-sm text-slate-300">{m.angle_contenu}</p>
                           {m.format_suggere && (
                             <p className="text-xs text-accent mt-1">{m.format_suggere}</p>
@@ -4820,11 +5261,8 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
-                  <p className="text-xs text-slate-400 font-semibold uppercase">🏆 Badge marketing</p>
-                  <p className="text-xs text-slate-500">
-                    Un visuel à intégrer sur ton site ou tes réseaux, avec tes chiffres dans la
-                    devise adaptée à ta zone.
-                  </p>
+                  <p className="text-xs text-slate-400 font-semibold uppercase">{t('badge_marketing')}</p>
+                  <p className="text-xs text-slate-500">{t('badge_marketing_desc')}</p>
                   {client?.token_badge_public && (
                     <>
                       <img
@@ -4851,7 +5289,7 @@ export default function DashboardPage() {
                           }
                           className="text-xs px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 shrink-0"
                         >
-                          {lienBadgeCopie ? '✅ Copié !' : 'Copier le lien'}
+                          {lienBadgeCopie ? t('lien_copie') : t('copier_le_lien')}
                         </button>
                       </div>
                     </>
@@ -4860,7 +5298,7 @@ export default function DashboardPage() {
 
                 {strategieResultat && strategieResultat.historique.filter((h) => h.recommandation_marketing).length > 0 && (
                   <div className="space-y-2 pt-2 border-t border-slate-800">
-                    <h3 className="text-sm font-semibold text-slate-300">🕓 Historique (stratégies précédentes)</h3>
+                    <h3 className="text-sm font-semibold text-slate-300">{t('historique_strategies_precedentes')}</h3>
                     {strategieResultat.historique
                       .filter((h) => h.recommandation_marketing)
                       .map((h) => (
@@ -4884,7 +5322,7 @@ export default function DashboardPage() {
         {ongletActif === 'catalogue_strategie' && sousOngletGroupe === 'catalogue' && (
           <section className="space-y-4">
             <p className="text-slate-400 text-sm">
-              {vocabulairePourVertical(verticalSlug).introCatalogue}
+              {vocabulairePourVertical(verticalSlug, langue).introCatalogue}
             </p>
 
             <div className="flex items-center gap-3 flex-wrap">
@@ -4900,30 +5338,26 @@ export default function DashboardPage() {
                 disabled={pdfEnCours}
                 className="text-xs px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-accent disabled:opacity-50"
               >
-                {pdfEnCours
-                  ? 'Analyse du fichier...'
-                  : '📄 Importer un fichier (PDF, Word, image... pré-remplit le formulaire)'}
+                {pdfEnCours ? t('analyse_fichier') : t('importer_fichier_catalogue')}
               </button>
               {pdfUrlTemp && (
-                <span className="text-xs text-accent">✓ Fichier prêt à être attaché à cette offre</span>
+                <span className="text-xs text-accent">{t('fichier_pret')}</span>
               )}
             </div>
-            <p className="text-xs text-slate-500 -mt-2">
-              Formats acceptés : PDF, Word (.docx), image (photo de brochure) ou texte (.txt).
-            </p>
+            <p className="text-xs text-slate-500 -mt-2">{t('formats_acceptes')}</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
               <input
                 value={nouvelleOffre.nom}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, nom: e.target.value })}
-                placeholder={vocabulairePourVertical(verticalSlug).placeholderNomOffre}
+                placeholder={vocabulairePourVertical(verticalSlug, langue).placeholderNomOffre}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <div className="flex gap-2">
                 <input
                   value={nouvelleOffre.prix}
                   onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, prix: e.target.value })}
-                  placeholder="Prix (ex: 450)"
+                  placeholder={t('prix_placeholder')}
                   type="number"
                   className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 />
@@ -4940,7 +5374,7 @@ export default function DashboardPage() {
               <input
                 value={nouvelleOffre.duree}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, duree: e.target.value })}
-                placeholder="Durée (ex: 3 jours)"
+                placeholder={t('duree_placeholder')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <select
@@ -4950,21 +5384,21 @@ export default function DashboardPage() {
                 }
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               >
-                <option value="">Mode de facturation (optionnel)</option>
-                <option value="journee">Tarif journalier (TJM)</option>
-                <option value="forfait">Forfait global</option>
-                <option value="abonnement_mensuel">Abonnement mensuel</option>
+                <option value="">{t('mode_facturation')}</option>
+                <option value="journee">{t('tarif_journalier')}</option>
+                <option value="forfait">{t('forfait_global')}</option>
+                <option value="abonnement_mensuel">{t('abonnement_mensuel')}</option>
               </select>
               <input
                 value={nouvelleOffre.public_cible}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, public_cible: e.target.value })}
-                placeholder="Public visé (optionnel)"
+                placeholder={t('public_vise')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <input
                 value={nouvelleOffre.thematique}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, thematique: e.target.value })}
-                placeholder="Thématique (ex: Management, RH, Soft Skills...)"
+                placeholder={t('thematique_placeholder')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <select
@@ -4972,30 +5406,30 @@ export default function DashboardPage() {
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, format: e.target.value })}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               >
-                <option value="">Format (optionnel)</option>
-                <option value="inter_entreprise">Inter-entreprises</option>
-                <option value="intra_entreprise">Intra-entreprise</option>
+                <option value="">{t('format_optionnel')}</option>
+                <option value="inter_entreprise">{t('inter_entreprises')}</option>
+                <option value="intra_entreprise">{t('intra_entreprise')}</option>
               </select>
               <select
                 value={nouvelleOffre.mode_delivrance}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, mode_delivrance: e.target.value })}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               >
-                <option value="">Mode de délivrance (optionnel)</option>
-                <option value="presentiel">100% présentiel</option>
-                <option value="en_ligne">En ligne</option>
-                <option value="blended">Blended (mixte)</option>
+                <option value="">{t('mode_delivrance_optionnel')}</option>
+                <option value="presentiel">{t('presentiel_100')}</option>
+                <option value="en_ligne">{t('en_ligne')}</option>
+                <option value="blended">{t('blended')}</option>
               </select>
               <input
                 value={nouvelleOffre.usp}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, usp: e.target.value })}
-                placeholder="Élément de différenciation / USP (optionnel)"
+                placeholder={t('usp_placeholder')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <textarea
                 value={nouvelleOffre.description}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, description: e.target.value })}
-                placeholder="Description courte"
+                placeholder={t('description_courte')}
                 className="md:col-span-2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
               />
               <button
@@ -5009,19 +5443,17 @@ export default function DashboardPage() {
 
             <div className="overflow-x-auto rounded-xl border border-slate-700">
               {catalogue.length === 0 ? (
-                <p className="text-slate-500 text-sm italic p-4">
-                  Aucune offre pour le moment — l'IA invente encore des packs génériques.
-                </p>
+                <p className="text-slate-500 text-sm italic p-4">{t('aucune_offre')}</p>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-900 text-slate-400 text-xs uppercase text-left">
-                      <th className="p-3 font-semibold">Offre</th>
-                      <th className="p-3 font-semibold">Thématique</th>
-                      <th className="p-3 font-semibold">Format</th>
-                      <th className="p-3 font-semibold">Mode de délivrance</th>
-                      <th className="p-3 font-semibold">Tarification</th>
-                      <th className="p-3 font-semibold">USP</th>
+                      <th className="p-3 font-semibold">{t('col_offre')}</th>
+                      <th className="p-3 font-semibold">{t('col_thematique')}</th>
+                      <th className="p-3 font-semibold">{t('col_format')}</th>
+                      <th className="p-3 font-semibold">{t('col_mode_delivrance')}</th>
+                      <th className="p-3 font-semibold">{t('col_tarification')}</th>
+                      <th className="p-3 font-semibold">{t('col_usp')}</th>
                       <th className="p-3 font-semibold"></th>
                     </tr>
                   </thead>
@@ -5035,7 +5467,7 @@ export default function DashboardPage() {
                             <p className="text-slate-400 text-xs mt-1">{o.description}</p>
                           )}
                           {o.public_cible && (
-                            <p className="text-slate-500 text-xs mt-1">Public : {o.public_cible}</p>
+                            <p className="text-slate-500 text-xs mt-1">{t('public_label')} : {o.public_cible}</p>
                           )}
                           {o.pdf_url && (
                             <a
@@ -5051,18 +5483,18 @@ export default function DashboardPage() {
                         <td className="p-3 text-slate-300">{o.thematique || '—'}</td>
                         <td className="p-3 text-slate-300">
                           {o.format === 'inter_entreprise'
-                            ? 'Inter-entreprises'
+                            ? t('inter_entreprises')
                             : o.format === 'intra_entreprise'
-                            ? 'Intra-entreprise'
+                            ? t('intra_entreprise')
                             : '—'}
                         </td>
                         <td className="p-3 text-slate-300">
                           {o.mode_delivrance === 'presentiel'
-                            ? '100% présentiel'
+                            ? t('presentiel_100')
                             : o.mode_delivrance === 'en_ligne'
-                            ? 'En ligne'
+                            ? t('en_ligne')
                             : o.mode_delivrance === 'blended'
-                            ? 'Blended'
+                            ? t('blended')
                             : '—'}
                         </td>
                         <td className="p-3 whitespace-nowrap">
@@ -5105,7 +5537,7 @@ export default function DashboardPage() {
                             onClick={() => supprimerOffre(o.id)}
                             className="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap"
                           >
-                            Supprimer
+                            {t('supprimer')}
                           </button>
                         </td>
                       </tr>
@@ -5118,7 +5550,7 @@ export default function DashboardPage() {
                                 onChange={(e) =>
                                   setEditionOffreForm({ ...editionOffreForm, nom: e.target.value })
                                 }
-                                placeholder="Nom"
+                                placeholder={t('champ_nom')}
                                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                               />
                               <input
@@ -5126,7 +5558,7 @@ export default function DashboardPage() {
                                 onChange={(e) =>
                                   setEditionOffreForm({ ...editionOffreForm, thematique: e.target.value })
                                 }
-                                placeholder="Thématique"
+                                placeholder={t('col_thematique')}
                                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                               />
                               <input
@@ -5134,7 +5566,7 @@ export default function DashboardPage() {
                                 onChange={(e) =>
                                   setEditionOffreForm({ ...editionOffreForm, public_cible: e.target.value })
                                 }
-                                placeholder="Public cible"
+                                placeholder={t('public_cible_placeholder')}
                                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                               />
                               <select
@@ -5144,9 +5576,9 @@ export default function DashboardPage() {
                                 }
                                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                               >
-                                <option value="">Format</option>
-                                <option value="inter_entreprise">Inter-entreprises</option>
-                                <option value="intra_entreprise">Intra-entreprise</option>
+                                <option value="">{t('col_format')}</option>
+                                <option value="inter_entreprise">{t('inter_entreprises')}</option>
+                                <option value="intra_entreprise">{t('intra_entreprise')}</option>
                               </select>
                               <select
                                 value={editionOffreForm.mode_delivrance}
@@ -5158,10 +5590,10 @@ export default function DashboardPage() {
                                 }
                                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                               >
-                                <option value="">Mode de délivrance</option>
-                                <option value="presentiel">100% présentiel</option>
-                                <option value="en_ligne">En ligne</option>
-                                <option value="blended">Blended</option>
+                                <option value="">{t('col_mode_delivrance')}</option>
+                                <option value="presentiel">{t('presentiel_100')}</option>
+                                <option value="en_ligne">{t('en_ligne')}</option>
+                                <option value="blended">{t('blended')}</option>
                               </select>
                               <div className="flex gap-2">
                                 <input
@@ -5169,7 +5601,7 @@ export default function DashboardPage() {
                                   onChange={(e) =>
                                     setEditionOffreForm({ ...editionOffreForm, prix: e.target.value })
                                   }
-                                  placeholder="Prix"
+                                  placeholder={t('prix')}
                                   type="number"
                                   className="w-1/2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                                 />
@@ -5190,7 +5622,7 @@ export default function DashboardPage() {
                                 onChange={(e) =>
                                   setEditionOffreForm({ ...editionOffreForm, duree: e.target.value })
                                 }
-                                placeholder="Durée"
+                                placeholder={t('duree_label')}
                                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                               />
                               <input
@@ -5198,7 +5630,7 @@ export default function DashboardPage() {
                                 onChange={(e) =>
                                   setEditionOffreForm({ ...editionOffreForm, usp: e.target.value })
                                 }
-                                placeholder="USP / différenciation"
+                                placeholder={t('usp_differenciation')}
                                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm md:col-span-2"
                               />
                               <textarea
@@ -5206,7 +5638,7 @@ export default function DashboardPage() {
                                 onChange={(e) =>
                                   setEditionOffreForm({ ...editionOffreForm, description: e.target.value })
                                 }
-                                placeholder="Description"
+                                placeholder={t('description_placeholder')}
                                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm md:col-span-3"
                                 rows={2}
                               />
@@ -5215,7 +5647,7 @@ export default function DashboardPage() {
                               <button
                                 onClick={async () => {
                                   if (!editionOffreForm.nom.trim()) {
-                                    alert('Le nom est obligatoire.')
+                                    alert(t('nom_est_obligatoire'))
                                     return
                                   }
                                   await modifierOffre(o.id, {
@@ -5234,13 +5666,13 @@ export default function DashboardPage() {
                                 }}
                                 className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold"
                               >
-                                Enregistrer
+                                {t('enregistrer')}
                               </button>
                               <button
                                 onClick={() => setOffreEnEdition(null)}
                                 className="text-xs px-3 py-1.5 rounded-lg border border-slate-700"
                               >
-                                Annuler
+                                {t('annuler')}
                               </button>
                             </div>
                           </td>
@@ -5259,12 +5691,10 @@ export default function DashboardPage() {
         {ongletActif === 'collaboration' && (
           <section className="grid md:grid-cols-2 gap-8">
             <div className="space-y-4">
-              <h2 className="font-semibold text-lg">💬 Messages d'équipe</h2>
+              <h2 className="font-semibold text-lg">{t('messages_equipe')}</h2>
               <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3 max-h-[420px] overflow-y-auto">
                 {messagesEquipe.length === 0 && (
-                  <p className="text-slate-500 text-sm italic">
-                    Pas encore de message — écrivez le premier ci-dessous.
-                  </p>
+                  <p className="text-slate-500 text-sm italic">{t('pas_encore_message')}</p>
                 )}
                 {messagesEquipe.map((m) => {
                   const estMoi = m.auteur_id === monClientUserId
@@ -5279,7 +5709,7 @@ export default function DashboardPage() {
                       >
                         {!estMoi && (
                           <p className="font-semibold text-accent text-xs mb-0.5">
-                            {m.client_users?.nom_complet ?? 'Membre'}
+                            {m.client_users?.nom_complet ?? t('membre_defaut')}
                           </p>
                         )}
                         <p>{m.contenu}</p>
@@ -5296,7 +5726,7 @@ export default function DashboardPage() {
                   value={nouveauMessageEquipe}
                   onChange={(e) => setNouveauMessageEquipe(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && envoyerMessageEquipe()}
-                  placeholder="Écrire un message à l'équipe..."
+                  placeholder={t('ecrire_message_equipe')}
                   className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 />
                 <button
@@ -5304,24 +5734,24 @@ export default function DashboardPage() {
                   disabled={envoiMessageEquipeEnCours || !nouveauMessageEquipe.trim()}
                   className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
                 >
-                  Envoyer
+                  {t('envoyer')}
                 </button>
               </div>
             </div>
 
             <div className="space-y-4">
-              <h2 className="font-semibold text-lg">✅ Tâches</h2>
+              <h2 className="font-semibold text-lg">{t('taches_titre')}</h2>
               <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
                 <input
                   value={nouvelleTache.titre}
                   onChange={(e) => setNouvelleTache({ ...nouvelleTache, titre: e.target.value })}
-                  placeholder="Titre de la tâche"
+                  placeholder={t('titre_tache_placeholder')}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 />
                 <textarea
                   value={nouvelleTache.description}
                   onChange={(e) => setNouvelleTache({ ...nouvelleTache, description: e.target.value })}
-                  placeholder="Description (optionnel)"
+                  placeholder={t('description_optionnel')}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                   rows={2}
                 />
@@ -5334,12 +5764,12 @@ export default function DashboardPage() {
                     <option value="">Assigner à...</option>
                     {membresEquipe.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.nom_complet ?? 'Membre'}
+                        {m.nom_complet ?? t('membre_defaut')}
                       </option>
                     ))}
                   </select>
                   <label className="flex items-center gap-1 text-xs text-slate-500">
-                    Deadline
+                    {t('deadline_label')}
                     <input
                       type="date"
                       value={nouvelleTache.echeance}
@@ -5352,7 +5782,7 @@ export default function DashboardPage() {
                     disabled={creationTacheEnCours || !nouvelleTache.titre.trim()}
                     className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
                   >
-                    Ajouter
+                    {t('ajouter')}
                   </button>
                 </div>
               </div>
@@ -5360,9 +5790,9 @@ export default function DashboardPage() {
               <div className="grid grid-cols-3 gap-2">
                 {(
                   [
-                    { id: 'a_faire' as const, label: 'À faire' },
-                    { id: 'en_cours' as const, label: 'En cours' },
-                    { id: 'terminee' as const, label: 'Terminée' },
+                    { id: 'a_faire' as const, label: t('statut_a_faire') },
+                    { id: 'en_cours' as const, label: t('statut_en_cours') },
+                    { id: 'terminee' as const, label: t('statut_terminee') },
                   ]
                 ).map((colonne) => (
                   <div key={colonne.id} className="space-y-2">
@@ -5379,7 +5809,7 @@ export default function DashboardPage() {
                             <p className="text-xs text-slate-400">{t.description}</p>
                           )}
                           <p className="text-xs text-slate-400">
-                            👤 {t.membre?.nom_complet ?? 'Non assignée'}
+                            👤 {t.membre?.nom_complet ?? traduire(langue, 'non_assignee')}
                           </p>
                           {t.echeance && (
                             <p
@@ -5389,26 +5819,26 @@ export default function DashboardPage() {
                                   : 'text-accent'
                               }`}
                             >
-                              📅 Échéance : {new Date(t.echeance).toLocaleDateString('fr-FR')}
-                              {t.statut !== 'terminee' && new Date(t.echeance) < new Date() && ' (dépassée)'}
+                              📅 {traduire(langue, 'echeance_label')} : {new Date(t.echeance).toLocaleDateString('fr-FR')}
+                              {t.statut !== 'terminee' && new Date(t.echeance) < new Date() && ` (${traduire(langue, 'depassee_label')})`}
                             </p>
                           )}
                           {t.createur?.nom_complet && (
                             <p className="text-xs text-slate-400">
-                              ✍️ Créée par {t.createur.nom_complet}
+                              ✍️ {traduire(langue, 'creee_par')} {t.createur.nom_complet}
                             </p>
                           )}
                           {t.cible?.nom && (
-                            <p className="text-xs text-accent">🎯 Prospect : {t.cible.nom}</p>
+                            <p className="text-xs text-accent">🎯 {traduire(langue, 'prospect_label')} : {t.cible.nom}</p>
                           )}
                           <select
                             value={t.statut}
                             onChange={(e) => majTache(t.id, { statut: e.target.value })}
                             className="w-full text-xs rounded bg-slate-950 border border-slate-700 p-1"
                           >
-                            <option value="a_faire">À faire</option>
-                            <option value="en_cours">En cours</option>
-                            <option value="terminee">Terminée</option>
+                            <option value="a_faire">{traduire(langue, 'statut_a_faire')}</option>
+                            <option value="en_cours">{traduire(langue, 'statut_en_cours')}</option>
+                            <option value="terminee">{traduire(langue, 'statut_terminee')}</option>
                           </select>
                         </div>
                       ))}
@@ -5423,15 +5853,12 @@ export default function DashboardPage() {
         {ongletActif === 'calendrier' && (
           <section className="space-y-4">
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
-              <h3 className="text-sm font-semibold">🔗 Connexion Google Calendar</h3>
-              <p className="text-xs text-slate-500">
-                Une fois connecté, le bouton "Bloquer un créneau d'échange" envoyé aux prospects leur
-                montre tes vraies disponibilités et crée directement l'événement dans ton agenda Google.
-              </p>
+              <h3 className="text-sm font-semibold">{t('connexion_google_calendar')}</h3>
+              <p className="text-xs text-slate-500">{t('google_calendar_desc')}</p>
               {client?.google_calendar_connecte ? (
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-sm text-emerald-400">
-                    ✅ Connecté{client.google_calendar_email ? ` (${client.google_calendar_email})` : ''}
+                    {t('connecte_label')}{client.google_calendar_email ? ` (${client.google_calendar_email})` : ''}
                   </span>
                   <button
                     onClick={async () => {
@@ -5445,7 +5872,7 @@ export default function DashboardPage() {
                     }}
                     className="text-xs px-3 py-1.5 rounded-lg border border-red-900 text-red-400 hover:bg-red-950"
                   >
-                    Déconnecter
+                    {t('deconnecter')}
                   </button>
                 </div>
               ) : (
@@ -5461,18 +5888,18 @@ export default function DashboardPage() {
                     if (data.url) {
                       window.location.href = data.url
                     } else {
-                      alert(data.error ?? 'Erreur de connexion à Google Calendar')
+                      alert(data.error ?? t('erreur_connexion_google'))
                     }
                   }}
                   className="text-sm px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold"
                 >
-                  Connecter Google Calendar
+                  {t('connecter_google_calendar')}
                 </button>
               )}
               {client?.google_calendar_connecte && (
                 <div className="flex flex-wrap gap-3 pt-2 border-t border-slate-800 text-xs">
                   <label className="flex items-center gap-1.5 text-slate-400">
-                    Durée d'un créneau :
+                    {t('duree_creneau_label')}
                     <select
                       defaultValue={client.reservation_duree_minutes ?? 30}
                       onChange={async (e) => {
@@ -5492,21 +5919,40 @@ export default function DashboardPage() {
                       <option value={60}>1h</option>
                     </select>
                   </label>
-                  <span className="text-slate-500">Créneaux proposés entre 9h et 18h, jours ouvrés.</span>
+                  <label className="flex items-center gap-1.5 text-slate-400">
+                    {t('fuseau_horaire_label')}
+                    <select
+                      defaultValue={client.fuseau_horaire ?? 'Africa/Tunis'}
+                      onChange={async (e) => {
+                        const { data: sessionData } = await supabase.auth.getSession()
+                        const token = sessionData.session?.access_token
+                        await fetch('/api/calendrier/google/reglages', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ fuseau_horaire: e.target.value }),
+                        })
+                      }}
+                      className="rounded bg-slate-800 border border-slate-700 px-2 py-1"
+                    >
+                      {TIMEZONES_DISPONIBLES.map((tz) => (
+                        <option key={tz.zone} value={tz.zone}>
+                          {tz.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="text-slate-500">{t('creneaux_proposes')}</span>
                 </div>
               )}
             </div>
 
-            <p className="text-slate-400 text-sm">
-              Rendez-vous clients, événements repérés, appels d'offres — ajoutés manuellement.
-              Rien ici n'est lié automatiquement à tes cibles.
-            </p>
+            <p className="text-slate-400 text-sm">{t('calendrier_manuel_desc')}</p>
 
             {jourSelectionne && (
               <div className="rounded-xl border border-accent/40 bg-slate-900 p-3 space-y-1">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-accent">
-                    📅 {new Date(jourSelectionne).toLocaleDateString('fr-FR', {
+                    📅 {new Date(jourSelectionne).toLocaleDateString(localeAffichage, {
                       weekday: 'long',
                       day: 'numeric',
                       month: 'long',
@@ -5516,13 +5962,11 @@ export default function DashboardPage() {
                     onClick={() => setJourSelectionne(null)}
                     className="text-xs text-slate-500 hover:text-slate-300"
                   >
-                    ✕ Désélectionner
+                    {t('deselectionner')}
                   </button>
                 </div>
                 {calendrier.filter((c) => c.date_evenement === jourSelectionne).length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">
-                    Rien de prévu ce jour-là — remplis le formulaire ci-dessous pour ajouter.
-                  </p>
+                  <p className="text-xs text-slate-500 italic">{t('rien_prevu_ce_jour')}</p>
                 ) : (
                   calendrier
                     .filter((c) => c.date_evenement === jourSelectionne)
@@ -5542,7 +5986,7 @@ export default function DashboardPage() {
               <input
                 value={nouvelleEntree.titre}
                 onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, titre: e.target.value })}
-                placeholder="Titre (ex: RDV client X)"
+                placeholder={t('titre_evenement_placeholder')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <input
@@ -5557,7 +6001,7 @@ export default function DashboardPage() {
                 value={nouvelleEntree.heure_debut}
                 onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, heure_debut: e.target.value })}
                 type="time"
-                placeholder="Heure (optionnel)"
+                placeholder={t('heure_optionnel')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               {nouvelleEntree.heure_debut && (
@@ -5579,7 +6023,7 @@ export default function DashboardPage() {
               <input
                 value={nouvelleEntree.lieu}
                 onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, lieu: e.target.value })}
-                placeholder="Lieu (adresse, bureau, visio...)"
+                placeholder={t('lieu_placeholder')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <select
@@ -5592,15 +6036,15 @@ export default function DashboardPage() {
                 }
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               >
-                <option value="rdv">📞 Rendez-vous client</option>
-                <option value="evenement">🎪 Événement</option>
-                <option value="appel_offre">📋 Appel d'offres</option>
-                <option value="autre">📌 Autre</option>
+                <option value="rdv">{t('rdv_client')}</option>
+                <option value="evenement">{t('evenement_label')}</option>
+                <option value="appel_offre">{t('appel_offre_label')}</option>
+                <option value="autre">{t('autre_label')}</option>
               </select>
               <input
                 value={nouvelleEntree.lien}
                 onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, lien: e.target.value })}
-                placeholder="Lien (optionnel)"
+                placeholder={t('lien_optionnel')}
                 className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               />
               <textarea
@@ -5608,7 +6052,7 @@ export default function DashboardPage() {
                 onChange={(e) =>
                   setNouvelleEntree({ ...nouvelleEntree, description: e.target.value })
                 }
-                placeholder="Notes (optionnel)"
+                placeholder={t('notes_optionnel')}
                 className="md:col-span-2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
               />
               <button
@@ -5640,23 +6084,23 @@ export default function DashboardPage() {
                   }
                   className="px-3 py-1 rounded-lg border border-slate-700 text-sm hover:border-accent"
                 >
-                  ← Précédent
+                  {t('precedent')}
                 </button>
                 <div className="flex items-center gap-3">
                   <p className="font-semibold capitalize">
                     {vueCalendrier === 'mois'
-                      ? moisAffiche.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+                      ? moisAffiche.toLocaleDateString(localeAffichage, { month: 'long', year: 'numeric' })
                       : vueCalendrier === 'semaine'
                       ? (() => {
                           const jours = genererJoursSemaine(semaineAffichee)
                           const debut = jours[0]
                           const fin = jours[6]
-                          return `${debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} – ${fin.toLocaleDateString(
-                            'fr-FR',
+                          return `${debut.toLocaleDateString(localeAffichage, { day: 'numeric', month: 'short' })} – ${fin.toLocaleDateString(
+                            localeAffichage,
                             { day: 'numeric', month: 'short', year: 'numeric' }
                           )}`
                         })()
-                      : jourAffiche.toLocaleDateString('fr-FR', {
+                      : jourAffiche.toLocaleDateString(localeAffichage, {
                           weekday: 'long',
                           day: 'numeric',
                           month: 'long',
@@ -5668,19 +6112,19 @@ export default function DashboardPage() {
                       onClick={() => setVueCalendrier('mois')}
                       className={`px-3 py-1 ${vueCalendrier === 'mois' ? 'bg-accent text-slate-950 font-semibold' : 'bg-slate-950 text-slate-400'}`}
                     >
-                      Mois
+                      {t('vue_mois')}
                     </button>
                     <button
                       onClick={() => setVueCalendrier('semaine')}
                       className={`px-3 py-1 ${vueCalendrier === 'semaine' ? 'bg-accent text-slate-950 font-semibold' : 'bg-slate-950 text-slate-400'}`}
                     >
-                      Semaine
+                      {t('vue_semaine')}
                     </button>
                     <button
                       onClick={() => setVueCalendrier('jour')}
                       className={`px-3 py-1 ${vueCalendrier === 'jour' ? 'bg-accent text-slate-950 font-semibold' : 'bg-slate-950 text-slate-400'}`}
                     >
-                      Jour
+                      {t('vue_jour')}
                     </button>
                   </div>
                 </div>
@@ -5702,7 +6146,7 @@ export default function DashboardPage() {
                   }
                   className="px-3 py-1 rounded-lg border border-slate-700 text-sm hover:border-accent"
                 >
-                  Suivant →
+                  {t('suivant')}
                 </button>
               </div>
 
@@ -5778,14 +6222,14 @@ export default function DashboardPage() {
                             estAujourdhui ? 'text-accent font-semibold' : 'text-slate-400'
                           } ${jourSelectionne === dateStr ? 'bg-accent/10' : ''}`}
                         >
-                          {date.toLocaleDateString('fr-FR', { weekday: 'short' })}{' '}
+                          {date.toLocaleDateString(localeAffichage, { weekday: 'short' })}{' '}
                           <span className={estAujourdhui ? 'text-accent' : 'text-slate-300'}>{date.getDate()}</span>
                         </div>
                       )
                     })}
 
                     {/* Entrées sans heure ("toute la journée") en haut de chaque colonne */}
-                    <div className="text-[10px] text-slate-600 flex items-center justify-end pr-1">journée</div>
+                    <div className="text-[10px] text-slate-600 flex items-center justify-end pr-1">{t('journee_label')}</div>
                     {genererJoursSemaine(semaineAffichee).map((date) => {
                       const dateStr = formatDateLocale(date)
                       const entreesSansHeure = calendrier.filter(
@@ -5928,7 +6372,7 @@ export default function DashboardPage() {
                           : '📌'}{' '}
                         {c.titre}
                         <span className="text-accent text-sm ml-2">
-                          {new Date(c.date_evenement).toLocaleDateString('fr-FR')}
+                          {new Date(c.date_evenement).toLocaleDateString(localeAffichage)}
                           {c.heure_debut && ` à ${c.heure_debut.slice(0, 5)}`}
                           {c.duree_minutes ? ` (${c.duree_minutes} min)` : ''}
                         </span>
@@ -6009,7 +6453,7 @@ export default function DashboardPage() {
               <h2 className="text-lg font-semibold">📈 Taux de performance</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
-                  <p className="text-slate-400 text-sm">Taux de réponse</p>
+                  <p className="text-slate-400 text-sm">{t('stats_taux_reponse')}</p>
                   <p className="text-3xl font-bold mt-2">
                     {statsPerformance.nbMessagesEnvoyes > 0
                       ? Math.round(
@@ -6024,7 +6468,7 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
-                  <p className="text-slate-400 text-sm">Taux de conversion</p>
+                  <p className="text-slate-400 text-sm">{t('stats_taux_conversion')}</p>
                   <p className="text-3xl font-bold mt-2">
                     {statsPerformance.nbDiagnosticsValides > 0
                       ? Math.round(
@@ -6042,6 +6486,101 @@ export default function DashboardPage() {
                 </div>
               </div>
             </section>
+
+            {/* Courbe : cibles ajoutees vs premiers contacts envoyes, 30 derniers jours */}
+            {(() => {
+              const AUJOURD_HUI = new Date()
+              AUJOURD_HUI.setHours(0, 0, 0, 0)
+              const jours: { date: string; label: string; ajoutees: number; contactees: number }[] = []
+              for (let i = 29; i >= 0; i--) {
+                const d = new Date(AUJOURD_HUI.getTime() - i * 24 * 60 * 60 * 1000)
+                jours.push({
+                  date: d.toISOString().slice(0, 10),
+                  label: d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+                  ajoutees: 0,
+                  contactees: 0,
+                })
+              }
+              const parDate = new Map(jours.map((j) => [j.date, j]))
+              for (const tg of targets) {
+                if (!tg.created_at) continue
+                const cle = tg.created_at.slice(0, 10)
+                const entree = parDate.get(cle)
+                if (entree) entree.ajoutees++
+              }
+              for (const envoi of outreachHistorique) {
+                const cle = envoi.created_at.slice(0, 10)
+                const entree = parDate.get(cle)
+                if (entree) entree.contactees++
+              }
+              return (
+                <section className="space-y-3">
+                  <h2 className="text-lg font-semibold">📉 {t('stats_evolution')}</h2>
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={jours}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} interval={4} />
+                        <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
+                        <Tooltip
+                          contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 12 }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Line
+                          type="monotone"
+                          dataKey="ajoutees"
+                          name={t('stats_cibles_ajoutees')}
+                          stroke="#38bdf8"
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="contactees"
+                          name={t('stats_contacts_envoyes')}
+                          stroke="#4ade80"
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </section>
+              )
+            })()}
+
+            {/* Entonnoir du pipeline (nombre de cibles par etape) */}
+            {(() => {
+              const colonnesFunnel = etapesPipelinePourVertical(verticalSlug, langue)
+              const donnees = colonnesFunnel.map((c) => ({
+                label: c.label.replace(/^[^\p{L}\d]+/u, '').trim(),
+                total: targets.filter((tg) => (tg.etape_pipeline ?? 'contacte') === c.etape).length,
+              }))
+              if (donnees.every((d) => d.total === 0)) return null
+              return (
+                <section className="space-y-3">
+                  <h2 className="text-lg font-semibold">🔻 {t('stats_entonnoir')}</h2>
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={donnees} layout="vertical" margin={{ left: 24 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
+                        <YAxis
+                          type="category"
+                          dataKey="label"
+                          tick={{ fontSize: 11, fill: '#94a3b8' }}
+                          width={140}
+                        />
+                        <Tooltip
+                          contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 12 }}
+                        />
+                        <Bar dataKey="total" fill="#818cf8" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </section>
+              )
+            })()}
 
             {(() => {
               const segments = new Map<string, { total: number; contactes: number }>()

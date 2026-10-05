@@ -343,6 +343,25 @@ export default function AdminPage() {
     setMajEnCours(null)
   }
 
+  // Retour terrain : bug trouve ou un cabinet cree avec un secteur X etait
+  // silencieusement rattache a 'cabinet-formation' si ce secteur n'existait
+  // pas encore en base (voir 67_verticals_seed_complet.sql). Ce controle
+  // permet de corriger directement le secteur actif d'un cabinet deja cree.
+  const corrigerVerticalActif = async (client: ClientAdmin, slug: string) => {
+    setMajEnCours(client.id)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const res = await fetch('/api/admin/clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ client_id: client.id, vertical_slug: slug }),
+    })
+    const data = await res.json()
+    if (!res.ok) alert(data.error ?? 'Erreur lors de la correction du secteur')
+    await charger()
+    setMajEnCours(null)
+  }
+
   const basculerOngletAutorise = async (client: ClientAdmin, ongletId: string) => {
     // null/vide = tous autorises ; on part donc de la liste complete si rien
     // n'a encore ete restreint, pour que le premier clic retire bien juste
@@ -370,6 +389,7 @@ export default function AdminPage() {
     { slug: 'investisseur-incubateur', label: 'Écosystème Entrepreneurial' },
     { slug: 'comptable-fiscal', label: 'Cabinet Comptable, Juridique & Fiscal' },
     { slug: 'services-generaux', label: 'Logistique, Transit & Services Généraux' },
+    { slug: 'immobilier', label: 'Immobilier (Agences, Promoteurs, Gestion Locative)' },
   ]
 
   const ONGLETS_ADMIN = [
@@ -1200,6 +1220,28 @@ export default function AdminPage() {
 
                 {gestionAccesOuverte === client.id && (
                   <div className="rounded-lg border border-slate-700 bg-slate-950 p-3 space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-300 mb-1">
+                        🗂️ Secteur actif réel (corrige le prompt IA / vocabulaire utilisés)
+                      </p>
+                      <select
+                        value={client.vertical_slug ?? ''}
+                        onChange={(e) => corrigerVerticalActif(client, e.target.value)}
+                        disabled={majEnCours === client.id}
+                        className="text-sm rounded-lg bg-slate-900 border border-slate-700 px-2 py-1.5 disabled:opacity-50"
+                      >
+                        {VERTICALS_ADMIN.map((v) => (
+                          <option key={v.slug} value={v.slug}>
+                            {v.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Actuellement : <span className="text-slate-300">{client.vertical_slug ?? '—'}</span>
+                        {' '}— à utiliser si le cabinet a été créé avec le mauvais secteur (bug corrigé,
+                        voir 67_verticals_seed_complet.sql).
+                      </p>
+                    </div>
                     <div>
                       <p className="text-xs font-semibold text-slate-300 mb-1">
                         Cartes/secteurs autorisés (un ou plusieurs)

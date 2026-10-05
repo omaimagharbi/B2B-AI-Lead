@@ -14,11 +14,13 @@ export async function POST(req: NextRequest) {
     // type_envoi : 'diagnostic' (par defaut, cree un diagnostic + lien) ou 'message'
     // (envoie juste le message personnalise du cabinet, sans creer de diagnostic)
     const typeEnvoi: 'diagnostic' | 'message' = type_envoi === 'message' ? 'message' : 'diagnostic'
-    // canal_force : 'linkedin' -> aucun appel WhatsApp/Email (texte a copier-coller,
-    // LinkedIn n'a pas d'API branchee ici). 'email' -> force l'envoi par email meme
-    // si le pays de la cible pointe normalement vers WhatsApp (utile quand WhatsApp
-    // n'est pas encore fiable/configure - le cabinet garde la main sur le canal).
+    // canal_force : 'linkedin' ou 'facebook' -> aucun appel API (texte a copier-coller ;
+    // Meta interdit le demarchage a froid via l'API Messenger, donc ce canal ne peut
+    // techniquement pas etre automatise comme WhatsApp/Email). 'email' -> force l'envoi
+    // par email meme si le pays de la cible pointe normalement vers WhatsApp (utile
+    // quand WhatsApp n'est pas encore fiable/configure - le cabinet garde la main).
     const forceLinkedin = canal_force === 'linkedin'
+    const forceFacebook = canal_force === 'facebook'
     const forceEmail = canal_force === 'email'
     const forceWhatsapp = canal_force === 'whatsapp'
     // previsualiser : etape 1 (facultative) - on prepare le texte exact (avec le vrai lien
@@ -82,16 +84,18 @@ export async function POST(req: NextRequest) {
 
     const canal = forceLinkedin
       ? 'linkedin'
+      : forceFacebook
+      ? 'facebook'
       : forceEmail
       ? 'email'
       : forceWhatsapp
       ? 'whatsapp'
       : canalParPays(target.country ?? 'FR')
 
-    if (!forceLinkedin && canal === 'whatsapp' && !target.telephone) {
+    if (!forceLinkedin && !forceFacebook && canal === 'whatsapp' && !target.telephone) {
       return NextResponse.json({ error: "Cette cible n'a pas de telephone" }, { status: 400 })
     }
-    if (!forceLinkedin && canal === 'email' && !target.email) {
+    if (!forceLinkedin && !forceFacebook && canal === 'email' && !target.email) {
       return NextResponse.json({ error: "Cette cible n'a pas d'email" }, { status: 400 })
     }
 
@@ -162,9 +166,11 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    if (forceLinkedin) {
-      // Rien a envoyer automatiquement : LinkedIn n'a pas d'API branchee ici.
-      // Le message est simplement renvoye au cabinet pour qu'il le copie-colle.
+    if (forceLinkedin || forceFacebook) {
+      // Rien a envoyer automatiquement : LinkedIn n'a pas d'API branchee ici, et
+      // Facebook Messenger interdit le demarchage a froid (le prospect doit avoir
+      // ecrit en premier). Le message est simplement renvoye au cabinet pour qu'il
+      // le copie-colle lui-meme.
     } else if (canal === 'whatsapp') {
       await envoyerWhatsapp(target.telephone!, message, client.logo_url)
     } else {

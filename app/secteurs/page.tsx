@@ -1,60 +1,55 @@
 'use client'
 
-import { useState } from 'react'
-import { SOUS_SECTEURS_PAR_VERTICAL } from '@/lib/sous-secteurs'
+import { useEffect, useState } from 'react'
+import { SOUS_SECTEURS_PAR_VERTICAL, traduireSousSecteur } from '@/lib/sous-secteurs'
+import { traduire, type Langue } from '@/lib/i18n'
 
-const cartes = [
-  {
-    slug: 'cabinet-formation',
-    titre: 'Formation & Conseil RH',
-    description: 'Recevez des prospects qualifiés, prêts à signer, sans effort de prospection.',
-    dotColor: '#1F6F78',
-    active: true,
-    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['cabinet-formation'],
-  },
-  {
-    slug: 'startup-saas',
-    titre: 'Startups & Éditeurs de Logiciels',
-    description: 'Recevez des audits techniques qualifiés directement dans votre pipeline.',
-    dotColor: '#F0CC7A',
-    active: true,
-    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['startup-saas'],
-  },
-  {
-    slug: 'pme-services',
-    titre: 'PME & Entreprises de Croissance',
-    description: 'Recevez des audits organisationnels qualifiés directement dans votre pipeline.',
-    dotColor: '#0F2540',
-    active: true,
-    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['pme-services'],
-  },
-  {
-    slug: 'investisseur-incubateur',
-    titre: 'Écosystème Entrepreneurial',
-    description: "Sourcez du dealflow qualifié : fondateurs et startups prêts à être contactés.",
-    dotColor: '#1F6F78',
-    active: true,
-    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['investisseur-incubateur'],
-  },
-  {
-    slug: 'comptable-fiscal',
-    titre: 'Cabinet Comptable, Juridique & Fiscal',
-    description: 'Automatisez la chasse de mandats — expertise comptable, avocats d\'affaires, conformité.',
-    dotColor: '#8892A0',
-    active: false,
-    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['comptable-fiscal'],
-  },
-  {
-    slug: 'services-generaux',
-    titre: 'Logistique, Transit & Services Généraux',
-    description: 'Transitaires, maintenance industrielle, facility management, événementiel B2B.',
-    dotColor: '#8892A0',
-    active: false,
-    sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL['services-generaux'],
-  },
-]
+type Carte = { slug: string; titre: string; description: string; dotColor: string; active: boolean }
+
+const CARTES: Record<Langue, Carte[]> = {
+  fr: [
+    { slug: 'cabinet-formation', titre: 'Formation & Conseil RH', description: 'Recevez des prospects qualifiés, prêts à signer, sans effort de prospection.', dotColor: '#1F6F78', active: true },
+    { slug: 'startup-saas', titre: 'Startups & Éditeurs de Logiciels', description: 'Recevez des audits techniques qualifiés directement dans votre pipeline.', dotColor: '#F0CC7A', active: true },
+    { slug: 'pme-services', titre: 'PME & Entreprises de Croissance', description: 'Recevez des audits organisationnels qualifiés directement dans votre pipeline.', dotColor: '#0F2540', active: true },
+    { slug: 'investisseur-incubateur', titre: 'Écosystème Entrepreneurial', description: "Sourcez du dealflow qualifié : fondateurs et startups prêts à être contactés.", dotColor: '#1F6F78', active: true },
+    { slug: 'comptable-fiscal', titre: 'Cabinet Comptable, Juridique & Fiscal', description: "Automatisez la chasse de mandats — expertise comptable, avocats d'affaires, conformité.", dotColor: '#8892A0', active: false },
+    { slug: 'services-generaux', titre: 'Logistique, Transit & Services Généraux', description: 'Transitaires, maintenance industrielle, facility management, événementiel B2B.', dotColor: '#8892A0', active: false },
+    { slug: 'immobilier', titre: 'Immobilier', description: 'Agences, promoteurs, agents indépendants : recevez des acheteurs et vendeurs qualifiés.', dotColor: '#8892A0', active: false },
+  ],
+  en: [
+    { slug: 'cabinet-formation', titre: 'Training & HR Consulting', description: 'Receive qualified prospects, ready to sign, without any prospecting effort.', dotColor: '#1F6F78', active: true },
+    { slug: 'startup-saas', titre: 'Startups & Software Vendors', description: 'Receive qualified technical audits directly in your pipeline.', dotColor: '#F0CC7A', active: true },
+    { slug: 'pme-services', titre: 'Growth SMEs & Businesses', description: 'Receive qualified organizational audits directly in your pipeline.', dotColor: '#0F2540', active: true },
+    { slug: 'investisseur-incubateur', titre: 'Startup Ecosystem', description: 'Source qualified dealflow: founders and startups ready to be contacted.', dotColor: '#1F6F78', active: true },
+    { slug: 'comptable-fiscal', titre: 'Accounting, Legal & Tax Firms', description: 'Automate mandate hunting — accounting expertise, business lawyers, compliance.', dotColor: '#8892A0', active: false },
+    { slug: 'services-generaux', titre: 'Logistics, Freight & General Services', description: 'Freight forwarders, industrial maintenance, facility management, B2B events.', dotColor: '#8892A0', active: false },
+    { slug: 'immobilier', titre: 'Real Estate', description: 'Agencies, developers, independent agents: receive qualified buyers and sellers.', dotColor: '#8892A0', active: false },
+  ],
+  ar: [
+    { slug: 'cabinet-formation', titre: 'التدريب واستشارات الموارد البشرية', description: 'احصل على عملاء محتملين مؤهلين وجاهزين للتوقيع، دون أي جهد تنقيب.', dotColor: '#1F6F78', active: true },
+    { slug: 'startup-saas', titre: 'الشركات الناشئة وناشرو البرمجيات', description: 'احصل على تقييمات تقنية مؤهلة مباشرة في مسار مبيعاتك.', dotColor: '#F0CC7A', active: true },
+    { slug: 'pme-services', titre: 'المؤسسات الصغيرة والمتوسطة النامية', description: 'احصل على تقييمات تنظيمية مؤهلة مباشرة في مسار مبيعاتك.', dotColor: '#0F2540', active: true },
+    { slug: 'investisseur-incubateur', titre: 'المنظومة الريادية', description: 'اجمع صفقات مؤهلة: مؤسسون وشركات ناشئة جاهزون للتواصل.', dotColor: '#1F6F78', active: true },
+    { slug: 'comptable-fiscal', titre: 'مكاتب المحاسبة والقانون والضرائب', description: 'أتمتة صيد المهام — خبرة محاسبية، محامو أعمال، امتثال.', dotColor: '#8892A0', active: false },
+    { slug: 'services-generaux', titre: 'اللوجستيات والنقل والخدمات العامة', description: 'وكلاء الشحن، الصيانة الصناعية، إدارة المرافق، فعاليات B2B.', dotColor: '#8892A0', active: false },
+    { slug: 'immobilier', titre: 'العقارات', description: 'وكالات، مطورون، وكلاء مستقلون: احصل على مشترين وبائعين مؤهلين.', dotColor: '#8892A0', active: false },
+  ],
+}
+
+function useLangueVisiteur() {
+  const [langue, setLangue] = useState<Langue>('fr')
+  useEffect(() => {
+    const sauvegardee = window.localStorage.getItem('pilobrain_langue') as Langue | null
+    if (sauvegardee === 'fr' || sauvegardee === 'en' || sauvegardee === 'ar') setLangue(sauvegardee)
+  }, [])
+  return langue
+}
 
 export default function Secteurs() {
+  const langue = useLangueVisiteur()
+  const t = (cle: string) => traduire(langue, cle)
+  const cartes = CARTES[langue].map((c) => ({ ...c, sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL[c.slug] }))
+
   const [carteOuverte, setCarteOuverte] = useState<string | null>(null)
   const [carteBeta, setCarteBeta] = useState<{ slug: string; titre: string } | null>(null)
   const [email, setEmail] = useState('')
@@ -103,7 +98,7 @@ export default function Secteurs() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white font-sans antialiased">
+    <main className="min-h-screen bg-slate-950 text-white font-sans antialiased" dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <div className="max-w-[1180px] mx-auto px-7">
         {/* NAVBAR simplifiée */}
         <nav className="flex items-center justify-between py-5 border-b border-slate-800">
@@ -122,18 +117,14 @@ export default function Secteurs() {
             href="/auth"
             className="text-sm px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white hover:border-slate-500"
           >
-            Se connecter
+            {t('se_connecter_nav')}
           </a>
         </nav>
 
         {/* EN-TÊTE */}
         <section className="py-14 md:py-16 text-center">
-          <h1 className="font-sans text-[28px] md:text-[38px] font-extrabold mt-3 mb-2.5">
-            Des prospects qualifiés, livrés automatiquement
-          </h1>
-          <p className="text-slate-400 text-[15.5px] leading-relaxed">
-            Choisissez votre secteur pour commencer
-          </p>
+          <h1 className="font-sans text-[28px] md:text-[38px] font-extrabold mt-3 mb-2.5">{t('secteurs_titre')}</h1>
+          <p className="text-slate-400 text-[15.5px] leading-relaxed">{t('secteurs_sous_titre')}</p>
         </section>
 
         {/* GRILLE DE SECTEURS */}
@@ -162,7 +153,7 @@ export default function Secteurs() {
                         carte.active ? 'text-accent' : 'text-amber-400'
                       }`}
                     >
-                      {carte.active ? 'Commencer →' : '🔒 Accès en bêta privée →'}
+                      {carte.active ? t('commencer_cta') : `🔒 ${t('beta_privee_cta')}`}
                     </span>
                   ) : (
                     <select
@@ -182,11 +173,11 @@ export default function Secteurs() {
                       className="w-full mt-3.5 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
                     >
                       <option value="" disabled>
-                        Précisez votre métier exact...
+                        {t('precisez_metier')}
                       </option>
                       {carte.sousSecteurs.map((s) => (
                         <option key={s} value={s}>
-                          {s}
+                          {traduireSousSecteur(s, langue)}
                         </option>
                       ))}
                     </select>
@@ -209,35 +200,33 @@ export default function Secteurs() {
           >
             {!confirme ? (
               <>
-                <h2 className="font-sans text-lg font-bold text-white">🚀 Merci pour votre intérêt !</h2>
+                <h2 className="font-sans text-lg font-bold text-white">🚀 {t('merci_interet_titre')}</h2>
                 <p className="text-sm text-slate-400">
-                  Notre moteur de commercialisation pour <strong className="text-white">{carteBeta.titre}</strong> est
-                  actuellement accessible uniquement en bêta privée. Laissez-nous votre email et
-                  votre secteur exact — notre équipe vous contacte sous 24h pour configurer votre
-                  accès sur-mesure.
+                  {t('beta_privee_desc_1')} <strong className="text-white">{carteBeta.titre}</strong>{' '}
+                  {t('beta_privee_desc_2')}
                 </p>
                 <input
-                  placeholder="Nom de votre entreprise"
+                  placeholder={t('nom_entreprise_placeholder')}
                   value={nomEntreprise}
                   onChange={(e) => setNomEntreprise(e.target.value)}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
                 />
                 <input
                   type="email"
-                  placeholder="Votre email"
+                  placeholder={t('votre_email_placeholder')}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
                 />
                 <input
                   type="tel"
-                  placeholder="Votre numéro de téléphone"
+                  placeholder={t('votre_telephone_placeholder')}
                   value={telephone}
                   onChange={(e) => setTelephone(e.target.value)}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
                 />
                 <input
-                  placeholder="Votre secteur exact (optionnel)"
+                  placeholder={t('votre_secteur_placeholder')}
                   value={sousSecteur}
                   onChange={(e) => setSousSecteur(e.target.value)}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-white focus:border-accent focus:outline-none"
@@ -248,28 +237,25 @@ export default function Secteurs() {
                     disabled={envoiEnCours || !formulaireValide}
                     className="flex-1 py-2 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50 hover:opacity-90"
                   >
-                    {envoiEnCours ? 'Envoi...' : 'Demander un accès'}
+                    {envoiEnCours ? t('envoi_en_cours') : t('demander_acces_cta')}
                   </button>
                   <button
                     onClick={fermerModal}
                     className="px-4 py-2 rounded-lg border border-slate-700 text-slate-300"
                   >
-                    Annuler
+                    {t('annuler')}
                   </button>
                 </div>
               </>
             ) : (
               <>
-                <h2 className="font-sans text-lg font-bold text-white">✅ Demande envoyée</h2>
-                <p className="text-sm text-slate-400">
-                  Votre demande a été placée en priorité haute. Notre équipe vous contacte sous
-                  24 heures.
-                </p>
+                <h2 className="font-sans text-lg font-bold text-white">✅ {t('demande_envoyee_titre')}</h2>
+                <p className="text-sm text-slate-400">{t('demande_envoyee_desc')}</p>
                 <button
                   onClick={fermerModal}
                   className="w-full py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700"
                 >
-                  Fermer
+                  {t('fermer_x')}
                 </button>
               </>
             )}

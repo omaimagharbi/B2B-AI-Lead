@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import RichTextEditor from '@/components/RichTextEditor'
+import { traduire, type Langue } from '@/lib/i18n'
 
 type Etape = { nom: string; description: string }
 type Pack = { nom: string; prix_indicatif: number; description: string }
@@ -35,10 +36,15 @@ type DiagnosticEnAttente = {
 export default function ValidationItem({
   diagnostic,
   onValide,
+  langue = 'fr',
+  secteurBadge,
 }: {
   diagnostic: DiagnosticEnAttente
   onValide: () => void
+  langue?: Langue
+  secteurBadge?: string
 }) {
+  const t = (cle: string) => traduire(langue, cle)
   const [ouvert, setOuvert] = useState(false)
   const [titre, setTitre] = useState(diagnostic.json_ia_brouillon.titre ?? '')
   const [synthese, setSynthese] = useState(diagnostic.json_ia_brouillon.synthese ?? '')
@@ -97,14 +103,14 @@ export default function ValidationItem({
       const data = await res.json()
 
       if (!res.ok) {
-        setErreur(data.error ?? 'Erreur lors de la validation')
+        setErreur(data.error ?? t('erreur_validation'))
         setEnvoi(false)
         return
       }
 
       onValide()
     } catch {
-      setErreur('Impossible de contacter le serveur')
+      setErreur(t('erreur_serveur'))
       setEnvoi(false)
     }
   }
@@ -116,19 +122,26 @@ export default function ValidationItem({
         className="w-full p-4 flex items-center justify-between text-left"
       >
         <div>
-          <p className="font-semibold">{nomProspect ?? 'Prospect'}</p>
+          <p className="font-semibold flex items-center gap-2 flex-wrap">
+            {nomProspect ?? 'Prospect'}
+            {secteurBadge && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 font-normal">
+                🗂️ {secteurBadge}
+              </span>
+            )}
+          </p>
           <p className="text-slate-400 text-sm italic">
             "{diagnostic.phrase_brute_prospect?.slice(0, 100)}
             {(diagnostic.phrase_brute_prospect?.length ?? 0) > 100 ? '...' : ''}"
           </p>
           <p className="text-xs text-slate-500 mt-1">
             {diagnostic.lien_ouvert_at
-              ? `👁️ Lien ouvert le ${new Date(diagnostic.lien_ouvert_at).toLocaleDateString('fr-FR')}`
-              : '👁️‍🗨️ Lien pas encore ouvert (mais réponse déjà reçue)'}
+              ? `👁️ ${t('lien_ouvert_le')} ${new Date(diagnostic.lien_ouvert_at).toLocaleDateString('fr-FR')}`
+              : `👁️‍🗨️ ${t('lien_pas_ouvert')}`}
           </p>
         </div>
         <span className="text-slate-300 text-sm">
-          {ouvert ? 'Fermer ▲' : 'Relire & valider ▼'}
+          {ouvert ? t('fermer_fleche') : t('relire_valider')}
         </span>
       </button>
 
@@ -142,12 +155,11 @@ export default function ValidationItem({
 
           {diagnostic.json_ia_brouillon._simule ? (
             <div className="text-xs px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300">
-              ⚙️ Mode simulé — aucune IA n'a généré ce contenu (texte générique de secours). Ajoute
-              une clé GEMINI_API_KEY ou ANTHROPIC_API_KEY sur Vercel pour un vrai contenu spécifique.
+              {t('mode_simule')}
             </div>
           ) : (
             <div className="text-xs px-3 py-2 rounded-lg bg-green-950/40 border border-green-800 text-green-400">
-              🤖 Contenu généré par IA
+              {t('contenu_genere_ia')}
             </div>
           )}
 
@@ -160,10 +172,10 @@ export default function ValidationItem({
                   </span>
                   <span className="text-xs px-2 py-1 rounded-full bg-slate-800">
                     {diagnostic.recommandations_json.segment.urgence === 'haute'
-                      ? '🔴 urgent'
+                      ? `🔴 ${t('urgent')}`
                       : diagnostic.recommandations_json.segment.urgence === 'basse'
-                      ? '🟢 pas pressé'
-                      : '🟠 moyen'}
+                      ? `🟢 ${t('pas_presse')}`
+                      : `🟠 ${t('moyen')}`}
                   </span>
                   <span className="text-xs px-2 py-1 rounded-full font-semibold bg-slate-800">
                     🔥 {diagnostic.recommandations_json.score}/100
@@ -175,7 +187,7 @@ export default function ValidationItem({
                   rel="noopener noreferrer"
                   className="text-xs text-accent underline"
                 >
-                  📄 Voir le rapport complet
+                  {t('voir_rapport_complet')}
                 </a>
               </div>
 
@@ -192,7 +204,7 @@ export default function ValidationItem({
               )}
 
               <div className="space-y-2">
-                <p className="text-xs text-slate-400 uppercase">Stratégie commerciale suggérée</p>
+                <p className="text-xs text-slate-400 uppercase">{t('strategie_suggeree')}</p>
                 {diagnostic.recommandations_json.recommandations.map((r, i) => (
                   <div key={i} className="text-sm">
                     <span className="font-semibold">{r.titre}</span>
@@ -210,7 +222,7 @@ export default function ValidationItem({
 
               {diagnostic.recommandations_json.contenuMarketing && (
                 <div className="space-y-1 border-t border-slate-800 pt-2">
-                  <p className="text-xs text-slate-400 uppercase">📣 Contenu marketing suggéré</p>
+                  <p className="text-xs text-slate-400 uppercase">{t('contenu_marketing_suggere')}</p>
                   <p className="text-sm font-semibold">
                     {diagnostic.recommandations_json.contenuMarketing.titre}
                   </p>
@@ -218,7 +230,7 @@ export default function ValidationItem({
                     {diagnostic.recommandations_json.contenuMarketing.accroche_linkedin}
                   </p>
                   <p className="text-xs text-slate-500">
-                    Format : {diagnostic.recommandations_json.contenuMarketing.format_suggere}
+                    {t('format_label')} : {diagnostic.recommandations_json.contenuMarketing.format_suggere}
                   </p>
                 </div>
               )}
@@ -226,7 +238,7 @@ export default function ValidationItem({
           )}
 
           <div className="space-y-2">
-            <label className="text-xs text-slate-400 uppercase">Titre</label>
+            <label className="text-xs text-slate-400 uppercase">{t('champ_titre')}</label>
             <input
               value={titre}
               onChange={(e) => setTitre(e.target.value)}
@@ -235,13 +247,13 @@ export default function ValidationItem({
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs text-slate-400 uppercase">Synthèse</label>
+            <label className="text-xs text-slate-400 uppercase">{t('champ_synthese')}</label>
             <RichTextEditor value={synthese} onChange={setSynthese} />
           </div>
 
           <div className="space-y-2">
             <label className="text-xs text-slate-400 uppercase">
-              Étapes ({diagnostic.json_ia_brouillon.methodologie})
+              {t('champ_etapes')} ({diagnostic.json_ia_brouillon.methodologie})
             </label>
             {etapes.map((etape, i) => (
               <div key={i} className="rounded-lg bg-slate-950 border border-slate-700 p-2 space-y-1">
@@ -261,9 +273,9 @@ export default function ValidationItem({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs text-slate-400 uppercase">Packs proposés</label>
+              <label className="text-xs text-slate-400 uppercase">{t('packs_proposes')}</label>
               <button onClick={ajouterPack} className="text-accent text-xs underline">
-                + Ajouter un pack
+                {t('ajouter_pack')}
               </button>
             </div>
             {packs.map((pack, i) => (
@@ -274,26 +286,26 @@ export default function ValidationItem({
                 <input
                   value={pack.nom}
                   onChange={(e) => majPack(i, 'nom', e.target.value)}
-                  placeholder="Nom du pack"
+                  placeholder={t('nom_du_pack')}
                   className="md:col-span-2 bg-transparent border-b border-slate-700 text-sm p-1"
                 />
                 <input
                   type="number"
                   value={pack.prix_indicatif}
                   onChange={(e) => majPack(i, 'prix_indicatif', e.target.value)}
-                  placeholder="Prix"
+                  placeholder={t('prix')}
                   className="bg-transparent border-b border-slate-700 text-sm p-1"
                 />
                 <button
                   onClick={() => supprimerPack(i)}
                   className="text-red-400 text-xs underline text-left"
                 >
-                  Supprimer
+                  {t('supprimer')}
                 </button>
                 <textarea
                   value={pack.description}
                   onChange={(e) => majPack(i, 'description', e.target.value)}
-                  placeholder="Description"
+                  placeholder={t('description_placeholder')}
                   className="md:col-span-4 bg-transparent text-slate-400 text-xs h-10"
                 />
               </div>
@@ -302,19 +314,19 @@ export default function ValidationItem({
 
           <div className="space-y-2">
             <label className="text-xs text-slate-400 uppercase">
-              💬 Votre commentaire personnalisé (optionnel — apparaît dans le rapport)
+              {t('commentaire_perso_label')}
             </label>
             <textarea
               value={commentaireExpert}
               onChange={(e) => setCommentaireExpert(e.target.value)}
-              placeholder="Ex : Je recommande de planifier cette session avant la rentrée de septembre..."
+              placeholder={t('commentaire_perso_placeholder')}
               className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
             />
           </div>
 
           <div className="space-y-2">
             <label className="text-xs text-slate-400 uppercase">
-              🌐 Langue du rapport envoyé au prospect
+              {t('langue_rapport_label')}
             </label>
             <select
               value={langueRapport}
@@ -332,7 +344,7 @@ export default function ValidationItem({
             disabled={envoi}
             className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50 hover:opacity-90 transition"
           >
-            {envoi ? 'Envoi en cours...' : '✅ Valider & Envoyer'}
+            {envoi ? t('envoi_en_cours') : t('valider_envoyer')}
           </button>
         </div>
       )}

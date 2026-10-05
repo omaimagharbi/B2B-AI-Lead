@@ -31,13 +31,15 @@ export async function POST(req: NextRequest) {
 
     const { data: clientUser } = await supabaseAdmin
       .from('client_users')
-      .select('client_id')
+      .select('client_id, clients(vertical_id)')
       .eq('auth_user_id', userData.user.id)
       .single()
 
     if (!clientUser) {
       return NextResponse.json({ error: 'Aucun cabinet associe' }, { status: 403 })
     }
+    // @ts-ignore - jointure Supabase typee dynamiquement
+    const verticalIdActif = clientUser.clients?.vertical_id as string | undefined
 
     const { contacts } = (await req.json()) as { contacts: ContactImporte[] }
     if (!Array.isArray(contacts) || contacts.length === 0) {
@@ -92,6 +94,7 @@ export async function POST(req: NextRequest) {
 
         return {
           client_id: clientUser.client_id,
+          vertical_id: verticalIdActif ?? null,
           nom: c.nom.trim(),
           telephone: c.telephone?.trim() || null,
           email: c.email?.trim() || null,

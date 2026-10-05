@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
 
     const { data: clientData } = await supabaseAdmin
       .from('clients')
-      .select('mode_ciblage')
+      .select('mode_ciblage, vertical_id')
       .eq('id', client_id)
       .single()
     const modeCiblage = clientData?.mode_ciblage === 'particulier' ? 'particulier' : 'entreprise'
@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
     const lignes = await Promise.all(
       contactsFiltres.map(async (c) => ({
         client_id,
+        vertical_id: clientData?.vertical_id ?? null,
         nom: c.nom,
         entreprise_ou_objectif: c.entreprise_ou_objectif ?? null,
         poste_ou_budget: c.poste_ou_budget ?? null,

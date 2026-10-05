@@ -10,12 +10,19 @@ function construirePrompt(params: {
   ideesRecues: string | null
   positionnement: string | null
   ligneEditoriale: string | null
+  langue: string
 }): string {
-  const { motsCles, ideesRecues, positionnement, ligneEditoriale } = params
+  const { motsCles, ideesRecues, positionnement, ligneEditoriale, langue } = params
+  const consigneLangue =
+    langue === 'en'
+      ? 'Respond in English, with concrete content specific to the industry (no vague generalities like "publish quality content").'
+      : langue === 'ar'
+      ? 'أجب باللغة العربية، بمحتوى ملموس وخاص بالقطاع (بدون عبارات عامة غامضة مثل "انشر محتوى جيدًا").'
+      : 'Reponds en francais, contenu concret et specifique au secteur (pas de generalites vagues type "publier du contenu de qualite").'
   return `Tu es strategiste content marketing B2B pour un cabinet de formation/conseil. Contexte du cabinet :
 ${positionnement ? `Positionnement : ${positionnement}` : ''}
 ${motsCles ? `Perimetre technique (rester dans ce cadre) : ${motsCles}` : ''}
-${ligneEditoriale ? `Ton observe sur ses reseaux : ${ligneEditoriale}` : ''}
+${ligneEditoriale ? `Ton observe sur ses reseaux : ${ligneEditoriale}` : "Aucune ligne editoriale reseaux precisee - adopte un ton professionnel et engageant par defaut pour ce secteur."}
 ${ideesRecues ? `Idees recues du marche a contrer : ${ideesRecues}` : "Pas d'idee recue precisee - deduis-en une ou deux plausibles pour ce secteur."}
 
 Genere deux livrables et renvoie UNIQUEMENT un JSON avec cette structure exacte, sans commentaire autour :
@@ -29,7 +36,7 @@ Genere deux livrables et renvoie UNIQUEMENT un JSON avec cette structure exacte,
     ... (2 a 4 entrees, une par idee recue/objection identifiee)
   ]
 }
-Reponds en francais, contenu concret et specifique au secteur (pas de generalites vagues type "publier du contenu de qualite").`
+${consigneLangue}`
 }
 
 async function genererAvecGemini(prompt: string, apiKey: string): Promise<string> {
@@ -75,7 +82,7 @@ export async function POST(req: NextRequest) {
 
   const { data: client } = await supabaseAdmin
     .from('clients')
-    .select('mots_cles_expertise, idees_recues_marche, positionnement_site, ligne_editoriale_reseaux')
+    .select('mots_cles_expertise, idees_recues_marche, positionnement_site, ligne_editoriale_reseaux, langue_preferee')
     .eq('id', auth.clientId)
     .single()
 
@@ -84,6 +91,7 @@ export async function POST(req: NextRequest) {
     ideesRecues: client?.idees_recues_marche ?? null,
     positionnement: client?.positionnement_site ?? null,
     ligneEditoriale: client?.ligne_editoriale_reseaux ?? null,
+    langue: client?.langue_preferee ?? 'fr',
   })
 
   const geminiKey = process.env.GEMINI_API_KEY

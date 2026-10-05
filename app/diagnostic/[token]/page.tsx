@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { traduire, type Langue } from '@/lib/i18n'
 
 type Etape = 'saisie' | 'envoi' | 'termine'
 type ModeCiblage = 'entreprise' | 'particulier'
@@ -9,6 +10,8 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
   const [etape, setEtape] = useState<Etape>('saisie')
   const [modeCiblage, setModeCiblage] = useState<ModeCiblage>('entreprise')
   const [erreur, setErreur] = useState<string | null>(null)
+  const [langue, setLangue] = useState<Langue>('fr')
+  const t = (cle: string) => traduire(langue, cle)
 
   // Questionnaire structure (au lieu d'une seule case libre) : de meilleures
   // reponses ici donnent un diagnostic bien plus precis a l'expert et a l'IA.
@@ -18,7 +21,8 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
   const [urgence, setUrgence] = useState('')
 
   // Suivi d'ouverture + recuperation du mode de ciblage (entreprise/particulier)
-  // pour adapter les questions posees.
+  // et de la langue preferee du cabinet (defaut d'affichage, modifiable par
+  // le prospect via le selecteur) pour adapter les questions posees.
   useEffect(() => {
     fetch('/api/diagnostic/ouverture', {
       method: 'POST',
@@ -28,6 +32,9 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
       .then((res) => res.json())
       .then((data) => {
         if (data?.mode_ciblage === 'particulier') setModeCiblage('particulier')
+        if (data?.langue_preferee === 'en' || data?.langue_preferee === 'ar') {
+          setLangue(data.langue_preferee)
+        }
       })
       .catch(() => {})
   }, [params.token])
@@ -40,14 +47,12 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
       const manques: string[] = []
       if (defi.trim().length < MIN_CARACTERES_DEFI) {
         manques.push(
-          `la description (encore ${MIN_CARACTERES_DEFI - defi.trim().length} caractère${
-            MIN_CARACTERES_DEFI - defi.trim().length > 1 ? 's' : ''
-          } minimum)`
+          `${t('diag_description_label_court')} (${t('diag_encore')} ${MIN_CARACTERES_DEFI - defi.trim().length} ${t('diag_caracteres_min_court')})`
         )
       }
-      if (!depuisQuand) manques.push('"Depuis combien de temps"')
-      if (!urgence) manques.push('"Niveau d\'urgence"')
-      setErreur(`Merci de compléter : ${manques.join(', ')}.`)
+      if (!depuisQuand) manques.push(t('diag_depuis_quand_court'))
+      if (!urgence) manques.push(t('diag_urgence_court'))
+      setErreur(`${t('diag_merci_completer')} ${manques.join(', ')}.`)
       return
     }
     setErreur(null)
@@ -55,7 +60,9 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
 
     // On combine les reponses en un texte structure envoye au backend (le
     // format de l'API ne change pas : une seule chaine "probleme"), mais
-    // desormais bien plus riche que "quelques mots".
+    // desormais bien plus riche que "quelques mots". Toujours redige en
+    // francais cote donnees internes (pour le prompt IA / le cabinet), quelle
+    // que soit la langue affichee au prospect.
     const probleme = [
       `Défi / objectif : ${defi.trim()}`,
       `Depuis quand : ${depuisQuand}`,
@@ -79,26 +86,38 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
       const data = await res.json()
 
       if (!res.ok) {
-        setErreur(data.error ?? 'Une erreur est survenue')
+        setErreur(data.error ?? t('diag_erreur_survenue'))
         setEtape('saisie')
         return
       }
 
       setEtape('termine')
     } catch {
-      setErreur('Le serveur met trop de temps à répondre. Merci de réessayer.')
+      setErreur(t('diag_serveur_trop_lent'))
       setEtape('saisie')
     }
   }
 
-  const libelleDefi =
-    modeCiblage === 'particulier'
-      ? "Quel est l'objectif ou le blocage que vous cherchez à résoudre ?"
-      : 'Quel est le principal défi que rencontre votre entreprise ou votre équipe ?'
+  const libelleDefi = modeCiblage === 'particulier' ? t('diag_defi_particulier') : t('diag_defi_entreprise')
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-4 py-10">
+    <main
+      className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-4 py-10"
+      dir={langue === 'ar' ? 'rtl' : 'ltr'}
+    >
       <div className="w-full max-w-2xl">
+        <div className="flex justify-end mb-3">
+          <select
+            value={langue}
+            onChange={(e) => setLangue(e.target.value as Langue)}
+            className="text-xs text-slate-400 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1"
+          >
+            <option value="fr">FR</option>
+            <option value="en">EN</option>
+            <option value="ar">AR</option>
+          </select>
+        </div>
+
         {erreur && (
           <div className="mb-4 text-center text-red-400 bg-red-950/40 border border-red-800 rounded-lg p-3">
             {erreur}
@@ -108,11 +127,8 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
         {etape === 'saisie' && (
           <div className="space-y-6">
             <div className="text-center space-y-2">
-              <h1 className="text-3xl md:text-4xl font-bold">Décrivez votre situation</h1>
-              <p className="text-slate-400">
-                Un expert étudiera votre dossier personnellement et vous recontactera avec une
-                solution sur-mesure.
-              </p>
+              <h1 className="text-3xl md:text-4xl font-bold">{t('diag_titre')}</h1>
+              <p className="text-slate-400">{t('diag_sous_titre')}</p>
             </div>
 
             <div className="space-y-4">
@@ -121,7 +137,7 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
                 <textarea
                   value={defi}
                   onChange={(e) => setDefi(e.target.value)}
-                  placeholder="Décrivez la situation avec le plus de détails possible..."
+                  placeholder={t('diag_defi_placeholder')}
                   className="w-full h-28 rounded-xl bg-slate-900 border border-slate-700 p-4 text-white placeholder-slate-500 focus:outline-none focus:border-accent"
                 />
                 <p
@@ -129,53 +145,45 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
                     defi.trim().length >= MIN_CARACTERES_DEFI ? 'text-slate-500' : 'text-amber-400'
                   }`}
                 >
-                  {defi.trim().length}/{MIN_CARACTERES_DEFI} caractères minimum
+                  {defi.trim().length}/{MIN_CARACTERES_DEFI} {t('diag_caracteres_min')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm text-slate-300">
-                  Depuis combien de temps rencontrez-vous cette situation ?
-                </label>
+                <label className="block text-sm text-slate-300">{t('diag_depuis_quand_label')}</label>
                 <select
                   value={depuisQuand}
                   onChange={(e) => setDepuisQuand(e.target.value)}
                   className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-white focus:outline-none focus:border-accent"
                 >
-                  <option value="">Sélectionner...</option>
-                  <option value="Moins d'1 mois">Moins d'1 mois</option>
-                  <option value="1 à 6 mois">1 à 6 mois</option>
-                  <option value="Plus de 6 mois">Plus de 6 mois</option>
+                  <option value="">{t('diag_selectionner')}</option>
+                  <option value="Moins d'1 mois">{t('diag_moins_1_mois')}</option>
+                  <option value="1 à 6 mois">{t('diag_1_a_6_mois')}</option>
+                  <option value="Plus de 6 mois">{t('diag_plus_6_mois')}</option>
                 </select>
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm text-slate-300">
-                  Qu'avez-vous déjà essayé pour y remédier ? (optionnel)
-                </label>
+                <label className="block text-sm text-slate-300">{t('diag_deja_essaye_label')}</label>
                 <textarea
                   value={dejaEssaye}
                   onChange={(e) => setDejaEssaye(e.target.value)}
-                  placeholder="Ex : formation en interne, prestataire externe, rien pour l'instant..."
+                  placeholder={t('diag_deja_essaye_placeholder')}
                   className="w-full h-20 rounded-xl bg-slate-900 border border-slate-700 p-4 text-white placeholder-slate-500 focus:outline-none focus:border-accent"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm text-slate-300">
-                  Quel est votre niveau d'urgence pour agir ?
-                </label>
+                <label className="block text-sm text-slate-300">{t('diag_urgence_label')}</label>
                 <select
                   value={urgence}
                   onChange={(e) => setUrgence(e.target.value)}
                   className="w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-white focus:outline-none focus:border-accent"
                 >
-                  <option value="">Sélectionner...</option>
-                  <option value="Pas pressé, j'explore">Pas pressé, j'explore</option>
-                  <option value="Modéré, dans les prochains mois">Modéré, dans les prochains mois</option>
-                  <option value="Urgent, je veux avancer rapidement">
-                    Urgent, je veux avancer rapidement
-                  </option>
+                  <option value="">{t('diag_selectionner')}</option>
+                  <option value="Pas pressé, j'explore">{t('diag_pas_presse')}</option>
+                  <option value="Modéré, dans les prochains mois">{t('diag_modere')}</option>
+                  <option value="Urgent, je veux avancer rapidement">{t('diag_urgent')}</option>
                 </select>
               </div>
             </div>
@@ -188,7 +196,7 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
                   : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
               }`}
             >
-              Envoyer à mon expert
+              {t('diag_envoyer_cta')}
             </button>
           </div>
         )}
@@ -196,18 +204,15 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
         {etape === 'envoi' && (
           <div className="text-center space-y-4">
             <div className="animate-spin h-10 w-10 border-4 border-accent border-t-transparent rounded-full mx-auto" />
-            <p className="text-slate-400">Transmission de votre dossier...</p>
+            <p className="text-slate-400">{t('diag_transmission')}</p>
           </div>
         )}
 
         {etape === 'termine' && (
           <div className="text-center space-y-4">
             <div className="text-5xl">✅</div>
-            <h1 className="text-2xl md:text-3xl font-bold">C'est envoyé !</h1>
-            <p className="text-slate-400 max-w-md mx-auto">
-              Votre expert étudie votre dossier et vous enverra votre solution personnalisée par
-              WhatsApp ou Email sous 72h maximum.
-            </p>
+            <h1 className="text-2xl md:text-3xl font-bold">{t('diag_cest_envoye')}</h1>
+            <p className="text-slate-400 max-w-md mx-auto">{t('diag_confirmation_desc')}</p>
           </div>
         )}
       </div>

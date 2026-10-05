@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
           'canaux_echoues, volume_equipe_commerciale, positionnement_site, ligne_editoriale_reseaux, ' +
           'mode_ciblage, secteur_activite, taille_entreprise, taille_min_salaries, taille_max_salaries, ' +
           'profil_particulier, portee_geographique, villes_ciblees, reseaux_actifs, blog_actif, ' +
-          'base_email_existante, budget_publicitaire, objectif_chiffre'
+          'base_email_existante, budget_publicitaire, objectif_chiffre, langue_preferee'
       )
       .eq('id', clientUser.client_id)
       .single()
@@ -237,6 +237,7 @@ export async function POST(req: NextRequest) {
       base_email_existante: string | null
       budget_publicitaire: string | null
       objectif_chiffre: string | null
+      langue_preferee: string | null
     } | null
 
     const { data: professionsData } = await supabaseAdmin
@@ -398,7 +399,13 @@ ${
       .filter(Boolean)
       .join('\n')
 
-    const prompt = `Tu es consultant en stratégie commerciale et marketing pour un cabinet de formation/conseil. Voici son profil de ciblage et ses données :\n\n${resumeProfil}\n\n${resumeCommercial}\n\n${resumeMarketing}\n\n${FORMAT_JSON_ATTENDU}`
+    const consigneLangue =
+      clientData?.langue_preferee === 'en'
+        ? '\n\nRespond in English for every text field of the JSON (values only, keep the JSON keys as given above).'
+        : clientData?.langue_preferee === 'ar'
+        ? '\n\nأجب باللغة العربية في كل الحقول النصية لهذا الـ JSON (القيم فقط، أبقِ مفاتيح الـ JSON كما هي أعلاه).'
+        : ''
+    const prompt = `Tu es consultant en stratégie commerciale et marketing pour un cabinet de formation/conseil. Voici son profil de ciblage et ses données :\n\n${resumeProfil}\n\n${resumeCommercial}\n\n${resumeMarketing}\n\n${FORMAT_JSON_ATTENDU}${consigneLangue}`
 
     const geminiKey = process.env.GEMINI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY

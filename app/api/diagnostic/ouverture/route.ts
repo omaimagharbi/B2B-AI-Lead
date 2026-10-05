@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
     const { data: diagnostic } = await supabaseAdmin
       .from('diagnostics')
-      .select('id, lien_ouvert_at, clients(mode_ciblage)')
+      .select('id, lien_ouvert_at, clients(mode_ciblage, langue_preferee)')
       .eq('token_acces', token)
       .single()
 
@@ -25,9 +25,11 @@ export async function POST(req: NextRequest) {
 
     // @ts-ignore - jointure Supabase typee dynamiquement
     const modeCiblage = diagnostic?.clients?.mode_ciblage ?? 'entreprise'
-    return NextResponse.json({ succes: true, mode_ciblage: modeCiblage })
+    // @ts-ignore - jointure Supabase typee dynamiquement
+    const languePreferee = diagnostic?.clients?.langue_preferee ?? 'fr'
+    return NextResponse.json({ succes: true, mode_ciblage: modeCiblage, langue_preferee: languePreferee })
   } catch {
     // Best-effort : on ne bloque jamais le prospect pour un souci de tracking
-    return NextResponse.json({ succes: true, mode_ciblage: 'entreprise' })
+    return NextResponse.json({ succes: true, mode_ciblage: 'entreprise', langue_preferee: 'fr' })
   }
 }

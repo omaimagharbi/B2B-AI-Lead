@@ -188,6 +188,7 @@ export async function POST(req: NextRequest) {
     onglets_autorises,
     verticals_autorises,
     secteur_activite,
+    vertical_slug,
   } = await req.json()
 
   if (!client_id) {
@@ -208,6 +209,24 @@ export async function POST(req: NextRequest) {
   if (onglets_autorises !== undefined) misAJour.onglets_autorises = onglets_autorises
   if (verticals_autorises !== undefined) misAJour.verticals_autorises = verticals_autorises
   if (secteur_activite !== undefined) misAJour.secteur_activite = secteur_activite
+
+  // Retour terrain : bug trouve ou un cabinet cree avec un secteur X se
+  // retrouvait silencieusement rattache a 'cabinet-formation' si ce
+  // secteur n'existait pas encore en base au moment de l'inscription (voir
+  // 67_verticals_seed_complet.sql). Cette option permet de corriger
+  // directement le secteur actif d'un cabinet deja cree, sans devoir le
+  // recreer.
+  if (vertical_slug !== undefined) {
+    const { data: verticalTrouve } = await supabaseAdmin
+      .from('verticals')
+      .select('id')
+      .eq('slug', vertical_slug)
+      .single()
+    if (!verticalTrouve) {
+      return NextResponse.json({ error: `Secteur '${vertical_slug}' introuvable en base` }, { status: 400 })
+    }
+    misAJour.vertical_id = verticalTrouve.id
+  }
 
   const { error } = await supabaseAdmin.from('clients').update(misAJour).eq('id', client_id)
 
