@@ -28,12 +28,18 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Manrope:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
+        />
+        {/* Applique le theme stocke avant le premier rendu pour eviter un flash clair/sombre */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem('pilobrain_theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}`,
+          }}
         />
       </head>
       <body>{children}</body>
