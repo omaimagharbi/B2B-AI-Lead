@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { traduire, type Langue } from '@/lib/i18n'
+import ThemeToggle from '@/components/ThemeToggle'
 
 type Profil = { titre: string; description: string; tag: string; dotColor: string; active: boolean }
 type Valeur = { emoji: string; titre: string; definition: string; pourquoi: string }
@@ -334,32 +335,36 @@ export default function Home() {
   const valeurs = VALEURS[langue]
 
   return (
-    <main className="min-h-screen bg-white text-ink font-sans antialiased" dir={langue === 'ar' ? 'rtl' : 'ltr'}>
+    <main
+      className="min-h-screen bg-white dark:bg-[#014B43] text-ink dark:text-[#F9ECE5] font-sans antialiased transition-colors"
+      dir={langue === 'ar' ? 'rtl' : 'ltr'}
+    >
       <div className="max-w-[1180px] mx-auto px-7">
         {/* NAVBAR */}
-        <nav className="flex items-center justify-between py-5 border-b border-slate-100">
+        <nav className="flex items-center justify-between py-5 border-b border-slate-100 dark:border-white/10">
           <div className="flex items-center gap-2.5">
             <div
               className="w-[34px] h-[34px] rounded-full relative"
               style={{ background: 'conic-gradient(#1F6F78, #F0CC7A, #0F2540, #1F6F78)' }}
             >
-              <div className="absolute inset-[6px] bg-white rounded-full" />
+              <div className="absolute inset-[6px] bg-white dark:bg-[#014B43] rounded-full" />
             </div>
             <div className="font-serif font-semibold text-[19px] tracking-tight">
               Pilo<span className="text-teal font-semibold">Brain</span>
             </div>
           </div>
-          <div className="hidden md:flex gap-7 text-[14.5px] text-[#4B5768]">
-            <a href="/" className="hover:text-ink">{t('accueil_nav')}</a>
-            <a href="#a-propos" className="hover:text-ink">{t('a_propos_nav')}</a>
-            <a href="/formation" className="hover:text-ink">{t('formation_nav')}</a>
-            <a href="/insights" className="hover:text-ink">{t('insights_nav')}</a>
+          <div className="hidden md:flex gap-7 text-[14.5px] text-[#4B5768] dark:text-[#C9DAD5]">
+            <a href="/" className="hover:text-ink dark:hover:text-white">{t('accueil_nav')}</a>
+            <a href="#a-propos" className="hover:text-ink dark:hover:text-white">{t('a_propos_nav')}</a>
+            <a href="/formation" className="hover:text-ink dark:hover:text-white">{t('formation_nav')}</a>
+            <a href="/insights" className="hover:text-ink dark:hover:text-white">{t('insights_nav')}</a>
           </div>
           <div className="flex items-center gap-3.5">
+            <ThemeToggle />
             <select
               value={langue}
               onChange={(e) => changerLangue(e.target.value as Langue)}
-              className="text-[13px] text-[#7C8794] border border-slate-300 rounded-lg px-2 py-1.5 bg-white hidden sm:inline-block"
+              className="text-[13px] text-[#7C8794] dark:text-[#C9DAD5] border border-slate-300 dark:border-white/15 rounded-lg px-2 py-1.5 bg-white dark:bg-white/5 hidden sm:inline-block"
             >
               <option value="fr">FR</option>
               <option value="en">EN</option>
@@ -367,13 +372,13 @@ export default function Home() {
             </select>
             <a
               href="/auth?mode=connexion"
-              className="text-sm px-4 py-2 rounded-lg border border-slate-300 bg-white text-ink hover:border-slate-400"
+              className="text-sm px-4 py-2 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-white/5 text-ink dark:text-[#F9ECE5] hover:border-slate-400"
             >
               {t('se_connecter_nav')}
             </a>
             <a
               href="/secteurs"
-              className="text-sm px-4 py-2 rounded-lg border-none bg-navy text-white font-semibold hover:bg-navy-deep"
+              className="text-sm px-4 py-2 rounded-lg border-none bg-navy dark:bg-[#F9ECE5] text-white dark:text-[#014B43] font-semibold hover:bg-navy-deep dark:hover:bg-white"
             >
               {t('sinscrire_nav')}
             </a>
@@ -383,25 +388,25 @@ export default function Home() {
         {/* HERO */}
         <section className="grid grid-cols-1 md:grid-cols-[1.05fr_.95fr] gap-14 items-center py-16 md:py-20">
           <div>
-            <span className="inline-flex items-center gap-2 text-[12.5px] tracking-wide uppercase text-teal bg-teal-light px-3 py-1.5 rounded-full font-bold">
+            <span className="inline-flex items-center gap-2 text-[12.5px] tracking-wide uppercase text-teal bg-teal-light dark:bg-white/10 dark:text-[#6FCF9E] px-3 py-1.5 rounded-full font-bold">
               ● {t('hero_badge')}
             </span>
-            <h1 className="font-serif italic font-medium text-[32px] md:text-[44px] leading-[1.14] mt-5 mb-5 text-navy-deep">
+            <h1 className="font-serif italic font-medium text-[32px] md:text-[44px] leading-[1.14] mt-5 mb-5 text-navy-deep dark:text-[#F9ECE5]">
               {t('hero_titre_1')} <span className="not-italic text-teal font-semibold">{t('hero_titre_2')}</span>,
               <br />
               {t('hero_titre_3')}
             </h1>
-            <p className="text-[16.5px] leading-relaxed text-[#4B5768] max-w-[480px] mb-7">{t('hero_description')}</p>
+            <p className="text-[16.5px] leading-relaxed text-[#4B5768] dark:text-[#C9DAD5] max-w-[480px] mb-7">{t('hero_description')}</p>
             <div className="flex flex-wrap gap-3 items-center">
               <a
                 href="/decouvrir"
-                className="text-sm px-[18px] py-[10px] rounded-lg bg-navy text-white font-semibold hover:bg-navy-deep"
+                className="text-sm px-[18px] py-[10px] rounded-lg bg-navy dark:bg-[#F9ECE5] text-white dark:text-[#014B43] font-semibold hover:bg-navy-deep dark:hover:bg-white"
               >
                 {t('decouvrir_cta')}
               </a>
               <a
                 href="/demo"
-                className="text-sm px-4 py-[9px] rounded-lg border border-slate-300 bg-white text-ink hover:border-slate-400"
+                className="text-sm px-4 py-[9px] rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-white/5 text-ink dark:text-[#F9ECE5] hover:border-slate-400"
               >
                 {t('voir_demo_cta')}
               </a>
@@ -446,28 +451,28 @@ export default function Home() {
         {/* COMMENT NOUS AIDONS */}
         <section id="a-propos" className="py-14 md:py-[70px]">
           <div className="max-w-[560px] mb-11">
-            <span className="text-[12.5px] tracking-widest uppercase text-teal font-bold">{t('pour_qui_label')}</span>
-            <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep">
+            <span className="text-[12.5px] tracking-widest uppercase text-teal dark:text-[#6FCF9E] font-bold">{t('pour_qui_label')}</span>
+            <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep dark:text-[#F9ECE5]">
               {t('moteur_metiers_titre')}
             </h2>
-            <p className="text-[#5B6675] text-[15.5px] leading-relaxed">{t('moteur_metiers_desc')}</p>
+            <p className="text-[#5B6675] dark:text-[#C9DAD5] text-[15.5px] leading-relaxed">{t('moteur_metiers_desc')}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {profils.map((profil) => (
               <div
                 key={profil.titre}
-                className="relative border border-slate-100 rounded-2xl p-6 bg-white transition hover:border-slate-300"
+                className="relative border border-slate-100 dark:border-white/10 rounded-2xl p-6 bg-white dark:bg-white/[0.04] transition hover:border-slate-300 dark:hover:border-white/20"
               >
                 {!profil.active && (
-                  <span className="absolute top-5 right-5 text-[10.5px] font-bold uppercase tracking-wide text-[#8892A0] bg-slate-100 px-2 py-1 rounded-full">
+                  <span className="absolute top-5 right-5 text-[10.5px] font-bold uppercase tracking-wide text-[#8892A0] dark:text-[#9FBDB5] bg-slate-100 dark:bg-white/10 px-2 py-1 rounded-full">
                     {t('bientot_badge')}
                   </span>
                 )}
                 <div className="w-[11px] h-[11px] rounded-[3px] mb-4" style={{ background: profil.dotColor }} />
-                <h3 className="font-serif text-[19px] font-semibold mb-2 text-navy-deep">{profil.titre}</h3>
-                <p className="text-sm leading-relaxed text-[#5B6675]">{profil.description}</p>
-                <span className="inline-block mt-3.5 text-[11.5px] font-bold uppercase tracking-wide text-[#8892A0]">
+                <h3 className="font-serif text-[19px] font-semibold mb-2 text-navy-deep dark:text-[#F9ECE5]">{profil.titre}</h3>
+                <p className="text-sm leading-relaxed text-[#5B6675] dark:text-[#C9DAD5]">{profil.description}</p>
+                <span className="inline-block mt-3.5 text-[11.5px] font-bold uppercase tracking-wide text-[#8892A0] dark:text-[#9FBDB5]">
                   {profil.tag}
                 </span>
               </div>
@@ -476,22 +481,22 @@ export default function Home() {
         </section>
 
         {/* NOS VALEURS */}
-        <section className="py-14 md:py-[70px] border-t border-slate-100">
+        <section className="py-14 md:py-[70px] border-t border-slate-100 dark:border-white/10">
           <div className="max-w-[560px] mb-11">
-            <span className="text-[12.5px] tracking-widest uppercase text-teal font-bold">{t('nos_valeurs_label')}</span>
-            <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep">
+            <span className="text-[12.5px] tracking-widest uppercase text-teal dark:text-[#6FCF9E] font-bold">{t('nos_valeurs_label')}</span>
+            <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep dark:text-[#F9ECE5]">
               {t('nos_valeurs_titre')}
             </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {valeurs.map((v) => (
-              <div key={v.titre} className="border border-slate-100 rounded-2xl p-6 bg-white transition hover:border-slate-300">
-                <h3 className="font-serif text-[17px] font-semibold mb-1.5 text-navy-deep">
+              <div key={v.titre} className="border border-slate-100 dark:border-white/10 rounded-2xl p-6 bg-white dark:bg-white/[0.04] transition hover:border-slate-300 dark:hover:border-white/20">
+                <h3 className="font-serif text-[17px] font-semibold mb-1.5 text-navy-deep dark:text-[#F9ECE5]">
                   {v.emoji} {v.titre}
                 </h3>
-                <p className="text-sm text-[#4B5768] mb-2 italic">{v.definition}</p>
-                <p className="text-sm leading-relaxed text-[#5B6675]">{v.pourquoi}</p>
+                <p className="text-sm text-[#4B5768] dark:text-[#C9DAD5] mb-2 italic">{v.definition}</p>
+                <p className="text-sm leading-relaxed text-[#5B6675] dark:text-[#C9DAD5]">{v.pourquoi}</p>
               </div>
             ))}
           </div>
