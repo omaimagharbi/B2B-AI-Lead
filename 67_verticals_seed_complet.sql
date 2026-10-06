@@ -89,7 +89,7 @@ business model, equipe fondatrice, etc.).'),
   if not exists (select 1 from verticals where slug = 'comptable-fiscal') then
     insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'comptable-fiscal', 'Comptable, Juridique & Fiscal', 'beta',
+      'comptable-fiscal', 'Comptable, Juridique & Fiscal', 'active',
       jsonb_build_object('system_prompt',
         'Tu es expert-comptable senior specialise dans l''accompagnement de dirigeants et particuliers
 sur leurs sujets comptables, juridiques et fiscaux. Un prospect decrit en une phrase sa situation ou
@@ -103,7 +103,7 @@ jamais de jargon de formation professionnelle ou de conseil generaliste.'),
   if not exists (select 1 from verticals where slug = 'services-generaux') then
     insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'services-generaux', 'Logistique & Services Généraux', 'beta',
+      'services-generaux', 'Logistique & Services Généraux', 'active',
       jsonb_build_object('system_prompt',
         'Tu es consultant senior en logistique, transit et services generaux aux entreprises. Un
 prospect decrit en une phrase son besoin (transport, maintenance, facility management, evenementiel
@@ -117,7 +117,7 @@ evenementiel, etc.), jamais de jargon de formation professionnelle ou de conseil
   if not exists (select 1 from verticals where slug = 'immobilier') then
     insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'immobilier', 'Immobilier', 'beta',
+      'immobilier', 'Immobilier', 'active',
       jsonb_build_object('system_prompt',
         'Tu es consultant senior en transactions immobilieres. Un prospect (acheteur, vendeur,
 investisseur locatif ou porteur de projet neuf) decrit en quelques mots son besoin. Tu dois generer

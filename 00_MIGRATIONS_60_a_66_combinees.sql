@@ -64,7 +64,7 @@ alter table outreach_campaigns add constraint outreach_campaigns_canal_check
   check (canal in ('whatsapp', 'email', 'linkedin', 'facebook'));
 
 
--- ============ 66 : Nouvelle verticale Immobilier (statut 'beta') ============
+-- ============ 66 : Nouvelle verticale Immobilier (statut 'active' - 'beta' refuse par la contrainte verticals_statut_check) ============
 do $$
 begin
   if not exists (select 1 from verticals where slug = 'immobilier') then
@@ -72,7 +72,7 @@ begin
     values (
       'immobilier',
       'Immobilier',
-      'beta',
+      'active',
       jsonb_build_object(
         'system_prompt',
         'Tu es consultant senior en transactions immobilieres. Un prospect (acheteur, vendeur,

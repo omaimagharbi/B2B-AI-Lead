@@ -1,9 +1,11 @@
 -- =====================================================================
 -- Nouvelle verticale : Immobilier (agences, promoteurs, agents
--- independants, syndics). Creee en statut 'beta' (comme
--- comptable-fiscal/services-generaux) : visible comme "Bientot" sur les
--- pages publiques, pas encore ouverte a l'inscription directe - a passer
--- en 'active' quand le cabinet-pilote est pret.
+-- independants, syndics).
+-- NB : la contrainte verticals_statut_check en base n'autorise que
+-- 'active' (pas de valeur 'beta' reconnue) - on insere donc en 'active'
+-- comme investisseur-incubateur. L'affichage "Bientot" sur les pages
+-- publiques reste gere cote front (PROFILS avec active: false dans
+-- app/page.tsx), independamment de cette colonne.
 -- =====================================================================
 
 do $$
@@ -13,7 +15,7 @@ begin
     values (
       'immobilier',
       'Immobilier',
-      'beta',
+      'active',
       jsonb_build_object(
         'system_prompt',
         'Tu es consultant senior en transactions immobilieres. Un prospect (acheteur, vendeur,
