@@ -33,9 +33,9 @@
 do $$
 begin
   if not exists (select 1 from verticals where slug = 'cabinet-formation') then
-    insert into verticals (slug, statut, prompt_ia_config, canaux_actifs)
+    insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'cabinet-formation', 'active',
+      'cabinet-formation', 'Cabinet de Formation', 'active',
       jsonb_build_object('system_prompt',
         'Tu es un consultant senior en formation professionnelle et developpement des competences.
 Un decideur (DRH ou Directeur) decrit en une phrase le probleme actuel de ses equipes.
@@ -45,9 +45,9 @@ Tu dois generer un diagnostic pedagogique structure, credible et actionnable.'),
   end if;
 
   if not exists (select 1 from verticals where slug = 'startup-saas') then
-    insert into verticals (slug, statut, prompt_ia_config, canaux_actifs)
+    insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'startup-saas', 'active',
+      'startup-saas', 'Startups & SaaS', 'active',
       jsonb_build_object('system_prompt',
         'Tu es un CTO/architecte logiciel senior specialise dans l''audit technique de startups SaaS.
 Un fondateur ou CTO decrit en une phrase le probleme technique actuel de son produit ou de son equipe.
@@ -58,9 +58,9 @@ Tu dois generer un audit technique structure, credible et actionnable, avec un v
   end if;
 
   if not exists (select 1 from verticals where slug = 'pme-services') then
-    insert into verticals (slug, statut, prompt_ia_config, canaux_actifs)
+    insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'pme-services', 'active',
+      'pme-services', 'PME de Services', 'active',
       jsonb_build_object('system_prompt',
         'Tu es un consultant senior en organisation et performance d''entreprise, specialise dans
 l''accompagnement des PME de services (agences, cabinets, prestataires B2B).
@@ -74,9 +74,9 @@ outils de gestion, etc.).'),
   end if;
 
   if not exists (select 1 from verticals where slug = 'investisseur-incubateur') then
-    insert into verticals (slug, statut, prompt_ia_config, canaux_actifs)
+    insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'investisseur-incubateur', 'active',
+      'investisseur-incubateur', 'Investisseurs & Incubateurs', 'active',
       jsonb_build_object('system_prompt',
         'Tu es analyste senior chez un fonds de capital-risque / incubateur. Un fondateur decrit en
 une phrase son projet ou sa startup. Tu dois generer une note de qualification structuree, credible
@@ -87,9 +87,9 @@ business model, equipe fondatrice, etc.).'),
   end if;
 
   if not exists (select 1 from verticals where slug = 'comptable-fiscal') then
-    insert into verticals (slug, statut, prompt_ia_config, canaux_actifs)
+    insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'comptable-fiscal', 'beta',
+      'comptable-fiscal', 'Comptable, Juridique & Fiscal', 'beta',
       jsonb_build_object('system_prompt',
         'Tu es expert-comptable senior specialise dans l''accompagnement de dirigeants et particuliers
 sur leurs sujets comptables, juridiques et fiscaux. Un prospect decrit en une phrase sa situation ou
@@ -101,9 +101,9 @@ jamais de jargon de formation professionnelle ou de conseil generaliste.'),
   end if;
 
   if not exists (select 1 from verticals where slug = 'services-generaux') then
-    insert into verticals (slug, statut, prompt_ia_config, canaux_actifs)
+    insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'services-generaux', 'beta',
+      'services-generaux', 'Logistique & Services Généraux', 'beta',
       jsonb_build_object('system_prompt',
         'Tu es consultant senior en logistique, transit et services generaux aux entreprises. Un
 prospect decrit en une phrase son besoin (transport, maintenance, facility management, evenementiel
@@ -115,9 +115,9 @@ evenementiel, etc.), jamais de jargon de formation professionnelle ou de conseil
   end if;
 
   if not exists (select 1 from verticals where slug = 'immobilier') then
-    insert into verticals (slug, statut, prompt_ia_config, canaux_actifs)
+    insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
-      'immobilier', 'beta',
+      'immobilier', 'Immobilier', 'beta',
       jsonb_build_object('system_prompt',
         'Tu es consultant senior en transactions immobilieres. Un prospect (acheteur, vendeur,
 investisseur locatif ou porteur de projet neuf) decrit en quelques mots son besoin. Tu dois generer

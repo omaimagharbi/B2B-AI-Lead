@@ -9,9 +9,10 @@
 do $$
 begin
   if not exists (select 1 from verticals where slug = 'immobilier') then
-    insert into verticals (slug, statut, prompt_ia_config, canaux_actifs)
+    insert into verticals (slug, nom_affiche, statut, prompt_ia_config, canaux_actifs)
     values (
       'immobilier',
+      'Immobilier',
       'beta',
       jsonb_build_object(
         'system_prompt',
