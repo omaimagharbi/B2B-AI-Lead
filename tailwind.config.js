@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class',
   content: [
     './app/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -15,6 +16,8 @@ module.exports = {
         'teal-light': '#E4F1F0',
         gold: '#F0CC7A',
         ink: '#101826',
+        cream: '#F9ECE5',
+        'deep-green': '#014B43',
       },
       fontFamily: {
         serif: ['Fraunces', 'serif'],
