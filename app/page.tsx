@@ -336,7 +336,7 @@ export default function Home() {
 
   return (
     <main
-      className="min-h-screen bg-white dark:bg-[#014B43] text-ink dark:text-[#F9ECE5] font-sans antialiased transition-colors"
+      className="min-h-screen bg-cream dark:bg-navy-deep text-ink dark:text-cream font-sans antialiased transition-colors"
       dir={langue === 'ar' ? 'rtl' : 'ltr'}
     >
       <div className="max-w-[1180px] mx-auto px-7">
@@ -347,7 +347,7 @@ export default function Home() {
               className="w-[34px] h-[34px] rounded-full relative"
               style={{ background: 'conic-gradient(#1F6F78, #F0CC7A, #0F2540, #1F6F78)' }}
             >
-              <div className="absolute inset-[6px] bg-white dark:bg-[#014B43] rounded-full" />
+              <div className="absolute inset-[6px] bg-white dark:bg-navy-deep rounded-full" />
             </div>
             <div className="font-serif font-semibold text-[19px] tracking-tight">
               Pilo<span className="text-teal font-semibold">Brain</span>
@@ -372,13 +372,13 @@ export default function Home() {
             </select>
             <a
               href="/auth?mode=connexion"
-              className="text-sm px-4 py-2 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-white/5 text-ink dark:text-[#F9ECE5] hover:border-slate-400"
+              className="text-sm px-4 py-2 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-white/5 text-ink dark:text-cream hover:border-slate-400"
             >
               {t('se_connecter_nav')}
             </a>
             <a
               href="/secteurs"
-              className="text-sm px-4 py-2 rounded-lg border-none bg-navy dark:bg-[#F9ECE5] text-white dark:text-[#014B43] font-semibold hover:bg-navy-deep dark:hover:bg-white"
+              className="text-sm px-4 py-2 rounded-lg border-none bg-navy dark:bg-cream text-white dark:text-navy-deep font-semibold hover:bg-navy-deep dark:hover:bg-white"
             >
               {t('sinscrire_nav')}
             </a>
@@ -391,7 +391,7 @@ export default function Home() {
             <span className="inline-flex items-center gap-2 text-[12.5px] tracking-wide uppercase text-teal bg-teal-light dark:bg-white/10 dark:text-[#6FCF9E] px-3 py-1.5 rounded-full font-bold">
               ● {t('hero_badge')}
             </span>
-            <h1 className="font-serif italic font-medium text-[32px] md:text-[44px] leading-[1.14] mt-5 mb-5 text-navy-deep dark:text-[#F9ECE5]">
+            <h1 className="font-serif italic font-medium text-[32px] md:text-[44px] leading-[1.14] mt-5 mb-5 text-navy-deep dark:text-cream">
               {t('hero_titre_1')} <span className="not-italic text-teal font-semibold">{t('hero_titre_2')}</span>,
               <br />
               {t('hero_titre_3')}
@@ -400,13 +400,13 @@ export default function Home() {
             <div className="flex flex-wrap gap-3 items-center">
               <a
                 href="/decouvrir"
-                className="text-sm px-[18px] py-[10px] rounded-lg bg-navy dark:bg-[#F9ECE5] text-white dark:text-[#014B43] font-semibold hover:bg-navy-deep dark:hover:bg-white"
+                className="text-sm px-[18px] py-[10px] rounded-lg bg-navy dark:bg-cream text-white dark:text-navy-deep font-semibold hover:bg-navy-deep dark:hover:bg-white"
               >
                 {t('decouvrir_cta')}
               </a>
               <a
                 href="/demo"
-                className="text-sm px-4 py-[9px] rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-white/5 text-ink dark:text-[#F9ECE5] hover:border-slate-400"
+                className="text-sm px-4 py-[9px] rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-white/5 text-ink dark:text-cream hover:border-slate-400"
               >
                 {t('voir_demo_cta')}
               </a>
@@ -452,7 +452,7 @@ export default function Home() {
         <section id="a-propos" className="py-14 md:py-[70px]">
           <div className="max-w-[560px] mb-11">
             <span className="text-[12.5px] tracking-widest uppercase text-teal dark:text-[#6FCF9E] font-bold">{t('pour_qui_label')}</span>
-            <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep dark:text-[#F9ECE5]">
+            <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep dark:text-cream">
               {t('moteur_metiers_titre')}
             </h2>
             <p className="text-[#5B6675] dark:text-[#C9DAD5] text-[15.5px] leading-relaxed">{t('moteur_metiers_desc')}</p>
@@ -470,7 +470,7 @@ export default function Home() {
                   </span>
                 )}
                 <div className="w-[11px] h-[11px] rounded-[3px] mb-4" style={{ background: profil.dotColor }} />
-                <h3 className="font-serif text-[19px] font-semibold mb-2 text-navy-deep dark:text-[#F9ECE5]">{profil.titre}</h3>
+                <h3 className="font-serif text-[19px] font-semibold mb-2 text-navy-deep dark:text-cream">{profil.titre}</h3>
                 <p className="text-sm leading-relaxed text-[#5B6675] dark:text-[#C9DAD5]">{profil.description}</p>
                 <span className="inline-block mt-3.5 text-[11.5px] font-bold uppercase tracking-wide text-[#8892A0] dark:text-[#9FBDB5]">
                   {profil.tag}
@@ -484,7 +484,7 @@ export default function Home() {
         <section className="py-14 md:py-[70px] border-t border-slate-100 dark:border-white/10">
           <div className="max-w-[560px] mb-11">
             <span className="text-[12.5px] tracking-widest uppercase text-teal dark:text-[#6FCF9E] font-bold">{t('nos_valeurs_label')}</span>
-            <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep dark:text-[#F9ECE5]">
+            <h2 className="font-serif text-[26px] md:text-[30px] font-medium mt-3 mb-2.5 text-navy-deep dark:text-cream">
               {t('nos_valeurs_titre')}
             </h2>
           </div>
@@ -492,7 +492,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {valeurs.map((v) => (
               <div key={v.titre} className="border border-slate-100 dark:border-white/10 rounded-2xl p-6 bg-white dark:bg-white/[0.04] transition hover:border-slate-300 dark:hover:border-white/20">
-                <h3 className="font-serif text-[17px] font-semibold mb-1.5 text-navy-deep dark:text-[#F9ECE5]">
+                <h3 className="font-serif text-[17px] font-semibold mb-1.5 text-navy-deep dark:text-cream">
                   {v.emoji} {v.titre}
                 </h3>
                 <p className="text-sm text-[#4B5768] dark:text-[#C9DAD5] mb-2 italic">{v.definition}</p>

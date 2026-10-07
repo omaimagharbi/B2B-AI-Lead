@@ -2217,7 +2217,7 @@ export default function DashboardPage() {
 
   if (chargement) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+      <main className="min-h-screen bg-deep-green text-white flex items-center justify-center">
         <p className="text-slate-400">Chargement...</p>
       </main>
     )
@@ -2225,7 +2225,7 @@ export default function DashboardPage() {
 
   if (!client) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+      <main className="min-h-screen bg-deep-green text-white flex items-center justify-center">
         <p className="text-slate-400">Impossible de charger votre compte.</p>
       </main>
     )
@@ -2233,7 +2233,7 @@ export default function DashboardPage() {
 
   if (!client.acces_active) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
+      <main className="min-h-screen bg-deep-green text-white flex items-center justify-center px-6">
         <div className="max-w-md text-center space-y-4">
           <div className="text-4xl">🔒</div>
           <h1 className="text-xl font-semibold">Compte en attente d'activation</h1>
@@ -2249,7 +2249,7 @@ export default function DashboardPage() {
 
   if (client.acces_active && !client.onboarding_complete && monRole === 'proprietaire') {
     return (
-      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-12">
+      <main className="min-h-screen bg-deep-green text-white flex items-center justify-center px-6 py-12">
         <div className="max-w-xl w-full space-y-6">
           <div className="text-center space-y-2">
             <div className="text-3xl">👋</div>
@@ -2400,7 +2400,7 @@ export default function DashboardPage() {
     })
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex flex-col md:flex-row" dir={dir}>
+    <main className="min-h-screen bg-deep-green text-white flex flex-col md:flex-row" dir={dir}>
       {detailCible && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-lg w-full space-y-4 max-h-[85vh] overflow-y-auto">
@@ -2495,7 +2495,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-500 uppercase font-semibold mb-1">{t('notes_titre')}</p>
                 <div className="space-y-1">
                   {notesCibles[detailCible.id].map((n, i) => (
-                    <p key={i} className="text-sm text-slate-300 bg-slate-950 rounded p-2">
+                    <p key={i} className="text-sm text-slate-300 bg-deep-green rounded p-2">
                       {n.contenu}
                     </p>
                   ))}
@@ -2521,7 +2521,7 @@ export default function DashboardPage() {
               onChange={(e) =>
                 setPrevisualisationEnvoi({ ...previsualisationEnvoi, texte: e.target.value })
               }
-              className="w-full h-40 rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
+              className="w-full h-40 rounded-lg bg-deep-green border border-slate-700 p-3 text-sm"
             />
             <div className="flex gap-2 justify-end">
               <button
@@ -2552,7 +2552,7 @@ export default function DashboardPage() {
             <textarea
               value={messageLinkedin}
               onChange={(e) => setMessageLinkedin(e.target.value)}
-              className="w-full h-40 rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
+              className="w-full h-40 rounded-lg bg-deep-green border border-slate-700 p-3 text-sm"
             />
             <div className="flex gap-2 justify-end">
               <button
@@ -2985,7 +2985,7 @@ export default function DashboardPage() {
                 value={nouvelleCible.nom}
                 onChange={(e) => setNouvelleCible({ ...nouvelleCible, nom: e.target.value })}
                 placeholder={t('champ_nom')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <input
                 value={nouvelleCible.entreprise_ou_objectif}
@@ -2993,7 +2993,7 @@ export default function DashboardPage() {
                   setNouvelleCible({ ...nouvelleCible, entreprise_ou_objectif: e.target.value })
                 }
                 placeholder={client.mode_ciblage === 'particulier' ? 'Objectif' : t('champ_entreprise')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <PhoneInput
                 indicatif={nouvelleCible.indicatifTelephone}
@@ -3006,12 +3006,12 @@ export default function DashboardPage() {
                 value={nouvelleCible.email}
                 onChange={(e) => setNouvelleCible({ ...nouvelleCible, email: e.target.value })}
                 placeholder={t('champ_email')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <select
                 value={nouvelleCible.country}
                 onChange={(e) => setNouvelleCible({ ...nouvelleCible, country: e.target.value })}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               >
                 {PAYS_DISPONIBLES.map((p) => (
                   <option key={p.code} value={p.code}>
@@ -3372,7 +3372,7 @@ export default function DashboardPage() {
                           )}
 
                           {cibleEditionOuverte === target.id && (
-                            <div className="mt-2 space-y-2 bg-slate-950 border border-slate-800 rounded-lg p-3">
+                            <div className="mt-2 space-y-2 bg-deep-green border border-slate-800 rounded-lg p-3">
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <input
                                   value={formEditionCible.nom}
@@ -3443,7 +3443,7 @@ export default function DashboardPage() {
                           )}
 
                           {cibleNotesOuverte === target.id && (
-                            <div className="mt-2 space-y-2 bg-slate-950 border border-slate-800 rounded-lg p-3">
+                            <div className="mt-2 space-y-2 bg-deep-green border border-slate-800 rounded-lg p-3">
                               <div className="flex gap-2">
                                 <input
                                   value={nouvelleNoteTexte}
@@ -3648,7 +3648,7 @@ export default function DashboardPage() {
                               )
                               setPopoverPipelineForm({ assigne_a: carte.assigne_a ?? '', consigne: '' })
                             }}
-                            className="rounded-lg border border-slate-700 bg-slate-950 p-2 cursor-grab active:cursor-grabbing space-y-1"
+                            className="rounded-lg border border-slate-700 bg-deep-green p-2 cursor-grab active:cursor-grabbing space-y-1"
                           >
                             <p className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
                               <button
@@ -3758,7 +3758,7 @@ export default function DashboardPage() {
                                       assigne_a: e.target.value,
                                     })
                                   }
-                                  className="w-full text-xs rounded-lg bg-slate-950 border border-slate-700 p-1.5"
+                                  className="w-full text-xs rounded-lg bg-deep-green border border-slate-700 p-1.5"
                                 >
                                   <option value="">{t('assigner_a')}</option>
                                   {membresEquipe.map((m) => (
@@ -3776,7 +3776,7 @@ export default function DashboardPage() {
                                     })
                                   }
                                   placeholder={t('consigne_placeholder')}
-                                  className="w-full text-xs rounded-lg bg-slate-950 border border-slate-700 p-1.5"
+                                  className="w-full text-xs rounded-lg bg-deep-green border border-slate-700 p-1.5"
                                   rows={2}
                                 />
                                 <div className="flex gap-2">
@@ -3945,7 +3945,7 @@ export default function DashboardPage() {
                   placeholder="+216 XX XXX XXX"
                   value={nouveauNumeroWhatsapp}
                   onChange={(e) => setNouveauNumeroWhatsapp(e.target.value)}
-                  className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="flex-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 />
                 <button
                   onClick={async () => {
@@ -3984,7 +3984,7 @@ export default function DashboardPage() {
                       .eq('id', client.id)
                     window.location.reload()
                   }}
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="w-full rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 >
                   {client.verticals_autorises.map((slug) => (
                     <option key={slug} value={slug}>
@@ -4004,7 +4004,7 @@ export default function DashboardPage() {
                   onChange={(e) => setEmailCabinet(e.target.value)}
                   placeholder="contact@cabinet.com"
                   type="email"
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="w-full rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 />
                 <button
                   onClick={enregistrerEmailCabinet}
@@ -4025,25 +4025,25 @@ export default function DashboardPage() {
                   value={presenceDigitale.site_web}
                   onChange={(e) => setPresenceDigitale({ ...presenceDigitale, site_web: e.target.value })}
                   placeholder={t('site_web_placeholder')}
-                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 />
                 <input
                   value={presenceDigitale.linkedin_url}
                   onChange={(e) => setPresenceDigitale({ ...presenceDigitale, linkedin_url: e.target.value })}
                   placeholder={t('page_linkedin_placeholder')}
-                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 />
                 <input
                   value={presenceDigitale.facebook_url}
                   onChange={(e) => setPresenceDigitale({ ...presenceDigitale, facebook_url: e.target.value })}
                   placeholder={t('page_facebook_placeholder')}
-                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 />
                 <input
                   value={presenceDigitale.instagram_url}
                   onChange={(e) => setPresenceDigitale({ ...presenceDigitale, instagram_url: e.target.value })}
                   placeholder={t('instagram_placeholder')}
-                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 />
               </div>
               <button
@@ -4149,7 +4149,7 @@ export default function DashboardPage() {
                     </div>
 
                     {ouvert && (
-                      <div className="border-t border-slate-800 p-3 space-y-3 bg-slate-950/60">
+                      <div className="border-t border-slate-800 p-3 space-y-3 bg-deep-green/60">
                         <div>
                           <label className="text-xs text-slate-500">{t('email_connexion_label')}</label>
                           <input
@@ -4300,14 +4300,14 @@ export default function DashboardPage() {
                 value={inviteNom}
                 onChange={(e) => setInviteNom(e.target.value)}
                 placeholder={t('nom_du_collegue')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <input
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder={t('email_du_collegue')}
                 type="email"
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <button
                 onClick={inviterMembre}
@@ -4320,7 +4320,7 @@ export default function DashboardPage() {
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as 'membre' | 'directeur_commercial')}
-                  className="md:col-span-3 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="md:col-span-3 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 >
                   <option value="membre">👤 Commercial</option>
                   <option value="directeur_commercial">🧭 Directeur commercial</option>
@@ -4421,7 +4421,7 @@ export default function DashboardPage() {
                     placeholder={t('serveur_imap_placeholder')}
                     value={imapForm.imap_host}
                     onChange={(e) => setImapForm({ ...imapForm, imap_host: e.target.value })}
-                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                    className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                   />
                   <input
                     type="number"
@@ -4430,7 +4430,7 @@ export default function DashboardPage() {
                     onChange={(e) =>
                       setImapForm({ ...imapForm, imap_port: Number(e.target.value) })
                     }
-                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                    className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                   />
                   <input
                     placeholder={t('adresse_email_placeholder')}
@@ -4438,7 +4438,7 @@ export default function DashboardPage() {
                     onChange={(e) =>
                       setImapForm({ ...imapForm, imap_utilisateur: e.target.value })
                     }
-                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                    className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                   />
                   <input
                     type="password"
@@ -4447,7 +4447,7 @@ export default function DashboardPage() {
                     onChange={(e) =>
                       setImapForm({ ...imapForm, imap_mot_de_passe: e.target.value })
                     }
-                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                    className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                   />
                 </div>
                 <label className="flex items-center gap-2 text-xs text-slate-400">
@@ -4524,7 +4524,7 @@ export default function DashboardPage() {
                               e.key === 'Enter' && repondreMessage(m.id, m.target_id!, m.canal)
                             }
                             placeholder={t('ecrire_reponse_placeholder')}
-                            className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                            className="flex-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                           />
                           <button
                             onClick={() => repondreMessage(m.id, m.target_id!, m.canal)}
@@ -4623,7 +4623,7 @@ export default function DashboardPage() {
                       }
                       type="number"
                       placeholder="Ex: 15"
-                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                     />
                   </div>
                   <div>
@@ -4640,7 +4640,7 @@ export default function DashboardPage() {
                         })
                       }
                       placeholder="Ex: Management Agile, Conduite du changement, RSE & Climat"
-                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                     />
                   </div>
                   <div>
@@ -4657,7 +4657,7 @@ export default function DashboardPage() {
                         })
                       }
                       placeholder="Ex: Mes prospects croient souvent qu'une certification PMP est trop théorique et inapplicable sur le terrain tunisien."
-                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                       rows={2}
                     />
                   </div>
@@ -4675,7 +4675,7 @@ export default function DashboardPage() {
                         })
                       }
                       placeholder={t('motifs_rejet_placeholder')}
-                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                       rows={2}
                     />
                   </div>
@@ -4693,7 +4693,7 @@ export default function DashboardPage() {
                         })
                       }
                       placeholder={t('canaux_echoues_placeholder')}
-                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                       rows={2}
                     />
                   </div>
@@ -4711,7 +4711,7 @@ export default function DashboardPage() {
                         })
                       }
                       placeholder={t('volume_equipe_placeholder')}
-                      className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                      className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                       rows={2}
                     />
                   </div>
@@ -4735,7 +4735,7 @@ export default function DashboardPage() {
                           }
                           type="number"
                           placeholder="20"
-                          className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                          className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                         />
                       </div>
                       <div>
@@ -4752,7 +4752,7 @@ export default function DashboardPage() {
                           }
                           type="number"
                           placeholder="100"
-                          className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                          className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                         />
                       </div>
                     </div>
@@ -4766,7 +4766,7 @@ export default function DashboardPage() {
                             portee_geographique: e.target.value,
                           })
                         }
-                        className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                        className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                       >
                         <option value="">{t('non_precise')}</option>
                         <option value="local">{t('local')}</option>
@@ -4788,7 +4788,7 @@ export default function DashboardPage() {
                             })
                           }
                           placeholder="Tunis, Sfax, Sousse"
-                          className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                          className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                         />
                       </div>
                     )}
@@ -4865,7 +4865,7 @@ export default function DashboardPage() {
                           })
                         }
                         placeholder={t('base_email_placeholder')}
-                        className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                        className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                       />
                     </div>
                     <div>
@@ -4878,7 +4878,7 @@ export default function DashboardPage() {
                             budget_publicitaire: e.target.value,
                           })
                         }
-                        className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                        className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                       >
                         <option value="">{t('non_precise')}</option>
                         <option value="organique">{t('organique_uniquement')}</option>
@@ -4899,12 +4899,12 @@ export default function DashboardPage() {
                           })
                         }
                         placeholder={t('objectifs_chiffres_placeholder')}
-                        className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                        className="w-full mt-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                       />
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
+                  <div className="rounded-lg border border-slate-800 bg-deep-green p-3 space-y-2">
                     <p className="text-xs font-semibold">{t('analyse_positionnement_titre')}</p>
                     <p className="text-[11px] text-slate-500">
                       {t('analyse_positionnement_desc')}
@@ -4965,7 +4965,7 @@ export default function DashboardPage() {
                           .eq('id', client.id)
                       }}
                       placeholder={t('ligne_editoriale_placeholder')}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs h-16"
+                      className="w-full rounded-lg bg-deep-green border border-slate-700 p-2 text-xs h-16"
                     />
                   </div>
                   <button
@@ -5278,7 +5278,7 @@ export default function DashboardPage() {
                               ? `${window.location.origin}/api/marketing/badge?token=${client.token_badge_public}`
                               : ''
                           }
-                          className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs text-slate-400"
+                          className="flex-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-xs text-slate-400"
                           onFocus={(e) => e.target.select()}
                         />
                         <button
@@ -5351,7 +5351,7 @@ export default function DashboardPage() {
                 value={nouvelleOffre.nom}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, nom: e.target.value })}
                 placeholder={vocabulairePourVertical(verticalSlug, langue).placeholderNomOffre}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <div className="flex gap-2">
                 <input
@@ -5359,12 +5359,12 @@ export default function DashboardPage() {
                   onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, prix: e.target.value })}
                   placeholder={t('prix_placeholder')}
                   type="number"
-                  className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="flex-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 />
                 <select
                   value={nouvelleOffre.devise}
                   onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, devise: e.target.value })}
-                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 >
                   <option value="TND">TND</option>
                   <option value="EUR">EUR</option>
@@ -5375,14 +5375,14 @@ export default function DashboardPage() {
                 value={nouvelleOffre.duree}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, duree: e.target.value })}
                 placeholder={t('duree_placeholder')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <select
                 value={nouvelleOffre.mode_facturation}
                 onChange={(e) =>
                   setNouvelleOffre({ ...nouvelleOffre, mode_facturation: e.target.value })
                 }
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               >
                 <option value="">{t('mode_facturation')}</option>
                 <option value="journee">{t('tarif_journalier')}</option>
@@ -5393,18 +5393,18 @@ export default function DashboardPage() {
                 value={nouvelleOffre.public_cible}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, public_cible: e.target.value })}
                 placeholder={t('public_vise')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <input
                 value={nouvelleOffre.thematique}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, thematique: e.target.value })}
                 placeholder={t('thematique_placeholder')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <select
                 value={nouvelleOffre.format}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, format: e.target.value })}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               >
                 <option value="">{t('format_optionnel')}</option>
                 <option value="inter_entreprise">{t('inter_entreprises')}</option>
@@ -5413,7 +5413,7 @@ export default function DashboardPage() {
               <select
                 value={nouvelleOffre.mode_delivrance}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, mode_delivrance: e.target.value })}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               >
                 <option value="">{t('mode_delivrance_optionnel')}</option>
                 <option value="presentiel">{t('presentiel_100')}</option>
@@ -5424,13 +5424,13 @@ export default function DashboardPage() {
                 value={nouvelleOffre.usp}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, usp: e.target.value })}
                 placeholder={t('usp_placeholder')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <textarea
                 value={nouvelleOffre.description}
                 onChange={(e) => setNouvelleOffre({ ...nouvelleOffre, description: e.target.value })}
                 placeholder={t('description_courte')}
-                className="md:col-span-2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
+                className="md:col-span-2 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm h-16"
               />
               <button
                 onClick={ajouterOffre}
@@ -5460,7 +5460,7 @@ export default function DashboardPage() {
                   <tbody>
                     {catalogue.map((o) => (
                       <Fragment key={o.id}>
-                      <tr className="border-t border-slate-800 bg-slate-950 align-top">
+                      <tr className="border-t border-slate-800 bg-deep-green align-top">
                         <td className="p-3">
                           <p className="font-semibold">{o.nom}</p>
                           {o.description && (
@@ -5551,7 +5551,7 @@ export default function DashboardPage() {
                                   setEditionOffreForm({ ...editionOffreForm, nom: e.target.value })
                                 }
                                 placeholder={t('champ_nom')}
-                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                               />
                               <input
                                 value={editionOffreForm.thematique}
@@ -5559,7 +5559,7 @@ export default function DashboardPage() {
                                   setEditionOffreForm({ ...editionOffreForm, thematique: e.target.value })
                                 }
                                 placeholder={t('col_thematique')}
-                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                               />
                               <input
                                 value={editionOffreForm.public_cible}
@@ -5567,14 +5567,14 @@ export default function DashboardPage() {
                                   setEditionOffreForm({ ...editionOffreForm, public_cible: e.target.value })
                                 }
                                 placeholder={t('public_cible_placeholder')}
-                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                               />
                               <select
                                 value={editionOffreForm.format}
                                 onChange={(e) =>
                                   setEditionOffreForm({ ...editionOffreForm, format: e.target.value })
                                 }
-                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                               >
                                 <option value="">{t('col_format')}</option>
                                 <option value="inter_entreprise">{t('inter_entreprises')}</option>
@@ -5588,7 +5588,7 @@ export default function DashboardPage() {
                                     mode_delivrance: e.target.value,
                                   })
                                 }
-                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                               >
                                 <option value="">{t('col_mode_delivrance')}</option>
                                 <option value="presentiel">{t('presentiel_100')}</option>
@@ -5603,14 +5603,14 @@ export default function DashboardPage() {
                                   }
                                   placeholder={t('prix')}
                                   type="number"
-                                  className="w-1/2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                  className="w-1/2 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                                 />
                                 <select
                                   value={editionOffreForm.devise}
                                   onChange={(e) =>
                                     setEditionOffreForm({ ...editionOffreForm, devise: e.target.value })
                                   }
-                                  className="w-1/2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                  className="w-1/2 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                                 >
                                   <option value="TND">TND</option>
                                   <option value="EUR">EUR</option>
@@ -5623,7 +5623,7 @@ export default function DashboardPage() {
                                   setEditionOffreForm({ ...editionOffreForm, duree: e.target.value })
                                 }
                                 placeholder={t('duree_label')}
-                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                               />
                               <input
                                 value={editionOffreForm.usp}
@@ -5631,7 +5631,7 @@ export default function DashboardPage() {
                                   setEditionOffreForm({ ...editionOffreForm, usp: e.target.value })
                                 }
                                 placeholder={t('usp_differenciation')}
-                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm md:col-span-2"
+                                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm md:col-span-2"
                               />
                               <textarea
                                 value={editionOffreForm.description}
@@ -5639,7 +5639,7 @@ export default function DashboardPage() {
                                   setEditionOffreForm({ ...editionOffreForm, description: e.target.value })
                                 }
                                 placeholder={t('description_placeholder')}
-                                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm md:col-span-3"
+                                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm md:col-span-3"
                                 rows={2}
                               />
                             </div>
@@ -5727,7 +5727,7 @@ export default function DashboardPage() {
                   onChange={(e) => setNouveauMessageEquipe(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && envoyerMessageEquipe()}
                   placeholder={t('ecrire_message_equipe')}
-                  className="flex-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="flex-1 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 />
                 <button
                   onClick={envoyerMessageEquipe}
@@ -5746,20 +5746,20 @@ export default function DashboardPage() {
                   value={nouvelleTache.titre}
                   onChange={(e) => setNouvelleTache({ ...nouvelleTache, titre: e.target.value })}
                   placeholder={t('titre_tache_placeholder')}
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="w-full rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 />
                 <textarea
                   value={nouvelleTache.description}
                   onChange={(e) => setNouvelleTache({ ...nouvelleTache, description: e.target.value })}
                   placeholder={t('description_optionnel')}
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="w-full rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                   rows={2}
                 />
                 <div className="flex gap-2 flex-wrap">
                   <select
                     value={nouvelleTache.assigne_a}
                     onChange={(e) => setNouvelleTache({ ...nouvelleTache, assigne_a: e.target.value })}
-                    className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                    className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                   >
                     <option value="">Assigner à...</option>
                     {membresEquipe.map((m) => (
@@ -5774,7 +5774,7 @@ export default function DashboardPage() {
                       type="date"
                       value={nouvelleTache.echeance}
                       onChange={(e) => setNouvelleTache({ ...nouvelleTache, echeance: e.target.value })}
-                      className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm text-slate-200"
+                      className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm text-slate-200"
                     />
                   </label>
                   <button
@@ -5834,7 +5834,7 @@ export default function DashboardPage() {
                           <select
                             value={t.statut}
                             onChange={(e) => majTache(t.id, { statut: e.target.value })}
-                            className="w-full text-xs rounded bg-slate-950 border border-slate-700 p-1"
+                            className="w-full text-xs rounded bg-deep-green border border-slate-700 p-1"
                           >
                             <option value="a_faire">{traduire(langue, 'statut_a_faire')}</option>
                             <option value="en_cours">{traduire(langue, 'statut_en_cours')}</option>
@@ -5987,7 +5987,7 @@ export default function DashboardPage() {
                 value={nouvelleEntree.titre}
                 onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, titre: e.target.value })}
                 placeholder={t('titre_evenement_placeholder')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <input
                 value={nouvelleEntree.date_evenement}
@@ -5995,14 +5995,14 @@ export default function DashboardPage() {
                   setNouvelleEntree({ ...nouvelleEntree, date_evenement: e.target.value })
                 }
                 type="date"
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <input
                 value={nouvelleEntree.heure_debut}
                 onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, heure_debut: e.target.value })}
                 type="time"
                 placeholder={t('heure_optionnel')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               {nouvelleEntree.heure_debut && (
                 <select
@@ -6010,7 +6010,7 @@ export default function DashboardPage() {
                   onChange={(e) =>
                     setNouvelleEntree({ ...nouvelleEntree, duree_minutes: e.target.value })
                   }
-                  className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                  className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
                 >
                   <option value="15">15 min</option>
                   <option value="30">30 min</option>
@@ -6024,7 +6024,7 @@ export default function DashboardPage() {
                 value={nouvelleEntree.lieu}
                 onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, lieu: e.target.value })}
                 placeholder={t('lieu_placeholder')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <select
                 value={nouvelleEntree.type}
@@ -6034,7 +6034,7 @@ export default function DashboardPage() {
                     type: e.target.value as CalendrierEntree['type'],
                   })
                 }
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               >
                 <option value="rdv">{t('rdv_client')}</option>
                 <option value="evenement">{t('evenement_label')}</option>
@@ -6045,7 +6045,7 @@ export default function DashboardPage() {
                 value={nouvelleEntree.lien}
                 onChange={(e) => setNouvelleEntree({ ...nouvelleEntree, lien: e.target.value })}
                 placeholder={t('lien_optionnel')}
-                className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                className="rounded-lg bg-deep-green border border-slate-700 p-2 text-sm"
               />
               <textarea
                 value={nouvelleEntree.description}
@@ -6053,7 +6053,7 @@ export default function DashboardPage() {
                   setNouvelleEntree({ ...nouvelleEntree, description: e.target.value })
                 }
                 placeholder={t('notes_optionnel')}
-                className="md:col-span-2 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
+                className="md:col-span-2 rounded-lg bg-deep-green border border-slate-700 p-2 text-sm h-16"
               />
               <button
                 onClick={ajouterEntreeCalendrier}
@@ -6110,19 +6110,19 @@ export default function DashboardPage() {
                   <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
                     <button
                       onClick={() => setVueCalendrier('mois')}
-                      className={`px-3 py-1 ${vueCalendrier === 'mois' ? 'bg-accent text-slate-950 font-semibold' : 'bg-slate-950 text-slate-400'}`}
+                      className={`px-3 py-1 ${vueCalendrier === 'mois' ? 'bg-accent text-slate-950 font-semibold' : 'bg-deep-green text-slate-400'}`}
                     >
                       {t('vue_mois')}
                     </button>
                     <button
                       onClick={() => setVueCalendrier('semaine')}
-                      className={`px-3 py-1 ${vueCalendrier === 'semaine' ? 'bg-accent text-slate-950 font-semibold' : 'bg-slate-950 text-slate-400'}`}
+                      className={`px-3 py-1 ${vueCalendrier === 'semaine' ? 'bg-accent text-slate-950 font-semibold' : 'bg-deep-green text-slate-400'}`}
                     >
                       {t('vue_semaine')}
                     </button>
                     <button
                       onClick={() => setVueCalendrier('jour')}
-                      className={`px-3 py-1 ${vueCalendrier === 'jour' ? 'bg-accent text-slate-950 font-semibold' : 'bg-slate-950 text-slate-400'}`}
+                      className={`px-3 py-1 ${vueCalendrier === 'jour' ? 'bg-accent text-slate-950 font-semibold' : 'bg-deep-green text-slate-400'}`}
                     >
                       {t('vue_jour')}
                     </button>
@@ -6171,7 +6171,7 @@ export default function DashboardPage() {
                             setNouvelleEntree((prev) => ({ ...prev, date_evenement: dateStr }))
                           }}
                           className={`min-h-[70px] rounded-lg border p-1 text-xs cursor-pointer transition ${
-                            dansLeMois ? 'border-slate-700 bg-slate-950 hover:border-accent/60' : 'border-slate-800 bg-slate-900 opacity-40'
+                            dansLeMois ? 'border-slate-700 bg-deep-green hover:border-accent/60' : 'border-slate-800 bg-slate-900 opacity-40'
                           } ${estAujourdhui ? 'ring-1 ring-accent' : ''} ${
                             jourSelectionne === dateStr ? 'border-accent ring-1 ring-accent' : ''
                           }`}
@@ -6236,7 +6236,7 @@ export default function DashboardPage() {
                         (c) => c.date_evenement === dateStr && !c.heure_debut
                       )
                       return (
-                        <div key={dateStr} className="border border-slate-800 bg-slate-950 p-0.5 space-y-0.5 min-h-[24px]">
+                        <div key={dateStr} className="border border-slate-800 bg-deep-green p-0.5 space-y-0.5 min-h-[24px]">
                           {entreesSansHeure.map((c) => (
                             <div key={c.id} title={c.titre} className="truncate rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-200">
                               {c.type === 'rdv' ? '📞' : c.type === 'evenement' ? '🎪' : c.type === 'appel_offre' ? '📋' : '📌'} {c.titre}
@@ -6269,7 +6269,7 @@ export default function DashboardPage() {
                                   heure_debut: `${String(heure).padStart(2, '0')}:00`,
                                 }))
                               }}
-                              className="border border-slate-800 bg-slate-950 hover:bg-slate-900 cursor-pointer p-0.5 space-y-0.5 min-h-[32px]"
+                              className="border border-slate-800 bg-deep-green hover:bg-slate-900 cursor-pointer p-0.5 space-y-0.5 min-h-[32px]"
                             >
                               {entreesHeure.map((c) => (
                                 <div
@@ -6331,7 +6331,7 @@ export default function DashboardPage() {
                                 heure_debut: `${String(heure).padStart(2, '0')}:00`,
                               }))
                             }}
-                            className="border border-slate-800 bg-slate-950 hover:bg-slate-900 cursor-pointer p-1 space-y-0.5 min-h-[36px]"
+                            className="border border-slate-800 bg-deep-green hover:bg-slate-900 cursor-pointer p-1 space-y-0.5 min-h-[36px]"
                           >
                             {entreesHeure.map((c) => (
                               <div
