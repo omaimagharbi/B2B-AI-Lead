@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import PhoneInput from '@/components/PhoneInput'
+import ThemeToggle from '@/components/ThemeToggle'
 
 type EtapeInscription = 1 | 2 | 3 | 4
 
@@ -305,6 +306,7 @@ function AuthForm() {
   if (equipeCreee.length > 0) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4">
+        <ThemeToggle className="fixed top-4 right-4 z-40" />
         <div className="w-full max-w-md space-y-6 text-center">
           <h1 className="text-2xl font-bold">✅ Compte créé !</h1>
           <p className="text-slate-400 text-sm">
@@ -349,6 +351,7 @@ function AuthForm() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4 py-10">
+        <ThemeToggle className="fixed top-4 right-4 z-40" />
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">

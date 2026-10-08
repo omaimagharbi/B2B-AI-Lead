@@ -38,8 +38,10 @@ import {
   CalendarDays,
   TrendingUp,
   Users,
+  User,
   type LucideIcon,
 } from 'lucide-react'
+import ThemeToggle from '@/components/ThemeToggle'
 
 const ROLE_LABELS: Record<string, string> = {
   proprietaire: 'Propriétaire',
@@ -2589,7 +2591,7 @@ export default function DashboardPage() {
         </div>
       )}
       {/* BARRE LATERALE GAUCHE */}
-      <aside className="md:w-60 shrink-0 bg-deep-green flex flex-col">
+      <aside className="keep-theme md:w-60 shrink-0 bg-deep-green dark:bg-slate-900 flex flex-col">
         <div className="px-5 py-5">
           <div className="flex items-center gap-3 mb-4">
             {client.logo_url ? (
@@ -2663,7 +2665,7 @@ export default function DashboardPage() {
                 const reponsesATraiter = targets.filter((tg) => tg.reponse_a_traiter).length
                 const total = mesTachesEnAttente + messagesNonLus + diagnosticsAValider + reponsesATraiter
                 return total > 0 ? (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-[#fff] text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                     {total > 9 ? '9+' : total}
                   </span>
                 ) : null
@@ -2698,7 +2700,7 @@ export default function DashboardPage() {
                       className="w-full flex items-center justify-between text-left text-sm px-3 py-2 rounded-lg hover:bg-slate-800"
                     >
                       <span>{i.label}</span>
-                      <span className="bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      <span className="bg-red-500 text-[#fff] text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
                         {i.count}
                       </span>
                     </button>
@@ -2707,8 +2709,9 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          <a href="/dashboard/profil" className="text-sm text-slate-400 hover:text-white flex items-center gap-1">
-            👤 Mon profil
+          <ThemeToggle />
+          <a href="/dashboard/profil" className="text-sm text-slate-400 hover:text-white flex items-center gap-1.5">
+            <User size={15} className="text-sky-300" /> Mon profil
           </a>
           <select
             value={client.langue_preferee}
@@ -6536,11 +6539,11 @@ export default function DashboardPage() {
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
                     <ResponsiveContainer width="100%" height={260}>
                       <LineChart data={jours}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--c-slate-800))" />
                         <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} interval={4} />
                         <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
                         <Tooltip
-                          contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 12 }}
+                          contentStyle={{ background: 'rgb(var(--c-slate-900))', border: '1px solid rgb(var(--c-slate-700))', color: 'rgb(var(--c-white))', fontSize: 12 }}
                         />
                         <Legend wrapperStyle={{ fontSize: 12 }} />
                         <Line
@@ -6580,7 +6583,7 @@ export default function DashboardPage() {
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
                     <ResponsiveContainer width="100%" height={280}>
                       <BarChart data={donnees} layout="vertical" margin={{ left: 24 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--c-slate-800))" />
                         <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
                         <YAxis
                           type="category"
@@ -6589,7 +6592,7 @@ export default function DashboardPage() {
                           width={140}
                         />
                         <Tooltip
-                          contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 12 }}
+                          contentStyle={{ background: 'rgb(var(--c-slate-900))', border: '1px solid rgb(var(--c-slate-700))', color: 'rgb(var(--c-white))', fontSize: 12 }}
                         />
                         <Bar dataKey="total" fill="#818cf8" radius={[0, 4, 4, 0]} />
                       </BarChart>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import ThemeToggle from '@/components/ThemeToggle'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -39,6 +40,7 @@ export default function ResetPasswordPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4">
+      <ThemeToggle className="fixed top-4 right-4 z-40" />
       <div className="w-full max-w-md space-y-6">
         <h1 className="text-2xl font-bold text-center">Nouveau mot de passe</h1>
 
