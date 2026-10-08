@@ -54,7 +54,7 @@ export default async function RapportPage({ params }: { params: { token: string 
   const { rapport, client, score } = donnees
 
   return (
-    <main className="min-h-screen bg-white text-slate-900 px-6 py-10 print:p-0">
+    <main className="keep-theme min-h-screen bg-white text-slate-900 px-6 py-10 print:p-0">
       <div className="max-w-2xl mx-auto space-y-8">
         <div className="flex items-center justify-between print:hidden">
           <span className="text-sm text-slate-500">Rapport confidentiel</span>

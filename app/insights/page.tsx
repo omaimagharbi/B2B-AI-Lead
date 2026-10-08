@@ -6,7 +6,7 @@ const articles: { titre: string; resume: string; date: string }[] = []
 
 export default function InsightsPage() {
   return (
-    <main className="min-h-screen bg-white text-ink font-sans antialiased">
+    <main className="keep-theme min-h-screen bg-white text-ink font-sans antialiased">
       <div className="max-w-[900px] mx-auto px-6 py-16">
         <nav className="flex items-center justify-between mb-14">
           <a href="/" className="flex items-center gap-2.5">

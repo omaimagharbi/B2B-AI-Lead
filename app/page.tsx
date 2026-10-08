@@ -336,7 +336,7 @@ export default function Home() {
 
   return (
     <main
-      className="min-h-screen bg-cream dark:bg-navy-deep text-ink dark:text-cream font-sans antialiased transition-colors"
+      className="keep-theme min-h-screen bg-cream dark:bg-navy-deep text-ink dark:text-cream font-sans antialiased transition-colors"
       dir={langue === 'ar' ? 'rtl' : 'ltr'}
     >
       <div className="max-w-[1180px] mx-auto px-7">

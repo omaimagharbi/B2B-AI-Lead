@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { SOUS_SECTEURS_PAR_VERTICAL, traduireSousSecteur } from '@/lib/sous-secteurs'
 import { traduire, type Langue } from '@/lib/i18n'
+import ThemeToggle from '@/components/ThemeToggle'
 
 type Carte = { slug: string; titre: string; description: string; dotColor: string; active: boolean }
 
@@ -113,12 +114,15 @@ export default function Secteurs() {
               Pilo<span className="text-teal font-semibold">Brain</span>
             </div>
           </a>
-          <a
-            href="/auth"
-            className="text-sm px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white hover:border-slate-500"
-          >
-            {t('se_connecter_nav')}
-          </a>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <a
+              href="/auth"
+              className="text-sm px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white hover:border-slate-500"
+            >
+              {t('se_connecter_nav')}
+            </a>
+          </div>
         </nav>
 
         {/* EN-TÊTE */}
