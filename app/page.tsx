@@ -58,6 +58,13 @@ const PROFILS: Record<Langue, Profil[]> = {
       dotColor: '#8892A0',
       active: false,
     },
+    {
+      titre: 'Immobilier',
+      description: 'Agences, promoteurs, agents indépendants, syndics : acheteurs et vendeurs qualifiés livrés dans votre pipeline.',
+      tag: 'Immobilier',
+      dotColor: '#8892A0',
+      active: false,
+    },
   ],
   en: [
     {
@@ -106,6 +113,13 @@ const PROFILS: Record<Langue, Profil[]> = {
       dotColor: '#8892A0',
       active: false,
     },
+    {
+      titre: 'Real Estate',
+      description: 'Agencies, developers, independent agents, property managers: qualified buyers and sellers delivered to your pipeline.',
+      tag: 'Real estate',
+      dotColor: '#8892A0',
+      active: false,
+    },
   ],
   ar: [
     {
@@ -147,6 +161,13 @@ const PROFILS: Record<Langue, Profil[]> = {
       titre: 'اللوجستيات والنقل والخدمات العامة',
       description: 'وكلاء الشحن، الصيانة الصناعية، إدارة المرافق، فعاليات B2B.',
       tag: 'لوجستيات',
+      dotColor: '#8892A0',
+      active: false,
+    },
+    {
+      titre: 'العقارات',
+      description: 'وكالات، مطورون، وكلاء مستقلون، مديرو العقارات: مشترون وبائعون مؤهلون في قناة مبيعاتك.',
+      tag: 'عقارات',
       dotColor: '#8892A0',
       active: false,
     },
@@ -378,7 +399,7 @@ export default function Home() {
             </a>
             <a
               href="/secteurs"
-              className="text-sm px-4 py-2 rounded-lg border-none bg-navy dark:bg-cream text-white dark:text-navy-deep font-semibold hover:bg-navy-deep dark:hover:bg-white"
+              className="text-sm px-4 py-2 rounded-lg border border-slate-300 dark:border-transparent bg-white dark:bg-cream text-ink dark:text-navy-deep font-semibold hover:border-slate-400 dark:hover:bg-white"
             >
               {t('sinscrire_nav')}
             </a>
@@ -400,7 +421,7 @@ export default function Home() {
             <div className="flex flex-wrap gap-3 items-center">
               <a
                 href="/decouvrir"
-                className="text-sm px-[18px] py-[10px] rounded-lg bg-navy dark:bg-cream text-white dark:text-navy-deep font-semibold hover:bg-navy-deep dark:hover:bg-white"
+                className="text-sm px-[18px] py-[10px] rounded-lg border border-slate-300 dark:border-transparent bg-white dark:bg-cream text-ink dark:text-navy-deep font-semibold hover:border-slate-400 dark:hover:bg-white"
               >
                 {t('decouvrir_cta')}
               </a>

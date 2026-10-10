@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { traduire, type Langue } from '@/lib/i18n'
+import ThemeToggle from '@/components/ThemeToggle'
 
 type Etape = 'saisie' | 'envoi' | 'termine'
 type ModeCiblage = 'entreprise' | 'particulier'
@@ -106,7 +107,8 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
       dir={langue === 'ar' ? 'rtl' : 'ltr'}
     >
       <div className="w-full max-w-2xl">
-        <div className="flex justify-end mb-3">
+        <div className="flex justify-end items-center gap-2 mb-3">
+          <ThemeToggle />
           <select
             value={langue}
             onChange={(e) => setLangue(e.target.value as Langue)}

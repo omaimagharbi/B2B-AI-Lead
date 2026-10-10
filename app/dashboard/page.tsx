@@ -437,6 +437,8 @@ export default function DashboardPage() {
   const [estAdmin, setEstAdmin] = useState(false)
   const [monClientUserId, setMonClientUserId] = useState<string | null>(null)
   const [monRole, setMonRole] = useState<string | null>(null)
+  const [monPhotoUrl, setMonPhotoUrl] = useState<string | null>(null)
+  const [monNomComplet, setMonNomComplet] = useState<string | null>(null)
   const [filtreAssignation, setFiltreAssignation] = useState<'toutes' | 'mes-cibles'>('toutes')
   const [statsPerformance, setStatsPerformance] = useState<StatsPerformance>({
     nbMessagesEnvoyes: 0,
@@ -723,7 +725,7 @@ export default function DashboardPage() {
 
       const { data: clientUser } = await supabase
         .from('client_users')
-        .select('id, client_id, role, onglets_masques')
+        .select('id, client_id, role, onglets_masques, photo_url, nom_complet')
         .eq('auth_user_id', userData.user.id)
         .single()
 
@@ -733,6 +735,8 @@ export default function DashboardPage() {
       }
       setMonClientUserId(clientUser.id)
       setMonRole(clientUser.role ?? 'membre')
+      setMonPhotoUrl((clientUser as { photo_url?: string | null }).photo_url ?? null)
+      setMonNomComplet((clientUser as { nom_complet?: string | null }).nom_complet ?? null)
       setMesOngletsMasques((clientUser.onglets_masques as string[]) ?? [])
 
       const { data: clientData } = await supabase
@@ -2591,40 +2595,74 @@ export default function DashboardPage() {
         </div>
       )}
       {/* BARRE LATERALE GAUCHE */}
-      <aside className="keep-theme md:w-60 shrink-0 bg-deep-green dark:bg-slate-900 flex flex-col">
-        <div className="px-5 py-5">
-          <div className="flex items-center gap-3 mb-4">
+            <aside className="keep-theme md:w-60 shrink-0 bg-deep-green dark:bg-slate-900 flex flex-col">
+        {/* Logo plateforme : meme hauteur que la barre du haut a droite */}
+        <a href="/" className="h-[72px] px-5 flex items-center gap-2.5 shrink-0">
+          <div
+            className="w-[30px] h-[30px] rounded-full relative"
+            style={{ background: 'conic-gradient(#1F6F78, #F0CC7A, #0F2540, #1F6F78)' }}
+          >
+            <div className="absolute inset-[5px] rounded-full bg-deep-green dark:bg-slate-900" />
+          </div>
+          <span className="font-serif font-semibold text-[18px] tracking-tight text-white">
+            Pilo<span className="text-gold">Brain</span>
+          </span>
+        </a>
+
+        {/* Carte profil : cadre couverture = logo de l'entreprise, cercle = photo de l'utilisateur */}
+        <div className="mx-3 mb-3 rounded-2xl bg-white/[0.06] overflow-hidden">
+          <div className="h-20 bg-white/10 flex items-center justify-center">
             {client.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={client.logo_url}
                 alt={client.nom_entreprise}
-                className="w-11 h-11 rounded-full object-cover shrink-0"
+                className="max-h-14 max-w-[75%] object-contain rounded-md bg-white p-1.5"
               />
             ) : (
-              <div className="w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center text-base font-bold shrink-0">
-                {client.nom_entreprise?.charAt(0).toUpperCase() || '?'}
-              </div>
+              <button
+                type="button"
+                onClick={() => setOngletActif('equipe')}
+                className="text-[11px] text-white/60 hover:text-white border border-dashed border-white/30 rounded-lg px-3 py-2"
+              >
+                + Logo de l&apos;entreprise
+              </button>
             )}
-            <div className="min-w-0">
-              <h1 className="text-sm font-bold leading-tight truncate text-white">{client.nom_entreprise}</h1>
-              <p className="text-white/60 text-[11px] truncate">
-                {monRole ? (ROLE_LABELS[monRole] ?? monRole) : ''}
-                {client.email ? ` · ${client.email}` : ''}
-              </p>
-            </div>
           </div>
-          <p className="text-white/50 text-xs">
-            {t('statut')} : <span className="text-sky-300">{client.statut_abonnement}</span>
-          </p>
-          {estAdmin && (
-            <a
-              href="/admin"
-              className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-white/10 text-sky-300"
-            >
-              Vous êtes admin — voir tous les cabinets →
-            </a>
-          )}
+          <div className="px-3 pb-3">
+            <div className="-mt-6 mb-2">
+              {monPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={monPhotoUrl}
+                  alt={monNomComplet ?? client.email ?? ''}
+                  className="w-12 h-12 rounded-full object-cover ring-2 ring-deep-green dark:ring-slate-900"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-[#F9ECE5] text-deep-green flex items-center justify-center text-base font-bold ring-2 ring-deep-green dark:ring-slate-900">
+                  {(monNomComplet ?? client.email ?? client.nom_entreprise ?? '?').charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <h1 className="text-sm font-bold leading-tight truncate text-white">
+              {monNomComplet ?? client.nom_entreprise}
+            </h1>
+            <p className="text-white/60 text-[11px] truncate">
+              {monRole ? (ROLE_LABELS[monRole] ?? monRole) : ''}
+              {monNomComplet ? ` · ${client.nom_entreprise}` : client.email ? ` · ${client.email}` : ''}
+            </p>
+            <p className="text-white/50 text-xs mt-2">
+              {t('statut')} : <span className="text-gold font-semibold">{client.statut_abonnement}</span>
+            </p>
+            {estAdmin && (
+              <a
+                href="/admin"
+                className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-white/10 text-gold"
+              >
+                Vous êtes admin — voir tous les cabinets →
+              </a>
+            )}
+          </div>
         </div>
 
         <nav className="flex md:flex-col gap-0.5 px-3 py-2 overflow-x-auto md:overflow-visible">
@@ -2638,7 +2676,7 @@ export default function DashboardPage() {
                   : 'text-white/70 hover:text-white hover:bg-white/5'
               }`}
             >
-              <onglet.Icone size={17} className="text-sky-300 shrink-0" />
+              <onglet.Icone size={17} className="text-[#F9ECE5] shrink-0" />
               {onglet.label}
             </button>
           ))}
@@ -2648,7 +2686,7 @@ export default function DashboardPage() {
       {/* CONTENU */}
       <div className="flex-1 overflow-y-auto">
         {/* BARRE DU HAUT (langue + deconnexion) */}
-        <div className="flex justify-end items-center gap-3 px-6 py-4">
+        <div className="h-[72px] flex justify-end items-center gap-4 px-6">
           <div className="relative">
             <button
               onClick={() => setNotifOuvertes((v) => !v)}
@@ -2709,14 +2747,14 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          <ThemeToggle />
+          <ThemeToggle variant="plain" />
           <a href="/dashboard/profil" className="text-sm text-slate-400 hover:text-white flex items-center gap-1.5">
-            <User size={15} className="text-sky-300" /> Mon profil
+            <User size={15} /> Mon profil
           </a>
           <select
             value={client.langue_preferee}
             onChange={(e) => changerLangue(e.target.value as Langue)}
-            className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
+            className="bg-transparent text-sm text-slate-400 hover:text-white cursor-pointer focus:outline-none"
           >
             <option value="fr">🇫🇷 Français</option>
             <option value="en">🇬🇧 English</option>
