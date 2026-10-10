@@ -411,7 +411,7 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     decouvrir_cta: 'Découvrir PiloBrain →',
     voir_demo_cta: 'Voir une démo',
     pour_qui_label: 'Pour qui',
-    moteur_metiers_titre: 'Un moteur, six métiers',
+    moteur_metiers_titre: 'Un moteur, sept métiers',
     moteur_metiers_desc:
       "PiloBrain s'adapte au vocabulaire et à la méthodologie de votre secteur — vous gardez le même outil, vos prospects voient un diagnostic qui parle leur langue.",
     bientot_badge: 'Bientôt',
@@ -877,7 +877,7 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     decouvrir_cta: 'Discover PiloBrain →',
     voir_demo_cta: 'Watch a demo',
     pour_qui_label: 'Who it’s for',
-    moteur_metiers_titre: 'One engine, six industries',
+    moteur_metiers_titre: 'One engine, seven industries',
     moteur_metiers_desc:
       'PiloBrain adapts to the vocabulary and methodology of your industry — you keep the same tool, your prospects see a diagnostic that speaks their language.',
     bientot_badge: 'Coming soon',
@@ -1340,7 +1340,7 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     decouvrir_cta: 'اكتشف PiloBrain ←',
     voir_demo_cta: 'مشاهدة عرض توضيحي',
     pour_qui_label: 'لمن هذا',
-    moteur_metiers_titre: 'محرك واحد، ستة قطاعات',
+    moteur_metiers_titre: 'محرك واحد، سبعة قطاعات',
     moteur_metiers_desc:
       'تتكيف PiloBrain مع مفردات ومنهجية قطاعك — تحتفظ بنفس الأداة، ويرى عملاؤك المحتملون تشخيصًا يتحدث لغتهم.',
     bientot_badge: 'قريبًا',
