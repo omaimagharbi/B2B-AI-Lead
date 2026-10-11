@@ -1,4 +1,5 @@
 'use client'
+import { tt, tf, definirLangueLitterale } from '@/lib/litteral'
 
 // Meme liste de pays que lib/pays.ts (PAYS_DISPONIBLES), avec indicatif +
 // emoji drapeau, pour que le selecteur telephone couvre tous les pays deja
@@ -38,7 +39,7 @@ export default function PhoneInput({
   numero,
   onNumeroChange,
   onNumeroBlur,
-  placeholder = 'Téléphone / WhatsApp',
+  placeholder = tt("Téléphone / WhatsApp"),
   className = '',
   compact = false,
 }: {

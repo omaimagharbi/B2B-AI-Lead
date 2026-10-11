@@ -2,6 +2,7 @@
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import { tt, tf, definirLangueLitterale } from '@/lib/litteral'
 
 // Editeur riche minimal (gras, italique, listes, titres) pour que l'expert
 // puisse mettre en forme le texte du rapport avant de l'envoyer au prospect.
@@ -47,43 +48,37 @@ export default function RichTextEditor({
           onClick={() => editor.chain().focus().toggleBold().run()}
           className={boutonClasse(editor.isActive('bold'))}
         >
-          Gras
-        </button>
+          {tt("Gras")}</button>
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleItalic().run()}
           className={boutonClasse(editor.isActive('italic'))}
         >
-          Italique
-        </button>
+          {tt("Italique")}</button>
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           className={boutonClasse(editor.isActive('bulletList'))}
         >
-          • Liste
-        </button>
+          {tt("• Liste")}</button>
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
           className={boutonClasse(editor.isActive('orderedList'))}
         >
-          1. Liste
-        </button>
+          {tt("1. Liste")}</button>
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
           className={boutonClasse(editor.isActive('heading', { level: 3 }))}
         >
-          Titre
-        </button>
+          {tt("Titre")}</button>
         <button
           type="button"
           onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
           className={boutonClasse(false)}
         >
-          Effacer le format
-        </button>
+          {tt("Effacer le format")}</button>
       </div>
       <EditorContent editor={editor} placeholder={placeholder} />
     </div>

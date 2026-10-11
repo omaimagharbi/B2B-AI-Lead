@@ -50,8 +50,6 @@ export const SOUS_SECTEURS_PAR_VERTICAL: Record<string, string[]> = {
   immobilier: [
     'Agence Immobilière (Vente & Location)',
     'Promoteur Immobilier / Construction Neuve',
-    'Agent Immobilier Indépendant',
-    'Syndic de Copropriété',
     'Gestion Locative / Property Management',
   ],
 }
@@ -84,8 +82,6 @@ const TRADUCTIONS_SOUS_SECTEURS: Record<'en' | 'ar', Record<string, string>> = {
     'Événementiel B2B': 'B2B Events',
     'Agence Immobilière (Vente & Location)': 'Real Estate Agency (Sales & Rental)',
     'Promoteur Immobilier / Construction Neuve': 'Real Estate Developer / New Construction',
-    'Agent Immobilier Indépendant': 'Independent Real Estate Agent',
-    'Syndic de Copropriété': 'Homeowners Association Manager',
     'Gestion Locative / Property Management': 'Rental / Property Management',
   },
   ar: {
@@ -113,8 +109,6 @@ const TRADUCTIONS_SOUS_SECTEURS: Record<'en' | 'ar', Record<string, string>> = {
     'Événementiel B2B': 'تنظيم فعاليات بين الشركات',
     'Agence Immobilière (Vente & Location)': 'وكالة عقارية (بيع وإيجار)',
     'Promoteur Immobilier / Construction Neuve': 'مطور عقاري / بناء جديد',
-    'Agent Immobilier Indépendant': 'وكيل عقاري مستقل',
-    'Syndic de Copropriété': 'مسيّر ملكية مشتركة',
     'Gestion Locative / Property Management': 'إدارة الإيجارات / إدارة الممتلكات',
   },
 }

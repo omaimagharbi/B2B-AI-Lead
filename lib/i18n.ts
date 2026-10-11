@@ -2,6 +2,7 @@ export type Langue = 'fr' | 'en' | 'ar'
 
 export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
   fr: {
+    secteur_unique_sous_titre: 'Choisissez votre activité pour créer votre compte',
     onglet_ciblage: 'Ciblage',
     onglet_cibles: 'Cibles',
     onglet_validation: 'Validation',
@@ -480,6 +481,7 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     diag_serveur_trop_lent: 'Le serveur met trop de temps à répondre. Merci de réessayer.',
   },
   en: {
+    secteur_unique_sous_titre: 'Choose your business type to create your account',
     onglet_ciblage: 'Targeting',
     onglet_cibles: 'Targets',
     onglet_validation: 'Validation',
@@ -944,6 +946,7 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     diag_serveur_trop_lent: 'The server is taking too long to respond. Please try again.',
   },
   ar: {
+    secteur_unique_sous_titre: 'اختر نشاطك لإنشاء حسابك',
     onglet_ciblage: 'الاستهداف',
     onglet_cibles: 'الأهداف',
     onglet_validation: 'التحقق',
