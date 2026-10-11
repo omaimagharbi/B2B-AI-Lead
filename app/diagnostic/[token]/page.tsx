@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { traduire, type Langue } from '@/lib/i18n'
 import ThemeToggle from '@/components/ThemeToggle'
+import { tt, tf, definirLangueLitterale } from '@/lib/litteral'
 
 type Etape = 'saisie' | 'envoi' | 'termine'
 type ModeCiblage = 'entreprise' | 'particulier'
@@ -11,7 +12,8 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
   const [etape, setEtape] = useState<Etape>('saisie')
   const [modeCiblage, setModeCiblage] = useState<ModeCiblage>('entreprise')
   const [erreur, setErreur] = useState<string | null>(null)
-  const [langue, setLangue] = useState<Langue>('fr')
+  const [langue, setLangue] = useState<Langue>('en')
+  definirLangueLitterale(langue)
   const t = (cle: string) => traduire(langue, cle)
 
   // Questionnaire structure (au lieu d'une seule case libre) : de meilleures
@@ -65,10 +67,10 @@ export default function DiagnosticPage({ params }: { params: { token: string } }
     // francais cote donnees internes (pour le prompt IA / le cabinet), quelle
     // que soit la langue affichee au prospect.
     const probleme = [
-      `Défi / objectif : ${defi.trim()}`,
+      tf("Défi / objectif : {0}", [defi.trim()]),
       `Depuis quand : ${depuisQuand}`,
-      `Déjà essayé : ${dejaEssaye.trim() || 'Rien de particulier pour le moment'}`,
-      `Urgence à agir : ${urgence}`,
+      tf("Déjà essayé : {0}", [dejaEssaye.trim() || 'Rien de particulier pour le moment']),
+      tf("Urgence à agir : {0}", [urgence]),
     ].join('\n')
 
     try {

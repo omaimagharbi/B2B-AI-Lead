@@ -4,8 +4,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import ThemeToggle from '@/components/ThemeToggle'
+import LangueSelect from '@/components/LangueSelect'
+import { useLangueVisiteur } from '@/lib/use-langue-visiteur'
+import { tt, tf, definirLangueLitterale } from '@/lib/litteral'
 
 export default function ResetPasswordPage() {
+  const [langue, changerLangue] = useLangueVisiteur()
   const router = useRouter()
   const [motDePasse, setMotDePasse] = useState('')
   const [confirmation, setConfirmation] = useState('')
@@ -17,11 +21,11 @@ export default function ResetPasswordPage() {
     setErreur(null)
 
     if (motDePasse.length < 6) {
-      setErreur('Le mot de passe doit contenir au moins 6 caractères')
+      setErreur(tt("Le mot de passe doit contenir au moins 6 caractères"))
       return
     }
     if (motDePasse !== confirmation) {
-      setErreur('Les mots de passe ne correspondent pas')
+      setErreur(tt("Les mots de passe ne correspondent pas"))
       return
     }
 
@@ -40,9 +44,12 @@ export default function ResetPasswordPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4">
-      <ThemeToggle className="fixed top-4 right-4 z-40" />
+      <div className="fixed top-4 right-4 z-40 flex items-center gap-3">
+        <LangueSelect langue={langue} onChange={changerLangue} />
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md space-y-6">
-        <h1 className="text-2xl font-bold text-center">Nouveau mot de passe</h1>
+        <h1 className="text-2xl font-bold text-center">{tt("Nouveau mot de passe")}</h1>
 
         {erreur && (
           <div className="text-center text-red-400 bg-red-950/40 border border-red-800 rounded-lg p-3 text-sm">
@@ -51,22 +58,21 @@ export default function ResetPasswordPage() {
         )}
         {succes && (
           <div className="text-center text-accent bg-slate-900 border border-accent/40 rounded-lg p-3 text-sm">
-            Mot de passe mis à jour ! Redirection...
-          </div>
+            {tt("Mot de passe mis à jour ! Redirection...")}</div>
         )}
 
         <div className="space-y-3 bg-slate-900 border border-slate-700 rounded-xl p-6">
           <input
             value={motDePasse}
             onChange={(e) => setMotDePasse(e.target.value)}
-            placeholder="Nouveau mot de passe"
+            placeholder={tt("Nouveau mot de passe")}
             type="password"
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
           />
           <input
             value={confirmation}
             onChange={(e) => setConfirmation(e.target.value)}
-            placeholder="Confirmez le mot de passe"
+            placeholder={tt("Confirmez le mot de passe")}
             type="password"
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
           />
@@ -75,7 +81,7 @@ export default function ResetPasswordPage() {
             disabled={chargement || !motDePasse || !confirmation}
             className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40 hover:opacity-90 transition"
           >
-            {chargement ? 'Mise à jour...' : 'Mettre à jour le mot de passe'}
+            {chargement ? tt("Mise à jour...") : tt("Mettre à jour le mot de passe")}
           </button>
         </div>
       </div>

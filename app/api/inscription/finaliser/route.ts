@@ -46,8 +46,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Aucun cabinet associe' }, { status: 403 })
     }
 
-    const { telephone, logo_url, site_web, facebook_url, instagram_url, linkedin_url, invite_emails, email_directeur_commercial } =
+    const { telephone, logo_url, site_web, facebook_url, instagram_url, linkedin_url, invite_emails, email_directeur_commercial, langue } =
       await req.json()
+    // Langue de l'interface choisie a l'inscription (anglais par defaut)
+    const languePreferee = langue === 'fr' || langue === 'ar' ? langue : 'en'
 
     const { error: erreurMaj } = await supabaseAdmin
       .from('clients')
@@ -58,6 +60,7 @@ export async function POST(req: NextRequest) {
         facebook_url: facebook_url || null,
         instagram_url: instagram_url || null,
         linkedin_url: linkedin_url || null,
+        langue_preferee: languePreferee,
         onboarding_complete: true,
       })
       .eq('id', clientUser.client_id)

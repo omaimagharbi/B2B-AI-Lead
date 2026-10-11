@@ -42,6 +42,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
+import { tt, tf, definirLangueLitterale } from '@/lib/litteral'
 
 const ROLE_LABELS: Record<string, string> = {
   proprietaire: 'Propriétaire',
@@ -560,7 +561,13 @@ export default function DashboardPage() {
   const [importCSVEnCours, setImportCSVEnCours] = useState(false)
   const [messageImportCSV, setMessageImportCSV] = useState<string | null>(null)
 
-  const langue: Langue = client?.langue_preferee ?? 'fr'
+  const langue: Langue = client?.langue_preferee ?? 'en'
+  definirLangueLitterale(langue)
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('pilobrain_langue', langue)
+    } catch {}
+  }, [langue])
   const t = (cle: string) => traduire(langue, cle)
   // Locale utilisee pour les noms de mois/jours affiches (calendrier, dates...) -
   // suit la langue choisie plutot que d'etre figee en francais.
@@ -894,7 +901,7 @@ export default function DashboardPage() {
     })
     const data = await res.json()
     if (!res.ok) {
-      setErreurAnalyseCabinet(data.error ?? "Erreur lors de l'analyse")
+      setErreurAnalyseCabinet(data.error ?? tt("Erreur lors de l'analyse"))
     } else {
       setClient({
         ...client,
@@ -917,7 +924,7 @@ export default function DashboardPage() {
     })
     const data = await res.json()
     if (!res.ok) {
-      setErreurAnalyseReseaux(data.error ?? "Erreur lors de l'analyse")
+      setErreurAnalyseReseaux(data.error ?? tt("Erreur lors de l'analyse"))
     } else {
       setClient({ ...client, ligne_editoriale_reseaux: data.ligne_editoriale_reseaux })
     }
@@ -948,7 +955,7 @@ export default function DashboardPage() {
     })
     const data = await res.json()
     if (!res.ok) {
-      setErreurCalendrier(data.error ?? 'Erreur lors de la génération')
+      setErreurCalendrier(data.error ?? tt("Erreur lors de la génération"))
     } else {
       await chargerCalendrierEditorial()
     }
@@ -1034,13 +1041,13 @@ export default function DashboardPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setLancementResultat([{ erreur: data.error ?? 'Erreur lors du lancement' }])
+        setLancementResultat([{ erreur: data.error ?? tt("Erreur lors du lancement") }])
       } else {
         setLancementResultat(data.resultats)
         await chargerTout(client.id)
       }
     } catch {
-      setLancementResultat([{ erreur: 'Impossible de contacter le serveur' }])
+      setLancementResultat([{ erreur: tt("Impossible de contacter le serveur") }])
     }
     setLancementEnCours(false)
   }
@@ -1209,17 +1216,17 @@ export default function DashboardPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setMessageImportCSV(`❌ ${data.error ?? "Erreur lors de l'import"}`)
+        setMessageImportCSV(`❌ ${data.error ?? tt("Erreur lors de l'import")}`)
       } else {
         setMessageImportCSV(
-          `✅ ${data.nombre_ajoute} cible(s) ajoutée(s)` +
-            (data.doublons_ignores > 0 ? ` · ${data.doublons_ignores} doublon(s) ignoré(s)` : '') +
-            (data.sans_nom_ignores > 0 ? ` · ${data.sans_nom_ignores} ligne(s) sans nom ignorée(s)` : '')
+          tf("✅ {0} cible(s) ajoutée(s)", [data.nombre_ajoute]) +
+            (data.doublons_ignores > 0 ? tf(" · {0} doublon(s) ignoré(s)", [data.doublons_ignores]) : '') +
+            (data.sans_nom_ignores > 0 ? tf(" · {0} ligne(s) sans nom ignorée(s)", [data.sans_nom_ignores]) : '')
         )
         await chargerTout(client.id)
       }
     } catch {
-      setMessageImportCSV('❌ Impossible de lire ce fichier')
+      setMessageImportCSV(tt("❌ Impossible de lire ce fichier"))
     }
 
     setImportCSVEnCours(false)
@@ -1241,14 +1248,14 @@ export default function DashboardPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setImapMessage(`❌ ${data.error ?? 'Erreur lors de la sauvegarde'}`)
+        setImapMessage(`❌ ${data.error ?? tt("Erreur lors de la sauvegarde")}`)
       } else {
-        setImapMessage('✅ Configuration enregistrée')
+        setImapMessage(tt("✅ Configuration enregistrée"))
         // On vide le champ mot de passe une fois envoye, il ne sera plus jamais rechargé.
         setImapForm((prev) => ({ ...prev, imap_mot_de_passe: '' }))
       }
     } catch {
-      setImapMessage('❌ Erreur réseau')
+      setImapMessage(tt("❌ Erreur réseau"))
     } finally {
       setImapEnregistrement(false)
     }
@@ -1427,10 +1434,10 @@ export default function DashboardPage() {
     setEmailCabinetMessage(null)
     const { error } = await supabase.from('clients').update({ email: nouveauEmail }).eq('id', client.id)
     if (error) {
-      setEmailCabinetMessage("Erreur lors de l'enregistrement.")
+      setEmailCabinetMessage(tt("Erreur lors de l'enregistrement."))
     } else {
       setClient({ ...client, email: nouveauEmail })
-      setEmailCabinetMessage('✅ Enregistré.')
+      setEmailCabinetMessage(tt("✅ Enregistré."))
     }
     setEmailCabinetEnCours(false)
   }
@@ -1447,10 +1454,10 @@ export default function DashboardPage() {
     }
     const { error } = await supabase.from('clients').update(maj).eq('id', client.id)
     if (error) {
-      setPresenceDigitaleMessage("Erreur lors de l'enregistrement.")
+      setPresenceDigitaleMessage(tt("Erreur lors de l'enregistrement."))
     } else {
       setClient({ ...client, ...maj })
-      setPresenceDigitaleMessage('✅ Enregistré.')
+      setPresenceDigitaleMessage(tt("✅ Enregistré."))
     }
     setPresenceDigitaleEnCours(false)
   }
@@ -1468,7 +1475,7 @@ export default function DashboardPage() {
       setLienBadgeCopie(true)
       setTimeout(() => setLienBadgeCopie(false), 2500)
     } catch {
-      alert("La copie automatique a échoué (autorisation refusée par le navigateur). Sélectionne le texte dans le champ ci-dessus et copie-le manuellement (Ctrl+C).")
+      alert(tt("La copie automatique a échoué (autorisation refusée par le navigateur). Sélectionne le texte dans le champ ci-dessus et copie-le manuellement (Ctrl+C)."))
     }
   }
 
@@ -1479,7 +1486,7 @@ export default function DashboardPage() {
       const chemin = `${client.id}/${membreId}-${Date.now()}.${fichier.name.split('.').pop()}`
       const { error: uploadError } = await supabase.storage.from('avatars').upload(chemin, fichier)
       if (uploadError) {
-        alert("Échec de l'upload de la photo")
+        alert(tt("Échec de l'upload de la photo"))
         return
       }
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(chemin)
@@ -1518,7 +1525,7 @@ export default function DashboardPage() {
       // on revient sur l'ancien email affiche plutot que de laisser croire
       // que le changement a ete pris en compte.
       const data = await res.json().catch(() => ({}))
-      alert(data.error ?? "Erreur lors du changement d'email")
+      alert(data.error ?? tt("Erreur lors du changement d'email"))
       if (membreAvant) {
         setMembresEquipe((prev) => prev.map((m) => (m.id === id ? membreAvant : m)))
       }
@@ -1703,10 +1710,10 @@ export default function DashboardPage() {
   // eviter une suppression accidentelle, suppression definitive (pas de
   // corbeille) donc on previent clairement dans le message.
   const supprimerCible = async (targetId: string, nom: string) => {
-    if (!confirm(`Supprimer définitivement "${nom}" ? Cette action est irréversible.`)) return
+    if (!confirm(tf("Supprimer définitivement \"{0}\" ? Cette action est irréversible.", [nom]))) return
     const { error } = await supabase.from('targets').delete().eq('id', targetId)
     if (error) {
-      alert("Erreur lors de la suppression : " + error.message)
+      alert(tt("Erreur lors de la suppression : ") + error.message)
       return
     }
     setTargets((prev) => prev.filter((tg) => tg.id !== targetId))
@@ -1735,7 +1742,7 @@ export default function DashboardPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert(data.error ?? 'Erreur lors de la préparation du message')
+        alert(data.error ?? tt("Erreur lors de la préparation du message"))
       } else {
         setPrevisualisationEnvoi({
           targetId,
@@ -1747,7 +1754,7 @@ export default function DashboardPage() {
         })
       }
     } catch {
-      alert('Impossible de contacter le serveur')
+      alert(tt("Impossible de contacter le serveur"))
     }
     setEnvoiEnCours(null)
   }
@@ -1769,11 +1776,11 @@ export default function DashboardPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) alert(data.error ?? "Erreur lors de l'envoi")
+      if (!res.ok) alert(data.error ?? tt("Erreur lors de l'envoi"))
       setPrevisualisationEnvoi(null)
       await chargerTout(client.id)
     } catch {
-      alert('Impossible de contacter le serveur')
+      alert(tt("Impossible de contacter le serveur"))
     }
     setEnvoiEnCours(null)
   }
@@ -1795,13 +1802,13 @@ export default function DashboardPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert(data.error ?? 'Erreur lors de la préparation du message')
+        alert(data.error ?? tt("Erreur lors de la préparation du message"))
       } else {
         setMessageLinkedin(data.message)
         await chargerTout(client.id)
       }
     } catch {
-      alert('Impossible de contacter le serveur')
+      alert(tt("Impossible de contacter le serveur"))
     }
     setEnvoiEnCours(null)
   }
@@ -1835,17 +1842,17 @@ export default function DashboardPage() {
         if (!res.ok) {
           const data = await res.json().catch(() => null)
           echecs += 1
-          dernierMessageErreur = data?.error ?? 'erreur inconnue'
+          dernierMessageErreur = data?.error ?? tt("erreur inconnue")
         }
       } catch {
         echecs += 1
-        dernierMessageErreur = 'erreur réseau'
+        dernierMessageErreur = tt("erreur réseau")
       }
     }
 
     if (echecs > 0) {
       alert(
-        `${echecs} envoi(s) sur ${ciblesSelectionnees.size} ont échoué (ex: ${dernierMessageErreur}). Les cibles concernées restent dans "Cibles" — vérifie leur téléphone/email.`
+        tf("{0} envoi(s) sur {1} ont échoué (ex: {2}). Les cibles concernées restent dans \"Cibles\" — vérifie leur téléphone/email.", [echecs, ciblesSelectionnees.size, dernierMessageErreur])
       )
     }
 
@@ -1871,12 +1878,12 @@ export default function DashboardPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setInviteMessage(`❌ ${data.error ?? "Erreur lors de l'invitation"}`)
+        setInviteMessage(`❌ ${data.error ?? tt("Erreur lors de l'invitation")}`)
       } else {
         setInviteMessage(
           data.emailEnvoye
-            ? `✅ Compte créé pour ${inviteEmail} — ses identifiants lui ont été envoyés automatiquement par email.`
-            : `✅ Compte créé pour ${inviteEmail}, mais l'email automatique a échoué — transmets-lui toi-même le mot de passe temporaire : ${data.motDePasseTemporaire}`
+            ? tf("✅ Compte créé pour {0} — ses identifiants lui ont été envoyés automatiquement par email.", [inviteEmail])
+            : tf("✅ Compte créé pour {0}, mais l'email automatique a échoué — transmets-lui toi-même le mot de passe temporaire : {1}", [inviteEmail, data.motDePasseTemporaire])
         )
         setInviteEmail('')
         setInviteNom('')
@@ -1884,14 +1891,14 @@ export default function DashboardPage() {
         await chargerTout(client.id)
       }
     } catch {
-      setInviteMessage('❌ Impossible de contacter le serveur')
+      setInviteMessage(tt("❌ Impossible de contacter le serveur"))
     }
     setInviteEnCours(false)
   }
 
   const supprimerMembre = async (clientUserId: string, nom: string | null) => {
     const confirme = window.confirm(
-      `Retirer ${nom || 'ce membre'} de l'équipe ? Il ne pourra plus se connecter. Ses cibles assignées repasseront à "non assigné".`
+      tf("Retirer {0} de l'équipe ? Il ne pourra plus se connecter. Ses cibles assignées repasseront à \"non assigné\".", [nom || 'ce membre'])
     )
     if (!confirme || !client) return
 
@@ -1907,13 +1914,13 @@ export default function DashboardPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setInviteMessage(`❌ ${data.error ?? 'Erreur lors de la suppression'}`)
+        setInviteMessage(`❌ ${data.error ?? tt("Erreur lors de la suppression")}`)
       } else {
-        setInviteMessage(`✅ ${nom || 'Le membre'} a été retiré de l'équipe`)
+        setInviteMessage(tf("✅ {0} a été retiré de l'équipe", [nom || 'Le membre']))
         await chargerTout(client.id)
       }
     } catch {
-      setInviteMessage('❌ Impossible de contacter le serveur')
+      setInviteMessage(tt("❌ Impossible de contacter le serveur"))
     }
   }
 
@@ -1939,13 +1946,13 @@ export default function DashboardPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error ?? "Échec de l'envoi")
+        alert(data.error ?? tt("Échec de l'envoi"))
       } else {
         setReponseTexte((prev) => ({ ...prev, [messageId]: '' }))
         await marquerCommeLu(messageId)
       }
     } catch {
-      alert('Impossible de contacter le serveur')
+      alert(tt("Impossible de contacter le serveur"))
     }
     setEnvoiReponseEnCours(null)
   }
@@ -1984,7 +1991,7 @@ export default function DashboardPage() {
         body: JSON.stringify(strategieResultat.filtresRecommandes),
       })
       if (res.ok) {
-        setFiltresAppliquesMessage('✅ Filtres appliqués à l\'onglet Ciblage.')
+        setFiltresAppliquesMessage(tt("✅ Filtres appliqués à l'onglet Ciblage."))
         // Recharge le client pour refleter secteur/taille mis a jour, et les
         // postes cibles (client_professions) - reutilise la logique de charger().
         const { data: clientMaj } = await supabase
@@ -2002,10 +2009,10 @@ export default function DashboardPage() {
           .eq('client_id', client?.id)
         setProfessionsSelectionnees(new Set((professionsData ?? []).map((p) => p.profession)))
       } else {
-        setFiltresAppliquesMessage("Erreur lors de l'application des filtres.")
+        setFiltresAppliquesMessage(tt("Erreur lors de l'application des filtres."))
       }
     } catch {
-      setFiltresAppliquesMessage("Erreur lors de l'application des filtres.")
+      setFiltresAppliquesMessage(tt("Erreur lors de l'application des filtres."))
     }
     setFiltresAppliquesEnCours(false)
   }
@@ -2025,7 +2032,7 @@ export default function DashboardPage() {
         .upload(chemin, fichier)
 
       if (uploadError) {
-        alert("Échec de l'upload du fichier")
+        alert(tt("Échec de l'upload du fichier"))
         setPdfEnCours(false)
         return
       }
@@ -2079,7 +2086,7 @@ export default function DashboardPage() {
           // manuelle offre par offre.
           const lignes = data.offres.map((champs: Record<string, unknown>) => ({
             client_id: client.id,
-            nom: (champs.nom as string) ?? 'Offre sans nom',
+            nom: (champs.nom as string) ?? tt("Offre sans nom"),
             description: (champs.description as string) ?? null,
             prix: champs.prix ? Number(champs.prix) : null,
             devise: 'TND',
@@ -2098,17 +2105,17 @@ export default function DashboardPage() {
               'id, nom, description, prix, devise, duree, public_cible, pdf_url, mode_facturation, thematique, format, mode_delivrance, usp'
             )
           if (inserees) setCatalogue((prev) => [...(inserees as OffreCatalogue[]), ...prev])
-          alert(`${data.offres.length} offres importées automatiquement depuis le catalogue.`)
+          alert(tf("{0} offres importées automatiquement depuis le catalogue.", [data.offres.length]))
         }
       } else {
         alert(
-          "Le fichier a bien été attaché, mais l'extraction automatique a échoué (" +
-            (data.error ?? 'erreur inconnue') +
-            '). Remplis au moins le champ "Nom" ci-dessous puis clique sur "Ajouter l\'offre" — le fichier reste attaché.'
+          tt("Le fichier a bien été attaché, mais l'extraction automatique a échoué (") +
+            (data.error ?? tt("erreur inconnue")) +
+            tt("). Remplis au moins le champ \"Nom\" ci-dessous puis clique sur \"Ajouter l'offre\" — le fichier reste attaché.")
         )
       }
     } catch {
-      alert("Erreur lors de l'import du fichier")
+      alert(tt("Erreur lors de l'import du fichier"))
     }
     setPdfEnCours(false)
     if (inputPdfCatalogue.current) inputPdfCatalogue.current.value = ''
@@ -2117,7 +2124,7 @@ export default function DashboardPage() {
   const ajouterOffre = async () => {
     if (!client) return
     if (!nouvelleOffre.nom.trim()) {
-      alert('Le nom de l\'offre est obligatoire pour l\'ajouter au catalogue.')
+      alert(tt("Le nom de l'offre est obligatoire pour l'ajouter au catalogue."))
       return
     }
     setMaj(true)
@@ -2237,7 +2244,7 @@ export default function DashboardPage() {
   if (chargement) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-        <p className="text-slate-400">Chargement...</p>
+        <p className="text-slate-400">{tt("Chargement...")}</p>
       </main>
     )
   }
@@ -2245,7 +2252,7 @@ export default function DashboardPage() {
   if (!client) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-        <p className="text-slate-400">Impossible de charger votre compte.</p>
+        <p className="text-slate-400">{tt("Impossible de charger votre compte.")}</p>
       </main>
     )
   }
@@ -2255,12 +2262,9 @@ export default function DashboardPage() {
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
         <div className="max-w-md text-center space-y-4">
           <div className="text-4xl">🔒</div>
-          <h1 className="text-xl font-semibold">Compte en attente d'activation</h1>
+          <h1 className="text-xl font-semibold">{tt("Compte en attente d'activation")}</h1>
           <p className="text-slate-400 text-sm">
-            Merci pour ton inscription, <strong>{client.nom_entreprise}</strong> ! Ton accès au
-            tableau de bord sera débloqué dès validation par notre équipe. Tu recevras un email
-            dès que c'est fait.
-          </p>
+            {tt("Merci pour ton inscription,")}{' '}<strong>{client.nom_entreprise}</strong> {tt("! Ton accès au tableau de bord sera débloqué dès validation par notre équipe. Tu recevras un email dès que c'est fait.")}</p>
         </div>
       </main>
     )
@@ -2273,18 +2277,16 @@ export default function DashboardPage() {
           <div className="text-center space-y-2">
             <div className="text-3xl">👋</div>
             <h1 className="text-xl font-semibold">
-              Bienvenue, {client.nom_entreprise} !
+              {tt("Bienvenue,")}{' '}{client.nom_entreprise} !
             </h1>
             <p className="text-slate-400 text-sm">
-              Quelques infos avant de commencer — ça ne prend qu'une minute, et tu pourras tout
-              modifier plus tard.
-            </p>
+              {tt("Quelques infos avant de commencer — ça ne prend qu'une minute, et tu pourras tout modifier plus tard.")}</p>
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-300">📱 Réseaux &amp; canaux</h2>
+            <h2 className="text-sm font-semibold text-slate-300">{tt("📱 Réseaux & canaux")}</h2>
             <input
-              placeholder="WhatsApp du directeur commercial"
+              placeholder={tt("WhatsApp du directeur commercial")}
               value={onboardingForm.whatsapp_directeur}
               onChange={(e) =>
                 setOnboardingForm({ ...onboardingForm, whatsapp_directeur: e.target.value })
@@ -2292,13 +2294,13 @@ export default function DashboardPage() {
               className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
             />
             <input
-              placeholder="Page Facebook (URL)"
+              placeholder={tt("Page Facebook (URL)")}
               value={onboardingForm.facebook_url}
               onChange={(e) => setOnboardingForm({ ...onboardingForm, facebook_url: e.target.value })}
               className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
             />
             <input
-              placeholder="Page Instagram (URL)"
+              placeholder={tt("Page Instagram (URL)")}
               value={onboardingForm.instagram_url}
               onChange={(e) =>
                 setOnboardingForm({ ...onboardingForm, instagram_url: e.target.value })
@@ -2306,13 +2308,13 @@ export default function DashboardPage() {
               className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
             />
             <input
-              placeholder="Page LinkedIn (URL)"
+              placeholder={tt("Page LinkedIn (URL)")}
               value={onboardingForm.linkedin_url}
               onChange={(e) => setOnboardingForm({ ...onboardingForm, linkedin_url: e.target.value })}
               className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
             />
             <input
-              placeholder="Site web"
+              placeholder={tt("Site web")}
               value={onboardingForm.site_web}
               onChange={(e) => setOnboardingForm({ ...onboardingForm, site_web: e.target.value })}
               className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
@@ -2320,7 +2322,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-300">👥 Ton équipe (facultatif)</h2>
+            <h2 className="text-sm font-semibold text-slate-300">{tt("👥 Ton équipe (facultatif)")}</h2>
             {onboardingMembres.map((membre, i) => (
               <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <input
@@ -2334,7 +2336,7 @@ export default function DashboardPage() {
                   className="rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                 />
                 <input
-                  placeholder="Nom complet"
+                  placeholder={tt("Nom complet")}
                   value={membre.nom_complet}
                   onChange={(e) => {
                     const copie = [...onboardingMembres]
@@ -2366,8 +2368,7 @@ export default function DashboardPage() {
               }
               className="text-xs text-accent underline"
             >
-              + Ajouter un membre
-            </button>
+              {tt("+ Ajouter un membre")}</button>
           </div>
 
           <button
@@ -2396,16 +2397,16 @@ export default function DashboardPage() {
     },
     {
       id: 'inbox',
-      label: `Boîte de réception${messagesRecus.filter((m) => !m.lu).length > 0 ? ` (${messagesRecus.filter((m) => !m.lu).length})` : ''}`,
+      label: tf("Boîte de réception{0}", [messagesRecus.filter((m) => !m.lu).length > 0 ? ` (${messagesRecus.filter((m) => !m.lu).length})` : '']),
       Icone: Inbox,
     },
     { id: 'pipeline', label: 'Pipeline', Icone: BarChart3 },
     {
       id: 'catalogue_strategie',
-      label: `${vocabulairePourVertical(verticalSlug, langue).labelCatalogue} / Stratégie`,
+      label: tf("{0} / Stratégie", [vocabulairePourVertical(verticalSlug, langue).labelCatalogue]),
       Icone: Package,
     },
-    { id: 'collaboration', label: 'Collaboration & Tâches', Icone: MessageSquare },
+    { id: 'collaboration', label: tt("Collaboration & Tâches"), Icone: MessageSquare },
     { id: 'calendrier', label: 'Mon Calendrier', Icone: CalendarDays },
     { id: 'stats', label: t('onglet_stats'), Icone: TrendingUp },
     { id: 'equipe', label: t('onglet_equipe'), Icone: Users },
@@ -2530,13 +2531,11 @@ export default function DashboardPage() {
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-lg w-full space-y-3">
             <h3 className="font-semibold text-lg">
-              {previsualisationEnvoi.typeEnvoi === 'diagnostic' ? '📋 Vérifier avant envoi' : '✉️ Vérifier avant envoi'}
+              {previsualisationEnvoi.typeEnvoi === 'diagnostic' ? tt("📋 Vérifier avant envoi") : tt("✉️ Vérifier avant envoi")}
             </h3>
             <p className="text-slate-400 text-xs">
-              Ce texte sera envoyé par{' '}
-              {previsualisationEnvoi.canal === 'whatsapp' ? 'WhatsApp' : 'Email'}. Relis-le (et modifie-le si besoin)
-              avant de confirmer.
-            </p>
+              {tt("Ce texte sera envoyé par")}{' '}
+              {previsualisationEnvoi.canal === 'whatsapp' ? 'WhatsApp' : 'Email'}{tt(". Relis-le (et modifie-le si besoin) avant de confirmer.")}</p>
             <textarea
               value={previsualisationEnvoi.texte}
               onChange={(e) =>
@@ -2549,14 +2548,13 @@ export default function DashboardPage() {
                 onClick={() => setPrevisualisationEnvoi(null)}
                 className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white"
               >
-                Annuler
-              </button>
+                {tt("Annuler")}</button>
               <button
                 onClick={confirmerEnvoi}
                 disabled={envoiEnCours === previsualisationEnvoi.targetId}
                 className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm disabled:opacity-40"
               >
-                {envoiEnCours === previsualisationEnvoi.targetId ? 'Envoi...' : '✅ Envoyer maintenant'}
+                {envoiEnCours === previsualisationEnvoi.targetId ? 'Envoi...' : tt("✅ Envoyer maintenant")}
               </button>
             </div>
           </div>
@@ -2565,11 +2563,9 @@ export default function DashboardPage() {
       {messageLinkedin && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-lg w-full space-y-3">
-            <h3 className="font-semibold text-lg">🔗 Message prêt pour LinkedIn</h3>
+            <h3 className="font-semibold text-lg">{tt("🔗 Message prêt pour LinkedIn")}</h3>
             <p className="text-slate-400 text-xs">
-              Copie ce texte et colle-le dans un message LinkedIn à ce contact (l'envoi LinkedIn
-              n'est pas automatisé, il se fait à la main).
-            </p>
+              {tt("Copie ce texte et colle-le dans un message LinkedIn à ce contact (l'envoi LinkedIn n'est pas automatisé, il se fait à la main).")}</p>
             <textarea
               value={messageLinkedin}
               onChange={(e) => setMessageLinkedin(e.target.value)}
@@ -2580,16 +2576,14 @@ export default function DashboardPage() {
                 onClick={() => setMessageLinkedin(null)}
                 className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white"
               >
-                Fermer
-              </button>
+                {tt("Fermer")}</button>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(messageLinkedin)
                 }}
                 className="px-4 py-2 rounded-lg bg-accent text-slate-950 font-semibold text-sm"
               >
-                📋 Copier
-              </button>
+                {tt("📋 Copier")}</button>
             </div>
           </div>
         </div>
@@ -2625,8 +2619,7 @@ export default function DashboardPage() {
                 onClick={() => setOngletActif('equipe')}
                 className="text-[11px] text-white/60 hover:text-white border border-dashed border-white/30 rounded-lg px-3 py-2"
               >
-                + Logo de l&apos;entreprise
-              </button>
+                {tt("+ Logo de l'entreprise")}</button>
             )}
           </div>
           <div className="px-3 pb-3">
@@ -2648,7 +2641,7 @@ export default function DashboardPage() {
               {monNomComplet ?? client.nom_entreprise}
             </h1>
             <p className="text-white/60 text-[11px] truncate">
-              {monRole ? (ROLE_LABELS[monRole] ?? monRole) : ''}
+              {monRole ? tt(ROLE_LABELS[monRole] ?? monRole) : ''}
               {monNomComplet ? ` · ${client.nom_entreprise}` : client.email ? ` · ${client.email}` : ''}
             </p>
             <p className="text-white/50 text-xs mt-2">
@@ -2659,8 +2652,7 @@ export default function DashboardPage() {
                 href="/admin"
                 className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-white/10 text-[#ECC45C]"
               >
-                Vous êtes admin — voir tous les cabinets →
-              </a>
+                {tt("Vous êtes admin — voir tous les cabinets →")}</a>
             )}
           </div>
         </div>
@@ -2719,14 +2711,14 @@ export default function DashboardPage() {
                   const diagnosticsAValider = diagnosticsEnAttente.length
                   const reponsesATraiter = targets.filter((tg) => tg.reponse_a_traiter).length
                   const items: { label: string; count: number; onglet: Onglet; groupe?: 'catalogue' | 'strategie' | 'idees' }[] = [
-                    { label: '✅ Tâches qui te sont assignées', count: mesTachesEnAttente, onglet: 'collaboration' },
-                    { label: '📬 Messages reçus non lus', count: messagesNonLus, onglet: 'inbox' },
-                    { label: '🛠️ Diagnostics à valider', count: diagnosticsAValider, onglet: 'validation' },
-                    { label: '🔥 Réponses de prospects à traiter', count: reponsesATraiter, onglet: 'cibles' },
+                    { label: tt("✅ Tâches qui te sont assignées"), count: mesTachesEnAttente, onglet: 'collaboration' },
+                    { label: tt("📬 Messages reçus non lus"), count: messagesNonLus, onglet: 'inbox' },
+                    { label: tt("🛠️ Diagnostics à valider"), count: diagnosticsAValider, onglet: 'validation' },
+                    { label: tt("🔥 Réponses de prospects à traiter"), count: reponsesATraiter, onglet: 'cibles' },
                   ]
                   const actives = items.filter((i) => i.count > 0)
                   if (actives.length === 0) {
-                    return <p className="text-xs text-slate-500 p-3">Aucune notification pour le moment.</p>
+                    return <p className="text-xs text-slate-500 p-3">{tt("Aucune notification pour le moment.")}</p>
                   }
                   return actives.map((i) => (
                     <button
@@ -2749,8 +2741,7 @@ export default function DashboardPage() {
           </div>
           <ThemeToggle variant="plain" />
           <a href="/dashboard/profil" className="text-sm text-slate-400 hover:text-white flex items-center gap-1.5">
-            <User size={15} /> Mon profil
-          </a>
+            <User size={15} /> {tt("Mon profil")}</a>
           <select
             value={client.langue_preferee}
             onChange={(e) => changerLangue(e.target.value as Langue)}
@@ -2770,8 +2761,8 @@ export default function DashboardPage() {
           <div className="flex gap-2 border-b border-slate-800 pb-2 -mb-6 flex-wrap">
             {[
               { id: 'catalogue' as const, label: `📦 ${vocabulairePourVertical(verticalSlug, langue).labelCatalogue}` },
-              { id: 'strategie' as const, label: '🧭 Stratégie' },
-              { id: 'idees' as const, label: '📣 Idées marketing' },
+              { id: 'strategie' as const, label: tt("🧭 Stratégie") },
+              { id: 'idees' as const, label: tt("📣 Idées marketing") },
             ].map((so) => (
               <button
                 key={so.id}
@@ -2919,9 +2910,7 @@ export default function DashboardPage() {
                   <option value="tous">{t('source_toutes')}</option>
                 </select>
                 <p className="text-slate-600 text-xs">
-                  💡 En Tunisie, beaucoup de PME sont plus présentes sur Google Maps/Facebook que
-                  sur LinkedIn — pense à activer "Toutes les sources" pour maximiser la couverture.
-                </p>
+                  {tt("💡 En Tunisie, beaucoup de PME sont plus présentes sur Google Maps/Facebook que sur LinkedIn — pense à activer \"Toutes les sources\" pour maximiser la couverture.")}</p>
               </div>
 
               {/* BOUTON LANCER LA RECHERCHE */}
@@ -2936,8 +2925,7 @@ export default function DashboardPage() {
                 </button>
                 {paysSelectionnes.size === 0 && (
                   <p className="text-slate-600 text-xs mt-1">
-                    Sélectionne au moins un pays d'abord.
-                  </p>
+                    {tt("Sélectionne au moins un pays d'abord.")}</p>
                 )}
 
                 {lancementResultat && (
@@ -2947,12 +2935,9 @@ export default function DashboardPage() {
                     ) ? (
                       <div className="rounded-lg bg-slate-900 border border-slate-700 p-3">
                         <p className="text-slate-300">
-                          ⚙️ La recherche automatique n'est pas encore configurée.
-                        </p>
+                          {tt("⚙️ La recherche automatique n'est pas encore configurée.")}</p>
                         <p className="text-slate-500 text-xs mt-1">
-                          En attendant, tu peux ajouter tes cibles à la main ci-dessous, dans
-                          l'onglet "Cibles".
-                        </p>
+                          {tt("En attendant, tu peux ajouter tes cibles à la main ci-dessous, dans l'onglet \"Cibles\".")}</p>
                       </div>
                     ) : (
                       lancementResultat.map((r, i) => (
@@ -2964,9 +2949,7 @@ export default function DashboardPage() {
                           ) : (
                             <span className="text-accent">
                               ✅ {String(r.pays)} ({String(r.source ?? '')}) —{' '}
-                              {String(r.nouveaux_ajoutes)} nouveaux prospects ajoutés (
-                              {String(r.profils_trouves)} trouvés au total)
-                            </span>
+                              {String(r.nouveaux_ajoutes)} {tt("nouveaux prospects ajoutés (")}{String(r.profils_trouves)} {tt("trouvés au total)")}</span>
                           )}
                         </div>
                       ))
@@ -2980,12 +2963,9 @@ export default function DashboardPage() {
             <section className="space-y-4">
               <h2 className="text-lg font-semibold">{t('message_personnalise')}</h2>
               <p className="text-slate-500 text-xs">
-                Utilise <code className="text-accent">{'{nom}'}</code>,{' '}
-                <code className="text-accent">{'{cabinet}'}</code> et{' '}
-                <code className="text-accent">{'{lien}'}</code> dans ton texte — ils seront
-                automatiquement remplacés. Le lien de désinscription est toujours ajouté
-                automatiquement à la fin (obligation légale).
-              </p>
+                {tt("Utilise")}{' '}<code className="text-accent">{'{nom}'}</code>,{' '}
+                <code className="text-accent">{'{cabinet}'}</code> {tt("et")}{' '}
+                <code className="text-accent">{'{lien}'}</code> {tt("dans ton texte — ils seront automatiquement remplacés. Le lien de désinscription est toujours ajouté automatiquement à la fin (obligation légale).")}</p>
 
               <div className="flex flex-wrap gap-2">
                 {templatesPourVertical(verticalSlug).map((tpl) => (
@@ -3006,27 +2986,27 @@ export default function DashboardPage() {
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
                 onBlur={() => enregistrerMessage()}
-                placeholder={`Bonjour {nom},\n\n{cabinet} vous invite a decrire votre situation, un expert etudiera votre dossier :\n{lien}`}
+                placeholder={tt("Bonjour {nom},\n\n{cabinet} vous invite a decrire votre situation, un expert etudiera votre dossier :\n{lien}")}
                 className="w-full h-28 rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
               />
 
               <div className="space-y-2">
                 <p className="text-slate-400 text-sm">
                   {t('logo')}{' '}
-                  <span className="text-slate-600">(URL d'image hébergée en ligne)</span>
+                  <span className="text-slate-600">{tt("(URL d'image hébergée en ligne)")}</span>
                 </p>
                 <input
                   value={logoInput}
                   onChange={(e) => setLogoInput(e.target.value)}
                   onBlur={enregistrerLogo}
-                  placeholder="https://ton-site.com/logo.png"
+                  placeholder={tt("https://ton-site.com/logo.png")}
                   className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                 />
                 {logoInput && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={logoInput}
-                    alt="Aperçu logo"
+                    alt={tt("Aperçu logo")}
                     className="h-12 mt-2 rounded bg-white p-1"
                   />
                 )}
@@ -3104,17 +3084,13 @@ export default function DashboardPage() {
                 {importCSVEnCours ? 'Import en cours...' : `📁 ${t('importer_liste')}`}
               </button>
               <span className="text-xs text-slate-500">
-                Colonnes : nom, telephone, email, entreprise, pays — et pour l'historique
-                (optionnel) : canal, resultat (gagné/perdu)
-              </span>
+                {tt("Colonnes : nom, telephone, email, entreprise, pays — et pour l'historique (optionnel) : canal, resultat (gagné/perdu)")}</span>
             </div>
             {messageImportCSV && <p className="text-sm text-slate-300">{messageImportCSV}</p>}
 
             {targets.filter((tg) => tg.statut === 'nouveau').length === 0 ? (
               <p className="text-slate-500 text-sm italic">
-                Aucune cible non contactée pour le moment. Les prospects déjà contactés se
-                trouvent dans l'onglet Pipeline.
-              </p>
+                {tt("Aucune cible non contactée pour le moment. Les prospects déjà contactés se trouvent dans l'onglet Pipeline.")}</p>
             ) : (
               <>
                 {membresEquipe.length > 1 && (
@@ -3218,7 +3194,7 @@ export default function DashboardPage() {
                       )
                       const nomCollegue = estPriseParAutre
                         ? membresEquipe.find((m) => m.id === target.assigne_a)?.nom_complet ||
-                          'un(e) collègue'
+                          tt("un(e) collègue")
                         : null
                       return (
                     <div
@@ -3235,7 +3211,7 @@ export default function DashboardPage() {
                           }
                           title={
                             estPriseParAutre && !peutSuperviser
-                              ? `Déjà pris en charge par ${nomCollegue}`
+                              ? tf("Déjà pris en charge par {0}", [nomCollegue])
                               : undefined
                           }
                           className="accent-accent"
@@ -3269,7 +3245,7 @@ export default function DashboardPage() {
                               onClick={() => supprimerCible(target.id, target.nom)}
                               disabled={estPriseParAutre && !peutSuperviser}
                               className="text-xs text-slate-500 hover:text-red-400 disabled:opacity-40"
-                              title="Supprimer définitivement cette cible"
+                              title={tt("Supprimer définitivement cette cible")}
                             >
                               🗑️
                             </button>
@@ -3307,14 +3283,11 @@ export default function DashboardPage() {
                           )}
                           {target.reponse_a_traiter && (
                             <p className="text-xs font-semibold text-emerald-400 mt-1">
-                              🎯 Réponse positive détectée — passez à l'envoi du diagnostic
-                            </p>
+                              {tt("🎯 Réponse positive détectée — passez à l'envoi du diagnostic")}</p>
                           )}
                           {estPriseParAutre && (
                             <p className="text-amber-400 text-xs mt-1">
-                              🔒 Déjà pris en charge par {nomCollegue} — merci de ne pas le contacter
-                              de ton côté.
-                            </p>
+                              {tt("🔒 Déjà pris en charge par")}{' '}{nomCollegue} {tt("— merci de ne pas le contacter de ton côté.")}</p>
                           )}
                           {(target.segment_categorie || typeof target.score_chaleur === 'number') && (
                             <div className="flex gap-2 mt-1 flex-wrap">
@@ -3328,7 +3301,7 @@ export default function DashboardPage() {
                                   {target.segment_urgence === 'haute'
                                     ? '🔴 urgent'
                                     : target.segment_urgence === 'basse'
-                                    ? '🟢 pas pressé'
+                                    ? tt("🟢 pas pressé")
                                     : '🟠 moyen'}
                                 </span>
                               )}
@@ -3371,7 +3344,7 @@ export default function DashboardPage() {
                               onChange={(e) => changerEtapePipeline(target.id, e.target.value)}
                               className="text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
                             >
-                              <option value="nouveau">🆕 Nouveau</option>
+                              <option value="nouveau">{tt("🆕 Nouveau")}</option>
                               {etapesPipelinePourVertical(verticalSlug, langue).map((e) => (
                                 <option key={e.etape} value={e.etape}>
                                   {e.label}
@@ -3392,10 +3365,10 @@ export default function DashboardPage() {
                               <span className="text-xs text-slate-500">
                                 ·{' '}
                                 {target.dernier_canal_contact === 'whatsapp'
-                                  ? '📱 Contactée par WhatsApp'
+                                  ? tt("📱 Contactée par WhatsApp")
                                   : target.dernier_canal_contact === 'linkedin'
-                                  ? '🔗 Contactée via LinkedIn'
-                                  : '📧 Contactée par email'}
+                                  ? tt("🔗 Contactée via LinkedIn")
+                                  : tt("📧 Contactée par email")}
                               </span>
                             )}
                           </div>
@@ -3403,8 +3376,7 @@ export default function DashboardPage() {
                           {target.etape_pipeline === 'a_recontacter' && !target.motif_refus && (
                             <div className="mt-2 bg-amber-950/40 border border-amber-900 rounded-lg p-2">
                               <p className="text-xs text-amber-400 mb-1">
-                                Pourquoi ce prospect a-t-il refusé ?
-                              </p>
+                                {tt("Pourquoi ce prospect a-t-il refusé ?")}</p>
                               <select
                                 defaultValue=""
                                 onChange={(e) => {
@@ -3414,21 +3386,18 @@ export default function DashboardPage() {
                                 className="w-full text-xs rounded-lg bg-slate-900 border border-amber-800 px-2 py-1"
                               >
                                 <option value="" disabled>
-                                  Choisir un motif...
-                                </option>
-                                <option value="Pas de budget">Pas de budget (relance dans 90j)</option>
-                                <option value="Pas le moment">Pas le moment (relance dans 30j)</option>
+                                  {tt("Choisir un motif...")}</option>
+                                <option value="Pas de budget">{tt("Pas de budget (relance dans 90j)")}</option>
+                                <option value="Pas le moment">{tt("Pas le moment (relance dans 30j)")}</option>
                                 <option value="Plus le bon interlocuteur">
-                                  Plus le bon interlocuteur (relance dans 60j)
-                                </option>
-                                <option value="Autre">Autre (relance dans 60j)</option>
+                                  {tt("Plus le bon interlocuteur (relance dans 60j)")}</option>
+                                <option value="Autre">{tt("Autre (relance dans 60j)")}</option>
                               </select>
                             </div>
                           )}
                           {target.motif_refus && (
                             <p className="text-xs text-slate-500 mt-1">
-                              Motif : {target.motif_refus} — relance planifiée dans Mon Calendrier
-                            </p>
+                              {tt("Motif :")}{' '}{target.motif_refus} {tt("— relance planifiée dans Mon Calendrier")}</p>
                           )}
 
                           {cibleEditionOuverte === target.id && (
@@ -3439,7 +3408,7 @@ export default function DashboardPage() {
                                   onChange={(e) =>
                                     setFormEditionCible((f) => ({ ...f, nom: e.target.value }))
                                   }
-                                  placeholder="Nom"
+                                  placeholder={tt("Nom")}
                                   className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
                                 />
                                 <input
@@ -3450,7 +3419,7 @@ export default function DashboardPage() {
                                       entreprise_ou_objectif: e.target.value,
                                     }))
                                   }
-                                  placeholder="Entreprise / objectif"
+                                  placeholder={tt("Entreprise / objectif")}
                                   className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
                                 />
                                 <input
@@ -3458,7 +3427,7 @@ export default function DashboardPage() {
                                   onChange={(e) =>
                                     setFormEditionCible((f) => ({ ...f, telephone: e.target.value }))
                                   }
-                                  placeholder="Téléphone"
+                                  placeholder={tt("Téléphone")}
                                   className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
                                 />
                                 <input
@@ -3476,7 +3445,7 @@ export default function DashboardPage() {
                                   }
                                   className="text-xs rounded-lg bg-slate-900 border border-slate-700 p-2 sm:col-span-2"
                                 >
-                                  <option value="">Pays...</option>
+                                  <option value="">{tt("Pays...")}</option>
                                   {PAYS_DISPONIBLES.map((p) => (
                                     <option key={p.code} value={p.code}>
                                       {p.nom}
@@ -3490,14 +3459,12 @@ export default function DashboardPage() {
                                   disabled={!formEditionCible.nom.trim()}
                                   className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
                                 >
-                                  Enregistrer
-                                </button>
+                                  {tt("Enregistrer")}</button>
                                 <button
                                   onClick={() => setCibleEditionOuverte(null)}
                                   className="text-xs px-3 py-1 rounded-lg bg-slate-800 border border-slate-700"
                                 >
-                                  Annuler
-                                </button>
+                                  {tt("Annuler")}</button>
                               </div>
                             </div>
                           )}
@@ -3511,7 +3478,7 @@ export default function DashboardPage() {
                                   onKeyDown={(e) =>
                                     e.key === 'Enter' && ajouterNote(target.id)
                                   }
-                                  placeholder="Ex: l'ai appelé, veut réfléchir, rappeler mardi"
+                                  placeholder={tt("Ex: l'ai appelé, veut réfléchir, rappeler mardi")}
                                   className="flex-1 text-xs rounded-lg bg-slate-900 border border-slate-700 p-2"
                                 />
                                 <button
@@ -3519,11 +3486,10 @@ export default function DashboardPage() {
                                   disabled={!nouvelleNoteTexte.trim()}
                                   className="text-xs px-3 py-1 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40"
                                 >
-                                  Ajouter
-                                </button>
+                                  {tt("Ajouter")}</button>
                               </div>
                               {(notesCibles[target.id] ?? []).length === 0 ? (
-                                <p className="text-xs text-slate-500 italic">Aucune note.</p>
+                                <p className="text-xs text-slate-500 italic">{tt("Aucune note.")}</p>
                               ) : (
                                 (notesCibles[target.id] ?? []).map((n) => (
                                   <div
@@ -3540,8 +3506,7 @@ export default function DashboardPage() {
                                       onClick={() => supprimerNote(target.id, n.id)}
                                       className="text-red-400 hover:text-red-300 underline whitespace-nowrap"
                                     >
-                                      Suppr.
-                                    </button>
+                                      {tt("Suppr.")}</button>
                                   </div>
                                 ))
                               )}
@@ -3560,7 +3525,7 @@ export default function DashboardPage() {
                                   [target.id]: e.target.value as 'whatsapp' | 'email',
                                 })
                               }
-                              title="Canal utilisé pour le premier contact et le diagnostic"
+                              title={tt("Canal utilisé pour le premier contact et le diagnostic")}
                               className="text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1"
                             >
                               <option value="whatsapp">💬 WhatsApp</option>
@@ -3598,7 +3563,7 @@ export default function DashboardPage() {
                             ? 'Envoi...'
                             : target.statut === 'nouveau'
                             ? `📋 ${t('diagnostic')}`
-                            : 'Déjà envoyé'}
+                            : tt("Déjà envoyé")}
                         </button>
                         {target.statut === 'nouveau' && (
                           <button
@@ -3613,7 +3578,7 @@ export default function DashboardPage() {
                           <button
                             onClick={() => preparerLienManuel(target.id, 'facebook')}
                             disabled={envoiEnCours === target.id}
-                            title="Facebook n'autorise pas l'envoi automatique à froid - le texte est préparé pour copier-coller"
+                            title={tt("Facebook n'autorise pas l'envoi automatique à froid - le texte est préparé pour copier-coller")}
                             className="text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 disabled:opacity-40"
                           >
                             {envoiEnCours === target.id ? '...' : '📘 Facebook'}
@@ -4034,7 +3999,7 @@ export default function DashboardPage() {
                       .single()
                     if (!verticalTrouve) {
                       alert(
-                        `Secteur "${slugChoisi}" introuvable en base — contacte l'administrateur pour qu'il exécute la migration 67_verticals_seed_complet.sql.`
+                        tf("Secteur \"{0}\" introuvable en base — contacte l'administrateur pour qu'il exécute la migration 67_verticals_seed_complet.sql.", [slugChoisi])
                       )
                       return
                     }
@@ -4062,7 +4027,7 @@ export default function DashboardPage() {
                 <input
                   value={emailCabinet}
                   onChange={(e) => setEmailCabinet(e.target.value)}
-                  placeholder="contact@cabinet.com"
+                  placeholder={tt("contact@cabinet.com")}
                   type="email"
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 />
@@ -4160,7 +4125,7 @@ export default function DashboardPage() {
                         ) : m.photo_url ? (
                           <img
                             src={m.photo_url}
-                            alt={m.nom_complet ?? 'Photo de profil'}
+                            alt={m.nom_complet ?? tt("Photo de profil")}
                             className="w-7 h-7 rounded-full object-cover border border-slate-600 shrink-0"
                           />
                         ) : null}
@@ -4217,7 +4182,7 @@ export default function DashboardPage() {
                             onChange={(e) =>
                               setEditionMembreForm({ ...editionMembreForm, email: e.target.value })
                             }
-                            placeholder="email@exemple.com"
+                            placeholder={tt("email@exemple.com")}
                             type="email"
                             className="w-full mt-1 rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
                           />
@@ -4382,8 +4347,8 @@ export default function DashboardPage() {
                   onChange={(e) => setInviteRole(e.target.value as 'membre' | 'directeur_commercial')}
                   className="md:col-span-3 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                 >
-                  <option value="membre">👤 Commercial</option>
-                  <option value="directeur_commercial">🧭 Directeur commercial</option>
+                  <option value="membre">{tt("👤 Commercial")}</option>
+                  <option value="directeur_commercial">{tt("🧭 Directeur commercial")}</option>
                 </select>
               )}
             </div>
@@ -4395,10 +4360,7 @@ export default function DashboardPage() {
         {ongletActif === 'catalogue_strategie' && sousOngletGroupe === 'idees' && (
           <section className="space-y-4">
             <p className="text-slate-400 text-sm">
-              Idées de contenu générées automatiquement à partir des diagnostics des prospects — à
-              copier-coller pour vos publications (LinkedIn, blog...). Rien n'est publié
-              automatiquement.
-            </p>
+              {tt("Idées de contenu générées automatiquement à partir des diagnostics des prospects — à copier-coller pour vos publications (LinkedIn, blog...). Rien n'est publié automatiquement.")}</p>
             {(() => {
               const tousLesDiagnostics = [...diagnosticsEnAttente, ...diagnosticsValides]
               const suggestions = tousLesDiagnostics
@@ -4417,9 +4379,7 @@ export default function DashboardPage() {
               if (suggestions.length === 0) {
                 return (
                   <p className="text-slate-500 text-sm italic">
-                    Pas encore de suggestion — elles apparaissent dès qu'un prospect répond à un
-                    diagnostic.
-                  </p>
+                    {tt("Pas encore de suggestion — elles apparaissent dès qu'un prospect répond à un diagnostic.")}</p>
                 )
               }
 
@@ -4440,8 +4400,8 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-slate-300 text-sm">{s.accroche_linkedin}</p>
                       <p className="text-slate-500 text-xs">
-                        Format suggéré : {s.format_suggere}
-                        {s.nomCible ? ` · inspiré par ${s.nomCible}` : ''}
+                        {tt("Format suggéré :")}{' '}{s.format_suggere}
+                        {s.nomCible ? tf(" · inspiré par {0}", [s.nomCible]) : ''}
                       </p>
                     </div>
                   ))}
@@ -4637,9 +4597,7 @@ export default function DashboardPage() {
                       📚 {vocabulairePourVertical(verticalSlug, langue).labelCatalogue}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {catalogue.length} offre{catalogue.length > 1 ? 's' : ''} renseignée
-                      {catalogue.length > 1 ? 's' : ''} — importable en PDF ou saisie manuelle.
-                    </p>
+                      {catalogue.length} {tt("offre")}{catalogue.length > 1 ? 's' : ''} {tt("renseignée")}{catalogue.length > 1 ? 's' : ''} {tt("— importable en PDF ou saisie manuelle.")}</p>
                     <button
                       onClick={() => {
                         setSousOngletGroupe('catalogue')
@@ -4653,9 +4611,7 @@ export default function DashboardPage() {
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-1">
                     <p className="text-sm font-semibold">{t('historique_cibles')}</p>
                     <p className="text-xs text-slate-500">
-                      {targets.length} cible{targets.length > 1 ? 's' : ''} au total — plus il y a
-                      de résultats connus (gagné/perdu), plus l'analyse est fiable.
-                    </p>
+                      {targets.length} {tt("cible")}{targets.length > 1 ? 's' : ''} {tt("au total — plus il y a de résultats connus (gagné/perdu), plus l'analyse est fiable.")}</p>
                     <button
                       onClick={() => setOngletActif('cibles')}
                       className="text-xs text-accent underline"
@@ -4699,7 +4655,7 @@ export default function DashboardPage() {
                           mots_cles_expertise: e.target.value,
                         })
                       }
-                      placeholder="Ex: Management Agile, Conduite du changement, RSE & Climat"
+                      placeholder={tt("Ex: Management Agile, Conduite du changement, RSE & Climat")}
                       className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                     />
                   </div>
@@ -4716,15 +4672,14 @@ export default function DashboardPage() {
                           idees_recues_marche: e.target.value,
                         })
                       }
-                      placeholder="Ex: Mes prospects croient souvent qu'une certification PMP est trop théorique et inapplicable sur le terrain tunisien."
+                      placeholder={tt("Ex: Mes prospects croient souvent qu'une certification PMP est trop théorique et inapplicable sur le terrain tunisien.")}
                       className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                       rows={2}
                     />
                   </div>
                   <div>
                     <label className="text-xs text-slate-400">
-                      Objections et motifs de rejet récurrents du passé
-                    </label>
+                      {tt("Objections et motifs de rejet récurrents du passé")}</label>
                     <p className="text-[11px] text-slate-600 mt-0.5">{t('motifs_rejet_aide')}</p>
                     <textarea
                       value={inputsStrategiques.motifs_rejet_passes}
@@ -4847,7 +4802,7 @@ export default function DashboardPage() {
                               villes_ciblees: e.target.value,
                             })
                           }
-                          placeholder="Tunis, Sfax, Sousse"
+                          placeholder={tt("Tunis, Sfax, Sousse")}
                           className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                         />
                       </div>
@@ -5327,7 +5282,7 @@ export default function DashboardPage() {
                     <>
                       <img
                         src={`/api/marketing/badge?token=${client.token_badge_public}`}
-                        alt="Badge marketing PiloBrain"
+                        alt={tt("Badge marketing PiloBrain")}
                         className="rounded-lg border border-slate-800"
                       />
                       <div className="flex items-center gap-2">
@@ -5591,8 +5546,7 @@ export default function DashboardPage() {
                             }}
                             className="text-xs text-accent hover:text-accent/80 underline"
                           >
-                            ✏️ Modifier
-                          </button>
+                            {tt("✏️ Modifier")}</button>
                           <button
                             onClick={() => supprimerOffre(o.id)}
                             className="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap"
@@ -5821,7 +5775,7 @@ export default function DashboardPage() {
                     onChange={(e) => setNouvelleTache({ ...nouvelleTache, assigne_a: e.target.value })}
                     className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
                   >
-                    <option value="">Assigner à...</option>
+                    <option value="">{tt("Assigner à...")}</option>
                     {membresEquipe.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.nom_complet ?? t('membre_defaut')}
@@ -6357,7 +6311,7 @@ export default function DashboardPage() {
                     )
                     return entreesSansHeure.length > 0 ? (
                       <div className="mb-2 space-y-1">
-                        <p className="text-[10px] text-slate-600">journée</p>
+                        <p className="text-[10px] text-slate-600">{tt("journée")}</p>
                         {entreesSansHeure.map((c) => (
                           <div
                             key={c.id}
@@ -6412,9 +6366,9 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-slate-300">📋 Liste détaillée</h3>
+              <h3 className="text-sm font-semibold text-slate-300">{tt("📋 Liste détaillée")}</h3>
               {calendrier.length === 0 ? (
-                <p className="text-slate-500 text-sm italic">Aucune entrée pour le moment.</p>
+                <p className="text-slate-500 text-sm italic">{tt("Aucune entrée pour le moment.")}</p>
               ) : (
                 calendrier.map((c) => (
                   <div
@@ -6450,16 +6404,14 @@ export default function DashboardPage() {
                           rel="noreferrer"
                           className="text-xs text-accent underline mt-1 inline-block"
                         >
-                          🔗 Voir le lien
-                        </a>
+                          {tt("🔗 Voir le lien")}</a>
                       )}
                     </div>
                     <button
                       onClick={() => supprimerEntreeCalendrier(c.id)}
                       className="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap"
                     >
-                      Supprimer
-                    </button>
+                      {tt("Supprimer")}</button>
                   </div>
                 ))
               )}
@@ -6471,12 +6423,12 @@ export default function DashboardPage() {
         {ongletActif === 'stats' && (
           <>
             <div className="flex items-center gap-2 flex-wrap">
-              <label className="text-xs text-slate-400">🌍 Filtrer par zone :</label>
+              <label className="text-xs text-slate-400">{tt("🌍 Filtrer par zone :")}</label>
               {[
-                { id: 'tous' as const, label: 'Tous les pays' },
+                { id: 'tous' as const, label: tt("Tous les pays") },
                 { id: 'tunisie' as const, label: '🇹🇳 Tunisie' },
                 { id: 'golfe' as const, label: '🇸🇦 Golfe' },
-                { id: 'reste' as const, label: '🌍 Reste du monde' },
+                { id: 'reste' as const, label: tt("🌍 Reste du monde") },
               ].map((z) => (
                 <button
                   key={z.id}
@@ -6510,7 +6462,7 @@ export default function DashboardPage() {
             </section>
 
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold">📈 Taux de performance</h2>
+              <h2 className="text-lg font-semibold">{tt("📈 Taux de performance")}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
                   <p className="text-slate-400 text-sm">{t('stats_taux_reponse')}</p>
@@ -6523,9 +6475,8 @@ export default function DashboardPage() {
                     %
                   </p>
                   <p className="text-slate-500 text-xs mt-1">
-                    {statsPerformance.nbReponses} réponses sur {statsPerformance.nbMessagesEnvoyes}{' '}
-                    messages envoyés
-                  </p>
+                    {statsPerformance.nbReponses} {tt("réponses sur")}{' '}{statsPerformance.nbMessagesEnvoyes}{' '}
+                    {tt("messages envoyés")}</p>
                 </div>
                 <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
                   <p className="text-slate-400 text-sm">{t('stats_taux_conversion')}</p>
@@ -6540,9 +6491,8 @@ export default function DashboardPage() {
                     %
                   </p>
                   <p className="text-slate-500 text-xs mt-1">
-                    {statsPerformance.nbPacksAcceptes} packs acceptés sur{' '}
-                    {statsPerformance.nbDiagnosticsValides} diagnostics validés
-                  </p>
+                    {statsPerformance.nbPacksAcceptes} {tt("packs acceptés sur")}{' '}
+                    {statsPerformance.nbDiagnosticsValides} {tt("diagnostics validés")}</p>
                 </div>
               </div>
             </section>
@@ -6645,7 +6595,7 @@ export default function DashboardPage() {
             {(() => {
               const segments = new Map<string, { total: number; contactes: number }>()
               for (const tg of targets) {
-                const key = tg.segment_categorie ?? 'non segmenté'
+                const key = tg.segment_categorie ?? tt("non segmenté")
                 const entry = segments.get(key) ?? { total: 0, contactes: 0 }
                 entry.total++
                 if (tg.statut === 'contacte') entry.contactes++
@@ -6655,7 +6605,7 @@ export default function DashboardPage() {
               if (lignes.length === 0) return null
               return (
                 <section className="space-y-3">
-                  <h2 className="text-lg font-semibold">🧩 Répartition par segment</h2>
+                  <h2 className="text-lg font-semibold">{tt("🧩 Répartition par segment")}</h2>
                   <div className="space-y-2">
                     {lignes.map(([categorie, stats]) => (
                       <div
@@ -6664,8 +6614,7 @@ export default function DashboardPage() {
                       >
                         <span className="capitalize">{categorie}</span>
                         <span className="text-slate-400">
-                          {stats.contactes}/{stats.total} contactées
-                        </span>
+                          {stats.contactes}/{stats.total} {tt("contactées")}</span>
                       </div>
                     ))}
                   </div>
@@ -6687,9 +6636,7 @@ export default function DashboardPage() {
               return (
                 <section className="space-y-3">
                   <h2 className="text-lg font-semibold text-amber-400">
-                    ⚠️ {chauds.length} prospect{chauds.length > 1 ? 's' : ''} chaud
-                    {chauds.length > 1 ? 's' : ''} sans relance récente
-                  </h2>
+                    ⚠️ {chauds.length} prospect{chauds.length > 1 ? 's' : ''} {tt("chaud")}{chauds.length > 1 ? 's' : ''} {tt("sans relance récente")}</h2>
                   <div className="space-y-2">
                     {chauds.map((tg) => (
                       <div
@@ -6729,12 +6676,12 @@ export default function DashboardPage() {
                 if (lignes.length === 0) return null
                 return (
                   <section className="space-y-3">
-                    <h2 className="text-lg font-semibold">👤 Stats par commercial</h2>
+                    <h2 className="text-lg font-semibold">{tt("👤 Stats par commercial")}</h2>
                     <div className="space-y-2">
                       {lignes.map(([id, stats]) => {
                         const nom =
                           id === '__non_assigne__'
-                            ? 'Non assigné'
+                            ? tt("Non assigné")
                             : membresEquipe.find((m) => m.id === id)?.nom_complet || '(sans nom)'
                         return (
                           <div
@@ -6743,8 +6690,7 @@ export default function DashboardPage() {
                           >
                             <span>👤 {nom}</span>
                             <span className="text-slate-400">
-                              {stats.contactes}/{stats.total} contactées · 🏆 {stats.gagnes} gagné
-                              {stats.gagnes > 1 ? 's' : ''}
+                              {stats.contactes}/{stats.total} {tt("contactées · 🏆")}{' '}{stats.gagnes} {tt("gagné")}{stats.gagnes > 1 ? 's' : ''}
                             </span>
                           </div>
                         )
@@ -6772,12 +6718,12 @@ export default function DashboardPage() {
               const lignes = Array.from(parMois.entries()).sort(([a], [b]) => (a < b ? 1 : -1))
               if (lignes.length === 0) return null
               const nomsMois = [
-                'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun',
-                'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc',
+                'Jan', tt("Fév"), 'Mar', tt("Avr"), tt("Mai"), 'Jun',
+                'Jul', tt("Aoû"), 'Sep', 'Oct', 'Nov', tt("Déc"),
               ]
               return (
                 <section className="space-y-3">
-                  <h2 className="text-lg font-semibold">📅 Stats par mois</h2>
+                  <h2 className="text-lg font-semibold">{tt("📅 Stats par mois")}</h2>
                   <div className="space-y-2">
                     {lignes.map(([cle, stats]) => {
                       const [annee, mois] = cle.split('-')
@@ -6789,8 +6735,7 @@ export default function DashboardPage() {
                         >
                           <span>{label}</span>
                           <span className="text-slate-400">
-                            {stats.contactes}/{stats.total} contactées
-                          </span>
+                            {stats.contactes}/{stats.total} {tt("contactées")}</span>
                         </div>
                       )
                     })}
@@ -6812,13 +6757,13 @@ export default function DashboardPage() {
               const labels: Record<string, string> = {
                 tunisie: '🇹🇳 Tunisie',
                 golfe: '🇸🇦 Golfe',
-                reste: '🌍 Reste du monde',
+                reste: tt("🌍 Reste du monde"),
               }
               const lignes = Array.from(parZone.entries())
               if (lignes.length === 0) return null
               return (
                 <section className="space-y-3">
-                  <h2 className="text-lg font-semibold">📍 Stats par zone</h2>
+                  <h2 className="text-lg font-semibold">{tt("📍 Stats par zone")}</h2>
                   <div className="space-y-2">
                     {lignes.map(([zone, stats]) => (
                       <div
@@ -6827,8 +6772,7 @@ export default function DashboardPage() {
                       >
                         <span>{labels[zone] ?? zone}</span>
                         <span className="text-slate-400">
-                          {stats.contactes}/{stats.total} contactées · 🏆 {stats.gagnes} gagné
-                          {stats.gagnes > 1 ? 's' : ''}
+                          {stats.contactes}/{stats.total} {tt("contactées · 🏆")}{' '}{stats.gagnes} {tt("gagné")}{stats.gagnes > 1 ? 's' : ''}
                         </span>
                       </div>
                     ))}
@@ -6868,14 +6812,13 @@ export default function DashboardPage() {
                 }}
                 className="text-sm px-4 py-2 rounded-lg bg-slate-800 border border-slate-600"
               >
-                📥 Exporter mes cibles en CSV
-              </button>
+                {tt("📥 Exporter mes cibles en CSV")}</button>
             </section>
 
             <section className="space-y-4">
-              <h2 className="text-lg font-semibold">{t('packs_vendus')} — détail</h2>
+              <h2 className="text-lg font-semibold">{t('packs_vendus')} {tt("— détail")}</h2>
               {packsVendus.length === 0 ? (
-                <p className="text-slate-500 text-sm italic">Aucun pack vendu pour le moment.</p>
+                <p className="text-slate-500 text-sm italic">{tt("Aucun pack vendu pour le moment.")}</p>
               ) : (
                 <div className="space-y-2">
                   {packsVendus.map((pack) => (

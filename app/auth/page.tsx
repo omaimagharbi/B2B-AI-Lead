@@ -5,12 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import PhoneInput from '@/components/PhoneInput'
 import ThemeToggle from '@/components/ThemeToggle'
+import LangueSelect from '@/components/LangueSelect'
+import { useLangueVisiteur } from '@/lib/use-langue-visiteur'
+import { tt, tf, definirLangueLitterale } from '@/lib/litteral'
 
 type EtapeInscription = 1 | 2 | 3 | 4
 
 function AuthForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [langue, changerLangue] = useLangueVisiteur()
   const vertical = searchParams.get('vertical') ?? 'cabinet-formation'
   const sousSecteurChoisi = searchParams.get('sous_secteur') ?? ''
 
@@ -82,11 +86,11 @@ function AuthForm() {
   const allerEtapeSuivante = () => {
     setErreur(null)
     if (etape === 1 && !etape1Valide) {
-      setErreur('Merci de remplir le nom, l’email et le téléphone de l’entreprise.')
+      setErreur(tt("Merci de remplir le nom, l’email et le téléphone de l’entreprise."))
       return
     }
     if (etape === 2 && !etape2Valide) {
-      setErreur('Le mot de passe doit faire au moins 6 caractères et les deux champs doivent correspondre.')
+      setErreur(tt("Le mot de passe doit faire au moins 6 caractères et les deux champs doivent correspondre."))
       return
     }
     setEtape((e) => Math.min(4, e + 1) as EtapeInscription)
@@ -119,7 +123,7 @@ function AuthForm() {
         setErreur(
           erreurSignup.message.toLowerCase().includes('already registered') ||
             erreurSignup.message.toLowerCase().includes('already been registered')
-            ? 'Cet email a déjà un compte — connecte-toi plutôt (un même email ne peut pas créer plusieurs cabinets).'
+            ? tt("Cet email a déjà un compte — connecte-toi plutôt (un même email ne peut pas créer plusieurs cabinets).")
             : erreurSignup.message
         )
         setChargement(false)
@@ -130,7 +134,7 @@ function AuthForm() {
       // l'enumeration d'emails) - il renvoie un "succes" silencieux avec un
       // tableau identities vide. On doit donc detecter ce cas nous-memes.
       if (signupData.user && signupData.user.identities && signupData.user.identities.length === 0) {
-        setErreur('Cet email a déjà un compte — connecte-toi plutôt (un même email ne peut pas créer plusieurs cabinets).')
+        setErreur(tt("Cet email a déjà un compte — connecte-toi plutôt (un même email ne peut pas créer plusieurs cabinets)."))
         setChargement(false)
         setMode('connexion')
         return
@@ -140,7 +144,7 @@ function AuthForm() {
       const token = sessionData.session?.access_token
 
       if (!token) {
-        setErreur('Compte créé, mais la session a échoué. Essaie de te connecter.')
+        setErreur(tt("Compte créé, mais la session a échoué. Essaie de te connecter."))
         setChargement(false)
         setMode('connexion')
         return
@@ -170,12 +174,13 @@ function AuthForm() {
           linkedin_url: linkedinUrl || null,
           invite_emails: emailsEquipe,
           email_directeur_commercial: emailDirecteurCommercial || null,
+          langue,
         }),
       })
       const data = await res.json()
 
       if (!res.ok) {
-        setErreur(data.error ?? "Compte créé, mais une erreur est survenue en finalisant l'inscription.")
+        setErreur(data.error ?? tt("Compte créé, mais une erreur est survenue en finalisant l'inscription."))
         setChargement(false)
         return
       }
@@ -191,7 +196,7 @@ function AuthForm() {
       await redirigerApresConnexion()
     } catch (err) {
       console.error('Erreur inscription:', err)
-      setErreur(err instanceof Error ? `Erreur technique : ${err.message}` : 'Erreur technique inconnue')
+      setErreur(err instanceof Error ? tf("Erreur technique : {0}", [err.message]) : tt("Erreur technique inconnue"))
       setChargement(false)
     }
   }
@@ -229,9 +234,9 @@ function AuthForm() {
           })
           const data = await res.json()
           if (!res.ok) {
-            setErreur(data.error ?? "Erreur lors de l'envoi du code")
+            setErreur(data.error ?? tt("Erreur lors de l'envoi du code"))
           } else {
-            setMessageSucces('Code envoyé — vérifie ta boîte mail (et les spams).')
+            setMessageSucces(tt("Code envoyé — vérifie ta boîte mail (et les spams)."))
             setEtapeMdpOublie('code')
           }
           setChargement(false)
@@ -245,9 +250,9 @@ function AuthForm() {
         })
         const data = await res.json()
         if (!res.ok) {
-          setErreur(data.error ?? 'Erreur lors du changement de mot de passe')
+          setErreur(data.error ?? tt("Erreur lors du changement de mot de passe"))
         } else {
-          setMessageSucces('Mot de passe mis à jour ! Tu peux te connecter.')
+          setMessageSucces(tt("Mot de passe mis à jour ! Tu peux te connecter."))
           setNouveauMotDePasse('')
           setCodeVerification('')
           setEtapeMdpOublie('email')
@@ -267,7 +272,7 @@ function AuthForm() {
       await redirigerApresConnexion()
     } catch (err) {
       console.error('Erreur auth:', err)
-      setErreur(err instanceof Error ? `Erreur technique : ${err.message}` : 'Erreur technique inconnue')
+      setErreur(err instanceof Error ? tf("Erreur technique : {0}", [err.message]) : tt("Erreur technique inconnue"))
       setChargement(false)
     }
   }
@@ -291,14 +296,14 @@ function AuthForm() {
       if (res.ok) {
         setEnvoiIdentifiantsMessage(
           data.echecs > 0
-            ? `${data.envoyes} email(s) envoyé(s), ${data.echecs} échec(s).`
-            : `✅ Identifiants envoyés à ${data.envoyes} membre(s) de l'équipe.`
+            ? tf("{0} email(s) envoyé(s), {1} échec(s).", [data.envoyes, data.echecs])
+            : tf("✅ Identifiants envoyés à {0} membre(s) de l'équipe.", [data.envoyes])
         )
       } else {
-        setEnvoiIdentifiantsMessage(data.error ?? "Erreur lors de l'envoi.")
+        setEnvoiIdentifiantsMessage(data.error ?? tt("Erreur lors de l'envoi."))
       }
     } catch {
-      setEnvoiIdentifiantsMessage("Erreur lors de l'envoi.")
+      setEnvoiIdentifiantsMessage(tt("Erreur lors de l'envoi."))
     }
     setEnvoiIdentifiantsEnCours(false)
   }
@@ -306,13 +311,14 @@ function AuthForm() {
   if (equipeCreee.length > 0) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4">
-        <ThemeToggle className="fixed top-4 right-4 z-40" />
+        <div className="fixed top-4 right-4 z-40 flex items-center gap-3">
+          <LangueSelect langue={langue} onChange={changerLangue} />
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-md space-y-6 text-center">
-          <h1 className="text-2xl font-bold">✅ Compte créé !</h1>
+          <h1 className="text-2xl font-bold">{tt("✅ Compte créé !")}</h1>
           <p className="text-slate-400 text-sm">
-            Voici les identifiants de connexion de ton équipe — transmets-les-leur, ils ne seront plus
-            affichés ensuite.
-          </p>
+            {tt("Voici les identifiants de connexion de ton équipe — transmets-les-leur, ils ne seront plus affichés ensuite.")}</p>
           <div className="space-y-2 text-left bg-slate-900 border border-slate-700 rounded-xl p-4">
             {equipeCreee.map((m) => (
               <div key={m.email} className="text-sm border-b border-slate-800 pb-2 last:border-0 last:pb-0">
@@ -323,7 +329,7 @@ function AuthForm() {
                   </span>
                 </p>
                 <p className="text-slate-400">
-                  Mot de passe temporaire : <span className="text-accent">{m.motDePasseTemporaire}</span>
+                  {tt("Mot de passe temporaire :")}{' '}<span className="text-accent">{m.motDePasseTemporaire}</span>
                 </p>
               </div>
             ))}
@@ -333,7 +339,7 @@ function AuthForm() {
             disabled={envoiIdentifiantsEnCours}
             className="w-full py-2.5 rounded-lg border border-accent text-accent font-semibold hover:bg-accent/10 transition disabled:opacity-50"
           >
-            {envoiIdentifiantsEnCours ? 'Envoi en cours...' : '📧 Envoyer les identifiants par email'}
+            {envoiIdentifiantsEnCours ? 'Envoi en cours...' : tt("📧 Envoyer les identifiants par email")}
           </button>
           {envoiIdentifiantsMessage && (
             <p className="text-xs text-slate-400">{envoiIdentifiantsMessage}</p>
@@ -342,8 +348,7 @@ function AuthForm() {
             onClick={redirigerApresConnexion}
             className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold hover:opacity-90 transition"
           >
-            Accéder à mon tableau de bord →
-          </button>
+            {tt("Accéder à mon tableau de bord →")}</button>
         </div>
       </main>
     )
@@ -351,22 +356,22 @@ function AuthForm() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4 py-10">
-        <ThemeToggle className="fixed top-4 right-4 z-40" />
+        <div className="fixed top-4 right-4 z-40 flex items-center gap-3">
+          <LangueSelect langue={langue} onChange={changerLangue} />
+          <ThemeToggle />
+        </div>
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">
             {mode === 'inscription'
-              ? 'Créez le compte de votre cabinet'
+              ? tt("Créez le compte de votre cabinet")
               : mode === 'connexion'
-              ? 'Connexion à votre compte cabinet'
-              : 'Mot de passe oublié'}
+              ? tt("Connexion à votre compte cabinet")
+              : tt("Mot de passe oublié")}
           </h1>
           {mode === 'inscription' && (
             <p className="text-slate-600 text-xs">
-              Étape {etape} sur 4
-              {sousSecteurChoisi ? ` — ${sousSecteurChoisi}` : ''} — l'accès administration
-              plateforme est réservé à PiloBrain et n'est pas ouvert à l'inscription.
-            </p>
+              {tt("Étape")}{' '}{etape} {tt("sur 4")}{sousSecteurChoisi ? ` — ${sousSecteurChoisi}` : ''} {tt("— l'accès administration plateforme est réservé à PiloBrain et n'est pas ouvert à l'inscription.")}</p>
           )}
         </div>
 
@@ -396,18 +401,17 @@ function AuthForm() {
             {etape === 1 && (
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-slate-300">
-                  L'identité de l'entreprise
-                </p>
+                  {tt("L'identité de l'entreprise")}</p>
                 <input
                   value={nomEntreprise}
                   onChange={(e) => setNomEntreprise(e.target.value)}
-                  placeholder="Nom de l'entreprise"
+                  placeholder={tt("Nom de l'entreprise")}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
                 <input
                   value={emailEntreprise}
                   onChange={(e) => setEmailEntreprise(e.target.value)}
-                  placeholder="Email professionnel de l'entreprise"
+                  placeholder={tt("Email professionnel de l'entreprise")}
                   type="email"
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
@@ -418,7 +422,7 @@ function AuthForm() {
                     onIndicatifChange={setIndicatifTelephone}
                     numero={telephone}
                     onNumeroChange={setTelephone}
-                    placeholder="Téléphone / WhatsApp pro"
+                    placeholder={tt("Téléphone / WhatsApp pro")}
                   />
                 </div>
                 <label
@@ -440,7 +444,7 @@ function AuthForm() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={logoApercu} alt="Logo" className="h-16 object-contain" />
                   ) : (
-                    <span>📁 Glissez-déposez le logo du cabinet ici (optionnel)</span>
+                    <span>{tt("📁 Glissez-déposez le logo du cabinet ici (optionnel)")}</span>
                   )}
                   <input
                     type="file"
@@ -455,19 +459,18 @@ function AuthForm() {
             {etape === 2 && (
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-slate-300">
-                  L'identité du directeur commercial
-                </p>
+                  {tt("L'identité du directeur commercial")}</p>
                 <input
                   value={nomDirecteur}
                   onChange={(e) => setNomDirecteur(e.target.value)}
-                  placeholder="Prénom & nom du directeur"
+                  placeholder={tt("Prénom & nom du directeur")}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
                 <div className="relative">
                   <input
                     value={motDePasseInscription}
                     onChange={(e) => setMotDePasseInscription(e.target.value)}
-                    placeholder="Mot de passe"
+                    placeholder={tt("Mot de passe")}
                     type={afficherMotDePasse ? 'text' : 'password'}
                     className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3 pr-10"
                   />
@@ -475,7 +478,7 @@ function AuthForm() {
                     type="button"
                     onClick={() => setAfficherMotDePasse((v) => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                    aria-label="Afficher/masquer le mot de passe"
+                    aria-label={tt("Afficher/masquer le mot de passe")}
                   >
                     👁️
                   </button>
@@ -483,7 +486,7 @@ function AuthForm() {
                 <input
                   value={confirmationMotDePasse}
                   onChange={(e) => setConfirmationMotDePasse(e.target.value)}
-                  placeholder="Confirmation du mot de passe"
+                  placeholder={tt("Confirmation du mot de passe")}
                   type={afficherMotDePasse ? 'text' : 'password'}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
@@ -493,31 +496,25 @@ function AuthForm() {
             {etape === 3 && (
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-slate-300">
-                  L'invitation de l'équipe
-                </p>
+                  {tt("L'invitation de l'équipe")}</p>
                 <div className="space-y-1">
                   <p className="text-xs text-slate-500">
-                    Directeur commercial (optionnel) — supervise l'équipe et voit les statistiques de
-                    chacun.
-                  </p>
+                    {tt("Directeur commercial (optionnel) — supervise l'équipe et voit les statistiques de chacun.")}</p>
                   <input
                     value={emailDirecteurCommercial}
                     onChange={(e) => setEmailDirecteurCommercial(e.target.value)}
-                    placeholder="email.du.directeur@exemple.com"
+                    placeholder={tt("email.du.directeur@exemple.com")}
                     type="email"
                     className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                   />
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-slate-500">
-                    Commerciaux — adresses e-mail séparées par une virgule. Ils recevront un accès
-                    immédiat (à leur transmettre toi-même) — tu peux aussi le faire plus tard depuis ton
-                    tableau de bord.
-                  </p>
+                    {tt("Commerciaux — adresses e-mail séparées par une virgule. Ils recevront un accès immédiat (à leur transmettre toi-même) — tu peux aussi le faire plus tard depuis ton tableau de bord.")}</p>
                   <textarea
                     value={emailsEquipe}
                     onChange={(e) => setEmailsEquipe(e.target.value)}
-                    placeholder="commercial1@exemple.com, commercial2@exemple.com"
+                    placeholder={tt("commercial1@exemple.com, commercial2@exemple.com")}
                     rows={3}
                     className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                   />
@@ -528,30 +525,29 @@ function AuthForm() {
             {etape === 4 && (
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-slate-300">
-                  Site et réseaux sociaux
-                </p>
+                  {tt("Site et réseaux sociaux")}</p>
                 <input
                   value={siteWeb}
                   onChange={(e) => setSiteWeb(e.target.value)}
-                  placeholder="Lien du site de l'entreprise (optionnel)"
+                  placeholder={tt("Lien du site de l'entreprise (optionnel)")}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
                 <input
                   value={linkedinUrl}
                   onChange={(e) => setLinkedinUrl(e.target.value)}
-                  placeholder="Page LinkedIn (optionnel)"
+                  placeholder={tt("Page LinkedIn (optionnel)")}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
                 <input
                   value={facebookUrl}
                   onChange={(e) => setFacebookUrl(e.target.value)}
-                  placeholder="Page Facebook (optionnel)"
+                  placeholder={tt("Page Facebook (optionnel)")}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
                 <input
                   value={instagramUrl}
                   onChange={(e) => setInstagramUrl(e.target.value)}
-                  placeholder="Page Instagram (optionnel)"
+                  placeholder={tt("Page Instagram (optionnel)")}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
               </div>
@@ -564,23 +560,21 @@ function AuthForm() {
                   disabled={chargement}
                   className="flex-1 py-3 rounded-lg border border-slate-700 text-slate-300 font-semibold hover:bg-slate-800 transition disabled:opacity-40"
                 >
-                  ← Précédent
-                </button>
+                  {tt("← Précédent")}</button>
               )}
               {etape < 4 ? (
                 <button
                   onClick={allerEtapeSuivante}
                   className="flex-1 py-3 rounded-lg bg-accent text-slate-950 font-semibold hover:opacity-90 transition"
                 >
-                  Suivant →
-                </button>
+                  {tt("Suivant →")}</button>
               ) : (
                 <button
                   onClick={finaliserInscription}
                   disabled={chargement}
                   className="flex-1 py-3 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-40 hover:opacity-90 transition"
                 >
-                  {chargement ? 'Création du compte...' : 'Créer mon compte →'}
+                  {chargement ? tt("Création du compte...") : tt("Créer mon compte →")}
                 </button>
               )}
             </div>
@@ -593,7 +587,7 @@ function AuthForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && soumettreConnexion()}
-              placeholder="Email professionnel"
+              placeholder={tt("Email professionnel")}
               type="email"
               className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
             />
@@ -602,7 +596,7 @@ function AuthForm() {
                 value={motDePasse}
                 onChange={(e) => setMotDePasse(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && soumettreConnexion()}
-                placeholder="Mot de passe"
+                placeholder={tt("Mot de passe")}
                 type="password"
                 className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
               />
@@ -612,14 +606,14 @@ function AuthForm() {
                 <input
                   value={codeVerification}
                   onChange={(e) => setCodeVerification(e.target.value)}
-                  placeholder="Code reçu par email (6 chiffres)"
+                  placeholder={tt("Code reçu par email (6 chiffres)")}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
                 <input
                   value={nouveauMotDePasse}
                   onChange={(e) => setNouveauMotDePasse(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && soumettreConnexion()}
-                  placeholder="Nouveau mot de passe"
+                  placeholder={tt("Nouveau mot de passe")}
                   type="password"
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
                 />
@@ -642,8 +636,8 @@ function AuthForm() {
                 : mode === 'connexion'
                 ? 'Se connecter'
                 : mode === 'mot_de_passe_oublie' && etapeMdpOublie === 'email'
-                ? 'Envoyer le code'
-                : 'Mettre à jour le mot de passe'}
+                ? tt("Envoyer le code")
+                : tt("Mettre à jour le mot de passe")}
             </button>
           </div>
         )}
@@ -659,8 +653,7 @@ function AuthForm() {
               }}
               className="text-slate-400 text-sm underline"
             >
-              Mot de passe oublié ?
-            </button>
+              {tt("Mot de passe oublié ?")}</button>
           </p>
         )}
 
@@ -676,11 +669,10 @@ function AuthForm() {
               }}
               className="text-accent underline"
             >
-              Retour à la connexion
-            </button>
+              {tt("Retour à la connexion")}</button>
           ) : (
             <>
-              {mode === 'inscription' ? 'Déjà un compte ?' : 'Pas encore de compte ?'}{' '}
+              {mode === 'inscription' ? tt("Déjà un compte ?") : tt("Pas encore de compte ?")}{' '}
               <button
                 onClick={() => {
                   if (mode === 'inscription') {

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { PAYS_DISPONIBLES } from '@/lib/pays'
 import PhoneInput, { decouperTelephone } from '@/components/PhoneInput'
+import { tt, tf } from '@/lib/litteral'
+import { useLangueVisiteur } from '@/lib/use-langue-visiteur'
 
 type Profil = {
   id: string
@@ -57,6 +59,7 @@ async function fetchAvecToken(url: string, options: RequestInit = {}) {
 }
 
 export default function ProfilPage() {
+  useLangueVisiteur()
   const router = useRouter()
   const [chargement, setChargement] = useState(true)
   const [email, setEmail] = useState('')
@@ -123,7 +126,7 @@ export default function ProfilPage() {
       const chemin = `${profil.id}-${Date.now()}.${fichier.name.split('.').pop()}`
       const { error } = await supabase.storage.from('avatars').upload(chemin, fichier)
       if (error) {
-        alert("Échec de l'upload de la photo")
+        alert(tt("Échec de l'upload de la photo"))
         return
       }
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(chemin)
@@ -136,7 +139,7 @@ export default function ProfilPage() {
   if (chargement) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-        <p className="text-slate-400">Chargement...</p>
+        <p className="text-slate-400">{tt("Chargement...")}</p>
       </main>
     )
   }
@@ -147,10 +150,9 @@ export default function ProfilPage() {
     <main className="min-h-screen bg-slate-950 text-white px-6 py-10">
       <div className="max-w-3xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">👤 Mon profil</h1>
+          <h1 className="text-2xl font-bold">{tt("👤 Mon profil")}</h1>
           <a href="/dashboard" className="text-sm text-accent underline">
-            ← Retour au dashboard
-          </a>
+            {tt("← Retour au dashboard")}</a>
         </div>
 
         {/* Photo + infos générales */}
@@ -160,7 +162,7 @@ export default function ProfilPage() {
               {profil.photo_url ? (
                 <img
                   src={profil.photo_url}
-                  alt="Photo de profil"
+                  alt={tt("Photo de profil")}
                   className="w-20 h-20 rounded-full object-cover border-2 border-slate-700"
                 />
               ) : (
@@ -186,7 +188,7 @@ export default function ProfilPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-slate-400">Nom complet</label>
+              <label className="text-xs text-slate-400">{tt("Nom complet")}</label>
               <input
                 value={profil.nom_complet ?? ''}
                 onChange={(e) => setProfil({ ...profil, nom_complet: e.target.value })}
@@ -195,7 +197,7 @@ export default function ProfilPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400">Téléphone</label>
+              <label className="text-xs text-slate-400">{tt("Téléphone")}</label>
               <PhoneInput
                 className="mt-1"
                 indicatif={indicatifTel}
@@ -212,7 +214,7 @@ export default function ProfilPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400">Pays</label>
+              <label className="text-xs text-slate-400">{tt("Pays")}</label>
               <select
                 value={profil.pays ?? ''}
                 onChange={(e) => sauvegarderProfil({ pays: e.target.value })}
@@ -227,20 +229,20 @@ export default function ProfilPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-400">Genre</label>
+              <label className="text-xs text-slate-400">{tt("Genre")}</label>
               <select
                 value={profil.genre ?? ''}
                 onChange={(e) => sauvegarderProfil({ genre: e.target.value })}
                 className="w-full mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
               >
                 <option value="">—</option>
-                <option value="femme">Femme</option>
-                <option value="homme">Homme</option>
-                <option value="autre">Autre</option>
+                <option value="femme">{tt("Femme")}</option>
+                <option value="homme">{tt("Homme")}</option>
+                <option value="autre">{tt("Autre")}</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-400">Date de naissance</label>
+              <label className="text-xs text-slate-400">{tt("Date de naissance")}</label>
               <input
                 type="date"
                 value={profil.date_naissance ?? ''}
@@ -249,7 +251,7 @@ export default function ProfilPage() {
               />
             </div>
           </div>
-          {sauvegardeEnCours && <p className="text-xs text-slate-500">Enregistrement...</p>}
+          {sauvegardeEnCours && <p className="text-xs text-slate-500">{tt("Enregistrement...")}</p>}
         </section>
 
         <SectionExperiences experiences={experiences} setExperiences={setExperiences} />
@@ -299,14 +301,14 @@ function SectionExperiences({
   return (
     <section className="rounded-xl border border-slate-700 bg-slate-900 p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">💼 Expériences</h2>
+        <h2 className="font-semibold">{tt("💼 Expériences")}</h2>
         <button onClick={() => setOuvert(!ouvert)} className="text-xs text-accent">
-          {ouvert ? 'Annuler' : '+ Ajouter'}
+          {ouvert ? 'Annuler' : tt("+ Ajouter")}
         </button>
       </div>
 
       {experiences.length === 0 && !ouvert && (
-        <p className="text-slate-500 text-sm">Aucune expérience renseignée.</p>
+        <p className="text-slate-500 text-sm">{tt("Aucune expérience renseignée.")}</p>
       )}
 
       <div className="space-y-3">
@@ -321,8 +323,7 @@ function SectionExperiences({
               {exp.description && <p className="text-slate-400 text-xs mt-1">{exp.description}</p>}
             </div>
             <button onClick={() => supprimer(exp.id)} className="text-xs text-red-400 shrink-0">
-              Retirer
-            </button>
+              {tt("Retirer")}</button>
           </div>
         ))}
       </div>
@@ -332,13 +333,13 @@ function SectionExperiences({
           <input
             value={form.intitule}
             onChange={(e) => setForm({ ...form, intitule: e.target.value })}
-            placeholder="Intitulé du poste"
+            placeholder={tt("Intitulé du poste")}
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
           />
           <input
             value={form.entreprise}
             onChange={(e) => setForm({ ...form, entreprise: e.target.value })}
-            placeholder="Entreprise"
+            placeholder={tt("Entreprise")}
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
           />
           <div className="grid grid-cols-2 gap-2">
@@ -362,18 +363,16 @@ function SectionExperiences({
               checked={form.en_cours}
               onChange={(e) => setForm({ ...form, en_cours: e.target.checked })}
             />
-            Poste actuel
-          </label>
+            {tt("Poste actuel")}</label>
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Description (optionnel)"
+            placeholder={tt("Description (optionnel)")}
             rows={2}
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
           />
           <button onClick={ajouter} className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold">
-            Enregistrer
-          </button>
+            {tt("Enregistrer")}</button>
         </div>
       )}
     </section>
@@ -419,14 +418,14 @@ function SectionFormations({
   return (
     <section className="rounded-xl border border-slate-700 bg-slate-900 p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">🎓 Formation</h2>
+        <h2 className="font-semibold">{tt("🎓 Formation")}</h2>
         <button onClick={() => setOuvert(!ouvert)} className="text-xs text-accent">
-          {ouvert ? 'Annuler' : '+ Ajouter'}
+          {ouvert ? 'Annuler' : tt("+ Ajouter")}
         </button>
       </div>
 
       {formations.length === 0 && !ouvert && (
-        <p className="text-slate-500 text-sm">Aucune formation renseignée.</p>
+        <p className="text-slate-500 text-sm">{tt("Aucune formation renseignée.")}</p>
       )}
 
       <div className="space-y-3">
@@ -441,8 +440,7 @@ function SectionFormations({
               {f.description && <p className="text-slate-400 text-xs mt-1">{f.description}</p>}
             </div>
             <button onClick={() => supprimer(f.id)} className="text-xs text-red-400 shrink-0">
-              Retirer
-            </button>
+              {tt("Retirer")}</button>
           </div>
         ))}
       </div>
@@ -452,13 +450,13 @@ function SectionFormations({
           <input
             value={form.diplome}
             onChange={(e) => setForm({ ...form, diplome: e.target.value })}
-            placeholder="Diplôme / certification"
+            placeholder={tt("Diplôme / certification")}
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
           />
           <input
             value={form.etablissement}
             onChange={(e) => setForm({ ...form, etablissement: e.target.value })}
-            placeholder="Établissement"
+            placeholder={tt("Établissement")}
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
           />
           <div className="grid grid-cols-2 gap-2">
@@ -482,18 +480,16 @@ function SectionFormations({
               checked={form.en_cours}
               onChange={(e) => setForm({ ...form, en_cours: e.target.checked })}
             />
-            En cours
-          </label>
+            {tt("En cours")}</label>
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Description (optionnel)"
+            placeholder={tt("Description (optionnel)")}
             rows={2}
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
           />
           <button onClick={ajouter} className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold">
-            Enregistrer
-          </button>
+            {tt("Enregistrer")}</button>
         </div>
       )}
     </section>
@@ -543,11 +539,11 @@ function SectionMissions({
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">🎯 Missions</h2>
         <button onClick={() => setOuvert(!ouvert)} className="text-xs text-accent">
-          {ouvert ? 'Annuler' : '+ Ajouter'}
+          {ouvert ? 'Annuler' : tt("+ Ajouter")}
         </button>
       </div>
 
-      {missions.length === 0 && !ouvert && <p className="text-slate-500 text-sm">Aucune mission renseignée.</p>}
+      {missions.length === 0 && !ouvert && <p className="text-slate-500 text-sm">{tt("Aucune mission renseignée.")}</p>}
 
       <div className="space-y-3">
         {missions.map((m) => (
@@ -560,7 +556,7 @@ function SectionMissions({
                     m.statut === 'terminee' ? 'bg-emerald-900 text-emerald-300' : 'bg-amber-900 text-amber-300'
                   }`}
                 >
-                  {m.statut === 'terminee' ? 'Terminée' : 'En cours'}
+                  {m.statut === 'terminee' ? tt("Terminée") : 'En cours'}
                 </span>
               </p>
               {m.description && <p className="text-slate-400 text-xs mt-1">{m.description}</p>}
@@ -570,8 +566,7 @@ function SectionMissions({
                 {m.statut === 'terminee' ? 'Rouvrir' : 'Terminer'}
               </button>
               <button onClick={() => supprimer(m.id)} className="text-xs text-red-400">
-                Retirer
-              </button>
+                {tt("Retirer")}</button>
             </div>
           </div>
         ))}
@@ -582,19 +577,18 @@ function SectionMissions({
           <input
             value={form.titre}
             onChange={(e) => setForm({ ...form, titre: e.target.value })}
-            placeholder="Titre de la mission"
+            placeholder={tt("Titre de la mission")}
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
           />
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Description (optionnel)"
+            placeholder={tt("Description (optionnel)")}
             rows={2}
             className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
           />
           <button onClick={ajouter} className="text-xs px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-semibold">
-            Enregistrer
-          </button>
+            {tt("Enregistrer")}</button>
         </div>
       )}
     </section>

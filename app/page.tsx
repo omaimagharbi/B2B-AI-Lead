@@ -60,7 +60,7 @@ const PROFILS: Record<Langue, Profil[]> = {
     },
     {
       titre: 'Immobilier',
-      description: 'Agences, promoteurs, agents indépendants, syndics : acheteurs et vendeurs qualifiés livrés dans votre pipeline.',
+      description: 'Agences immobilières, promoteurs, gestion locative : acheteurs et vendeurs qualifiés livrés dans votre pipeline.',
       tag: 'Immobilier',
       dotColor: '#C87D55',
       active: true,
@@ -115,7 +115,7 @@ const PROFILS: Record<Langue, Profil[]> = {
     },
     {
       titre: 'Real Estate',
-      description: 'Agencies, developers, independent agents, property managers: qualified buyers and sellers delivered to your pipeline.',
+      description: 'Real estate agencies, developers, property management: qualified buyers and sellers delivered to your pipeline.',
       tag: 'Real estate',
       dotColor: '#C87D55',
       active: true,
@@ -166,7 +166,7 @@ const PROFILS: Record<Langue, Profil[]> = {
     },
     {
       titre: 'العقارات',
-      description: 'وكالات، مطورون، وكلاء مستقلون، مديرو العقارات: مشترون وبائعون مؤهلون في قناة مبيعاتك.',
+      description: 'وكالات عقارية، مطورون، إدارة الأملاك: مشترون وبائعون مؤهلون في قناة مبيعاتك.',
       tag: 'عقارات',
       dotColor: '#C87D55',
       active: true,
@@ -337,10 +337,16 @@ const VALEURS: Record<Langue, Valeur[]> = {
 }
 
 function useLangueVisiteur() {
-  const [langue, setLangue] = useState<Langue>('fr')
+  // ?lang= dans le lien > choix memorise > anglais par defaut
+  const [langue, setLangue] = useState<Langue>('en')
   useEffect(() => {
-    const sauvegardee = window.localStorage.getItem('pilobrain_langue') as Langue | null
-    if (sauvegardee === 'fr' || sauvegardee === 'en' || sauvegardee === 'ar') setLangue(sauvegardee)
+    const valide = (v: string | null): v is Langue => v === 'fr' || v === 'en' || v === 'ar'
+    const param = new URLSearchParams(window.location.search).get('lang')
+    const sauvegardee = window.localStorage.getItem('pilobrain_langue')
+    if (valide(param)) {
+      setLangue(param)
+      window.localStorage.setItem('pilobrain_langue', param)
+    } else if (valide(sauvegardee)) setLangue(sauvegardee)
   }, [])
   const changerLangue = (l: Langue) => {
     setLangue(l)

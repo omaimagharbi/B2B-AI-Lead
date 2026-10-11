@@ -15,7 +15,7 @@ const CARTES: Record<Langue, Carte[]> = {
     { slug: 'investisseur-incubateur', titre: 'Écosystème Entrepreneurial', description: "Sourcez du dealflow qualifié : fondateurs et startups prêts à être contactés.", dotColor: '#1F6F78', active: true },
     { slug: 'comptable-fiscal', titre: 'Cabinet Comptable, Juridique & Fiscal', description: "Automatisez la chasse de mandats — expertise comptable, avocats d'affaires, conformité.", dotColor: '#8892A0', active: false },
     { slug: 'services-generaux', titre: 'Logistique, Transit & Services Généraux', description: 'Transitaires, maintenance industrielle, facility management, événementiel B2B.', dotColor: '#8892A0', active: false },
-    { slug: 'immobilier', titre: 'Immobilier', description: 'Agences, promoteurs, agents indépendants : recevez des acheteurs et vendeurs qualifiés.', dotColor: '#C87D55', active: true },
+    { slug: 'immobilier', titre: 'Immobilier', description: 'Agences immobilières, promoteurs, gestion locative : recevez des acheteurs et vendeurs qualifiés.', dotColor: '#C87D55', active: true },
   ],
   en: [
     { slug: 'cabinet-formation', titre: 'Training & HR Consulting', description: 'Receive qualified prospects, ready to sign, without any prospecting effort.', dotColor: '#1F6F78', active: true },
@@ -24,7 +24,7 @@ const CARTES: Record<Langue, Carte[]> = {
     { slug: 'investisseur-incubateur', titre: 'Startup Ecosystem', description: 'Source qualified dealflow: founders and startups ready to be contacted.', dotColor: '#1F6F78', active: true },
     { slug: 'comptable-fiscal', titre: 'Accounting, Legal & Tax Firms', description: 'Automate mandate hunting — accounting expertise, business lawyers, compliance.', dotColor: '#8892A0', active: false },
     { slug: 'services-generaux', titre: 'Logistics, Freight & General Services', description: 'Freight forwarders, industrial maintenance, facility management, B2B events.', dotColor: '#8892A0', active: false },
-    { slug: 'immobilier', titre: 'Real Estate', description: 'Agencies, developers, independent agents: receive qualified buyers and sellers.', dotColor: '#C87D55', active: true },
+    { slug: 'immobilier', titre: 'Real Estate', description: 'Real estate agencies, developers, property management: receive qualified buyers and sellers.', dotColor: '#C87D55', active: true },
   ],
   ar: [
     { slug: 'cabinet-formation', titre: 'التدريب واستشارات الموارد البشرية', description: 'احصل على عملاء محتملين مؤهلين وجاهزين للتوقيع، دون أي جهد تنقيب.', dotColor: '#1F6F78', active: true },
@@ -33,23 +33,47 @@ const CARTES: Record<Langue, Carte[]> = {
     { slug: 'investisseur-incubateur', titre: 'المنظومة الريادية', description: 'اجمع صفقات مؤهلة: مؤسسون وشركات ناشئة جاهزون للتواصل.', dotColor: '#1F6F78', active: true },
     { slug: 'comptable-fiscal', titre: 'مكاتب المحاسبة والقانون والضرائب', description: 'أتمتة صيد المهام — خبرة محاسبية، محامو أعمال، امتثال.', dotColor: '#8892A0', active: false },
     { slug: 'services-generaux', titre: 'اللوجستيات والنقل والخدمات العامة', description: 'وكلاء الشحن، الصيانة الصناعية، إدارة المرافق، فعاليات B2B.', dotColor: '#8892A0', active: false },
-    { slug: 'immobilier', titre: 'العقارات', description: 'وكالات، مطورون، وكلاء مستقلون: احصل على مشترين وبائعين مؤهلين.', dotColor: '#C87D55', active: true },
+    { slug: 'immobilier', titre: 'العقارات', description: 'وكالات عقارية، مطورون، إدارة الأملاك: احصل على مشترين وبائعين مؤهلين.', dotColor: '#C87D55', active: true },
   ],
 }
 
-function useLangueVisiteur() {
-  const [langue, setLangue] = useState<Langue>('fr')
+// Langue du visiteur : ?lang= dans le lien > choix memorise > anglais par defaut
+function useLangueVisiteur(): [Langue, (l: Langue) => void] {
+  const [langue, setLangueEtat] = useState<Langue>('en')
   useEffect(() => {
-    const sauvegardee = window.localStorage.getItem('pilobrain_langue') as Langue | null
-    if (sauvegardee === 'fr' || sauvegardee === 'en' || sauvegardee === 'ar') setLangue(sauvegardee)
+    const valide = (v: string | null): v is Langue => v === 'fr' || v === 'en' || v === 'ar'
+    const param = new URLSearchParams(window.location.search).get('lang')
+    const sauvegardee = window.localStorage.getItem('pilobrain_langue')
+    if (valide(param)) {
+      setLangueEtat(param)
+      window.localStorage.setItem('pilobrain_langue', param)
+    } else if (valide(sauvegardee)) {
+      setLangueEtat(sauvegardee)
+    }
   }, [])
-  return langue
+  const changer = (l: Langue) => {
+    setLangueEtat(l)
+    window.localStorage.setItem('pilobrain_langue', l)
+  }
+  return [langue, changer]
 }
 
 export default function Secteurs() {
-  const langue = useLangueVisiteur()
+  const [langue, changerLangue] = useLangueVisiteur()
   const t = (cle: string) => traduire(langue, cle)
-  const cartes = CARTES[langue].map((c) => ({ ...c, sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL[c.slug] }))
+
+  // Lien d'inscription dedie a un seul secteur : /secteurs?secteur=immobilier (ou /immobilier)
+  const [secteurUnique, setSecteurUnique] = useState<string | null>(null)
+  useEffect(() => {
+    const slug = new URLSearchParams(window.location.search).get('secteur')
+    if (slug && SOUS_SECTEURS_PAR_VERTICAL[slug]) {
+      setSecteurUnique(slug)
+      setCarteOuverte(slug)
+    }
+  }, [])
+  const cartes = CARTES[langue]
+    .filter((c) => !secteurUnique || c.slug === secteurUnique)
+    .map((c) => ({ ...c, sousSecteurs: SOUS_SECTEURS_PAR_VERTICAL[c.slug] }))
 
   const [carteOuverte, setCarteOuverte] = useState<string | null>(null)
   const [carteBeta, setCarteBeta] = useState<{ slug: string; titre: string } | null>(null)
@@ -116,8 +140,18 @@ export default function Secteurs() {
           </a>
           <div className="flex items-center gap-3">
             <ThemeToggle />
+            <select
+              value={langue}
+              onChange={(e) => changerLangue(e.target.value as Langue)}
+              aria-label="Language"
+              className="text-[13px] text-slate-400 bg-transparent cursor-pointer focus:outline-none"
+            >
+              <option value="en">EN</option>
+              <option value="fr">FR</option>
+              <option value="ar">AR</option>
+            </select>
             <a
-              href="/auth"
+              href={`/auth?mode=connexion&lang=${langue}`}
               className="text-sm px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white hover:border-slate-500"
             >
               {t('se_connecter_nav')}
@@ -128,12 +162,14 @@ export default function Secteurs() {
         {/* EN-TÊTE */}
         <section className="py-14 md:py-16 text-center">
           <h1 className="font-sans text-[28px] md:text-[38px] font-extrabold mt-3 mb-2.5">{t('secteurs_titre')}</h1>
-          <p className="text-slate-400 text-[15.5px] leading-relaxed">{t('secteurs_sous_titre')}</p>
+          <p className="text-slate-400 text-[15.5px] leading-relaxed">
+            {secteurUnique ? t('secteur_unique_sous_titre') : t('secteurs_sous_titre')}
+          </p>
         </section>
 
         {/* GRILLE DE SECTEURS */}
         <section className="pb-20">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className={secteurUnique ? 'max-w-md mx-auto' : 'grid grid-cols-1 md:grid-cols-3 gap-5'}>
             {cartes.map((carte) => {
               const ouverte = carteOuverte === carte.slug
               return (
@@ -169,7 +205,7 @@ export default function Secteurs() {
                         if (carte.active) {
                           window.location.href = `/auth?vertical=${carte.slug}&sous_secteur=${encodeURIComponent(
                             e.target.value
-                          )}`
+                          )}&lang=${langue}`
                         } else {
                           choisirSousSecteurBeta(carte, e.target.value)
                         }
