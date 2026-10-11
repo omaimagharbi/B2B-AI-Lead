@@ -2652,12 +2652,12 @@ export default function DashboardPage() {
               {monNomComplet ? ` · ${client.nom_entreprise}` : client.email ? ` · ${client.email}` : ''}
             </p>
             <p className="text-white/50 text-xs mt-2">
-              {t('statut')} : <span className="text-gold font-semibold">{client.statut_abonnement}</span>
+              {t('statut')} : <span className="text-[#ECC45C] font-semibold">{client.statut_abonnement}</span>
             </p>
             {estAdmin && (
               <a
                 href="/admin"
-                className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-white/10 text-gold"
+                className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-white/10 text-[#ECC45C]"
               >
                 Vous êtes admin — voir tous les cabinets →
               </a>
@@ -2676,7 +2676,7 @@ export default function DashboardPage() {
                   : 'text-white/70 hover:text-white hover:bg-white/5'
               }`}
             >
-              <onglet.Icone size={17} className="text-[#F9ECE5] shrink-0" />
+              <onglet.Icone size={17} className="text-[#ECC45C] shrink-0" />
               {onglet.label}
             </button>
           ))}
@@ -3038,7 +3038,7 @@ export default function DashboardPage() {
         {/* ===================== ONGLET CIBLES ===================== */}
         {ongletActif === 'cibles' && (
           <section className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-2 bg-slate-900 border border-slate-700 rounded-xl p-4">
               <input
                 value={nouvelleCible.nom}
                 onChange={(e) => setNouvelleCible({ ...nouvelleCible, nom: e.target.value })}
@@ -3059,6 +3059,8 @@ export default function DashboardPage() {
                 numero={nouvelleCible.telephone}
                 onNumeroChange={(v) => setNouvelleCible({ ...nouvelleCible, telephone: v })}
                 placeholder={t('champ_telephone')}
+                compact
+                className="md:col-span-2"
               />
               <input
                 value={nouvelleCible.email}
@@ -3662,7 +3664,7 @@ export default function DashboardPage() {
                   {cibleEnCours.length === 0 && (
                     <p className="text-slate-500 text-sm italic">{t('aucun_prospect_en_cours')}</p>
                   )}
-                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-7 gap-3">
+                  <div className="flex gap-3 overflow-x-auto pb-2 items-stretch">
                   {colonnes.map((colonne) => {
                     const cartes = cibleEnCours.filter(
                       (tg) => (tg.etape_pipeline || 'contacte') === colonne.etape
@@ -3678,7 +3680,7 @@ export default function DashboardPage() {
                           }
                           setCarteEnCoursDeGlissement(null)
                         }}
-                        className="rounded-xl border border-slate-700 bg-slate-900/60 p-2 min-h-[200px] space-y-2"
+                        className="rounded-xl border border-slate-700 bg-slate-900/60 p-2 min-h-[200px] space-y-2 flex-1 min-w-[110px] shrink-0"
                       >
                         <p className="text-xs font-semibold text-slate-300 px-1 pb-1 border-b border-slate-800 min-h-[2.4rem] flex items-start gap-1">
                           <span className="flex-1">

@@ -62,8 +62,8 @@ const PROFILS: Record<Langue, Profil[]> = {
       titre: 'Immobilier',
       description: 'Agences, promoteurs, agents indépendants, syndics : acheteurs et vendeurs qualifiés livrés dans votre pipeline.',
       tag: 'Immobilier',
-      dotColor: '#8892A0',
-      active: false,
+      dotColor: '#C87D55',
+      active: true,
     },
   ],
   en: [
@@ -117,8 +117,8 @@ const PROFILS: Record<Langue, Profil[]> = {
       titre: 'Real Estate',
       description: 'Agencies, developers, independent agents, property managers: qualified buyers and sellers delivered to your pipeline.',
       tag: 'Real estate',
-      dotColor: '#8892A0',
-      active: false,
+      dotColor: '#C87D55',
+      active: true,
     },
   ],
   ar: [
@@ -168,8 +168,8 @@ const PROFILS: Record<Langue, Profil[]> = {
       titre: 'العقارات',
       description: 'وكالات، مطورون، وكلاء مستقلون، مديرو العقارات: مشترون وبائعون مؤهلون في قناة مبيعاتك.',
       tag: 'عقارات',
-      dotColor: '#8892A0',
-      active: false,
+      dotColor: '#C87D55',
+      active: true,
     },
   ],
 }

@@ -15,7 +15,7 @@ const CARTES: Record<Langue, Carte[]> = {
     { slug: 'investisseur-incubateur', titre: 'Écosystème Entrepreneurial', description: "Sourcez du dealflow qualifié : fondateurs et startups prêts à être contactés.", dotColor: '#1F6F78', active: true },
     { slug: 'comptable-fiscal', titre: 'Cabinet Comptable, Juridique & Fiscal', description: "Automatisez la chasse de mandats — expertise comptable, avocats d'affaires, conformité.", dotColor: '#8892A0', active: false },
     { slug: 'services-generaux', titre: 'Logistique, Transit & Services Généraux', description: 'Transitaires, maintenance industrielle, facility management, événementiel B2B.', dotColor: '#8892A0', active: false },
-    { slug: 'immobilier', titre: 'Immobilier', description: 'Agences, promoteurs, agents indépendants : recevez des acheteurs et vendeurs qualifiés.', dotColor: '#8892A0', active: false },
+    { slug: 'immobilier', titre: 'Immobilier', description: 'Agences, promoteurs, agents indépendants : recevez des acheteurs et vendeurs qualifiés.', dotColor: '#C87D55', active: true },
   ],
   en: [
     { slug: 'cabinet-formation', titre: 'Training & HR Consulting', description: 'Receive qualified prospects, ready to sign, without any prospecting effort.', dotColor: '#1F6F78', active: true },
@@ -24,7 +24,7 @@ const CARTES: Record<Langue, Carte[]> = {
     { slug: 'investisseur-incubateur', titre: 'Startup Ecosystem', description: 'Source qualified dealflow: founders and startups ready to be contacted.', dotColor: '#1F6F78', active: true },
     { slug: 'comptable-fiscal', titre: 'Accounting, Legal & Tax Firms', description: 'Automate mandate hunting — accounting expertise, business lawyers, compliance.', dotColor: '#8892A0', active: false },
     { slug: 'services-generaux', titre: 'Logistics, Freight & General Services', description: 'Freight forwarders, industrial maintenance, facility management, B2B events.', dotColor: '#8892A0', active: false },
-    { slug: 'immobilier', titre: 'Real Estate', description: 'Agencies, developers, independent agents: receive qualified buyers and sellers.', dotColor: '#8892A0', active: false },
+    { slug: 'immobilier', titre: 'Real Estate', description: 'Agencies, developers, independent agents: receive qualified buyers and sellers.', dotColor: '#C87D55', active: true },
   ],
   ar: [
     { slug: 'cabinet-formation', titre: 'التدريب واستشارات الموارد البشرية', description: 'احصل على عملاء محتملين مؤهلين وجاهزين للتوقيع، دون أي جهد تنقيب.', dotColor: '#1F6F78', active: true },
@@ -33,7 +33,7 @@ const CARTES: Record<Langue, Carte[]> = {
     { slug: 'investisseur-incubateur', titre: 'المنظومة الريادية', description: 'اجمع صفقات مؤهلة: مؤسسون وشركات ناشئة جاهزون للتواصل.', dotColor: '#1F6F78', active: true },
     { slug: 'comptable-fiscal', titre: 'مكاتب المحاسبة والقانون والضرائب', description: 'أتمتة صيد المهام — خبرة محاسبية، محامو أعمال، امتثال.', dotColor: '#8892A0', active: false },
     { slug: 'services-generaux', titre: 'اللوجستيات والنقل والخدمات العامة', description: 'وكلاء الشحن، الصيانة الصناعية، إدارة المرافق، فعاليات B2B.', dotColor: '#8892A0', active: false },
-    { slug: 'immobilier', titre: 'العقارات', description: 'وكالات، مطورون، وكلاء مستقلون: احصل على مشترين وبائعين مؤهلين.', dotColor: '#8892A0', active: false },
+    { slug: 'immobilier', titre: 'العقارات', description: 'وكالات، مطورون، وكلاء مستقلون: احصل على مشترين وبائعين مؤهلين.', dotColor: '#C87D55', active: true },
   ],
 }
 
