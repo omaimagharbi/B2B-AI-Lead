@@ -40,6 +40,7 @@ export default function PhoneInput({
   onNumeroBlur,
   placeholder = 'Téléphone / WhatsApp',
   className = '',
+  compact = false,
 }: {
   indicatif: string
   onIndicatifChange: (v: string) => void
@@ -48,13 +49,15 @@ export default function PhoneInput({
   onNumeroBlur?: (v: string) => void
   placeholder?: string
   className?: string
+  compact?: boolean
 }) {
+  const taille = compact ? 'p-2 text-sm' : 'p-3'
   return (
     <div className={`flex gap-2 ${className}`}>
       <select
         value={indicatif}
         onChange={(e) => onIndicatifChange(e.target.value)}
-        className="rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
+        className={`rounded-lg bg-slate-950 border border-slate-700 text-sm shrink-0 ${compact ? 'p-2' : 'p-3'}`}
       >
         {INDICATIFS_PAYS.map((p) => (
           <option key={p.label || 'autre'} value={p.code}>
@@ -68,7 +71,7 @@ export default function PhoneInput({
         onBlur={(e) => onNumeroBlur?.(e.target.value)}
         placeholder={placeholder}
         type="tel"
-        className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3"
+        className={`flex-1 min-w-[120px] w-full rounded-lg bg-slate-950 border border-slate-700 ${taille}`}
       />
     </div>
   )
