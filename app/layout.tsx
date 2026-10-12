@@ -1,4 +1,5 @@
 import './globals.css'
+import SuiviActivite from '@/components/SuiviActivite'
 
 export const metadata = {
   title: 'PiloBrain',
@@ -42,7 +43,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <SuiviActivite />
+        {children}
+      </body>
     </html>
   )
 }

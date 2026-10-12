@@ -124,6 +124,65 @@ export default function AdminPage() {
     setErreursChargement(false)
   }
 
+  // Suivi testeur : on saisit seulement l'email d'un utilisateur et on obtient
+  // l'historique de ses connexions (date d'entree, temps actif, pages vues).
+  type SuiviSession = {
+    id: string
+    debut: string
+    derniere_activite: string
+    duree_secondes: number
+    pages: { chemin: string; a: string }[]
+    appareil: string | null
+  }
+  type SuiviResultat = {
+    email: string
+    compte: { existe: boolean; cree_le: string | null; derniere_connexion: string | null }
+    resume: {
+      nb_connexions: number
+      duree_totale_secondes: number
+      duree_moyenne_secondes: number
+      premiere_connexion: string | null
+      derniere_activite: string | null
+    }
+    sessions: SuiviSession[]
+  }
+  const [suiviOuvert, setSuiviOuvert] = useState(false)
+  const [suiviEmail, setSuiviEmail] = useState('')
+  const [suiviChargement, setSuiviChargement] = useState(false)
+  const [suiviErreur, setSuiviErreur] = useState<string | null>(null)
+  const [suiviResultat, setSuiviResultat] = useState<SuiviResultat | null>(null)
+  const [suiviSessionOuverte, setSuiviSessionOuverte] = useState<string | null>(null)
+
+  const formaterDuree = (secondes: number) => {
+    if (secondes < 60) return `${secondes} s`
+    const h = Math.floor(secondes / 3600)
+    const m = Math.floor((secondes % 3600) / 60)
+    return h > 0 ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`
+  }
+
+  const chargerSuivi = async () => {
+    const email = suiviEmail.trim().toLowerCase()
+    if (!email.includes('@')) {
+      setSuiviErreur('Saisis une adresse email valide')
+      return
+    }
+    setSuiviChargement(true)
+    setSuiviErreur(null)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const res = await fetch(`/api/admin/suivi?email=${encodeURIComponent(email)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json().catch(() => null)
+    if (res.ok) {
+      setSuiviResultat(data)
+    } else {
+      setSuiviResultat(null)
+      setSuiviErreur(data?.error ?? 'Erreur de chargement')
+    }
+    setSuiviChargement(false)
+  }
+
   const charger = async () => {
     setChargement(true)
     const { data: sessionData } = await supabase.auth.getSession()
@@ -1125,7 +1184,134 @@ export default function AdminPage() {
           >
             🐞 Erreurs récentes
           </button>
+          <button
+            onClick={() => setSuiviOuvert(!suiviOuvert)}
+            className="text-xs px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:border-accent hover:text-accent"
+          >
+            👁️ Suivi testeur
+          </button>
         </div>
+
+        {suiviOuvert && (
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+            <h3 className="text-sm font-semibold">
+              👁️ Suivi testeur : connexions et temps passé
+            </h3>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                type="email"
+                value={suiviEmail}
+                onChange={(e) => setSuiviEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') chargerSuivi()
+                }}
+                placeholder="email du testeur (ex: testeur@exemple.com)"
+                className="flex-1 min-w-[220px] rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+              />
+              <button
+                onClick={chargerSuivi}
+                disabled={suiviChargement}
+                className="px-4 py-2 rounded-lg bg-accent text-slate-950 text-sm font-semibold disabled:opacity-50"
+              >
+                {suiviChargement ? 'Chargement...' : 'Voir l’historique'}
+              </button>
+            </div>
+
+            {suiviErreur && <p className="text-xs text-red-400">{suiviErreur}</p>}
+
+            {suiviResultat && (
+              <div className="space-y-3">
+                {!suiviResultat.compte.existe && suiviResultat.resume.nb_connexions === 0 && (
+                  <p className="text-xs text-amber-400">
+                    Aucun compte trouvé avec cet email. Vérifie l’orthographe.
+                  </p>
+                )}
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="rounded-lg border border-slate-700 p-3">
+                    <p className="text-[11px] text-slate-500">Connexions</p>
+                    <p className="text-lg font-semibold">{suiviResultat.resume.nb_connexions}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-700 p-3">
+                    <p className="text-[11px] text-slate-500">Temps total</p>
+                    <p className="text-lg font-semibold">
+                      {formaterDuree(suiviResultat.resume.duree_totale_secondes)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-700 p-3">
+                    <p className="text-[11px] text-slate-500">Durée moyenne</p>
+                    <p className="text-lg font-semibold">
+                      {formaterDuree(suiviResultat.resume.duree_moyenne_secondes)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-700 p-3">
+                    <p className="text-[11px] text-slate-500">Dernière activité</p>
+                    <p className="text-sm font-semibold">
+                      {suiviResultat.resume.derniere_activite
+                        ? new Date(suiviResultat.resume.derniere_activite).toLocaleString('fr-FR')
+                        : suiviResultat.compte.derniere_connexion
+                        ? new Date(suiviResultat.compte.derniere_connexion).toLocaleString('fr-FR')
+                        : '—'}
+                    </p>
+                  </div>
+                </div>
+
+                {suiviResultat.sessions.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Aucune connexion enregistrée pour l’instant. Le suivi ne compte que les visites
+                    faites après sa mise en ligne
+                    {suiviResultat.compte.derniere_connexion
+                      ? ` (dernière connexion connue côté compte : ${new Date(
+                          suiviResultat.compte.derniere_connexion
+                        ).toLocaleString('fr-FR')}).`
+                      : '.'}
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {suiviResultat.sessions.map((sess) => {
+                      const ouverte = suiviSessionOuverte === sess.id
+                      return (
+                        <div key={sess.id} className="rounded-lg border border-slate-800 p-3 text-xs">
+                          <button
+                            onClick={() => setSuiviSessionOuverte(ouverte ? null : sess.id)}
+                            className="w-full flex items-center justify-between gap-3 flex-wrap text-left"
+                          >
+                            <span className="font-semibold text-slate-200">
+                              {new Date(sess.debut).toLocaleString('fr-FR')}
+                            </span>
+                            <span className="text-slate-400">
+                              {sess.appareil ?? '—'} · {sess.pages.length} page
+                              {sess.pages.length > 1 ? 's' : ''}
+                            </span>
+                            <span className="text-accent font-semibold">
+                              ⏱ {formaterDuree(sess.duree_secondes)}
+                            </span>
+                          </button>
+                          {ouverte && (
+                            <ul className="mt-2 space-y-1 border-t border-slate-800 pt-2">
+                              {sess.pages.map((pg, i) => (
+                                <li key={i} className="flex justify-between text-slate-400">
+                                  <span className="font-mono">{pg.chemin}</span>
+                                  <span>
+                                    {new Date(pg.a).toLocaleTimeString('fr-FR', {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      second: '2-digit',
+                                    })}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {erreursOuvert && (
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
