@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import RichTextEditor from '@/components/RichTextEditor'
 import { traduire, type Langue } from '@/lib/i18n'
+import { tt } from '@/lib/litteral'
 
 type Etape = { nom: string; description: string }
 type Pack = { nom: string; prix_indicatif: number; description: string }
@@ -29,6 +30,7 @@ type DiagnosticEnAttente = {
     contenuMarketing: { titre: string; accroche_linkedin: string; format_suggere: string }
     explicationScore?: string
     besoinSousJacent?: string
+    immobilier?: unknown
   } | null
   targets: { nom: string } | { nom: string }[] | null
 }
@@ -45,13 +47,15 @@ export default function ValidationItem({
   secteurBadge?: string
 }) {
   const t = (cle: string) => traduire(langue, cle)
+  // Diagnostic immobilier (Qatar) : plan en 5 etapes + biens du catalogue au lieu des packs formation
+  const estImmo = !!diagnostic.recommandations_json?.immobilier
   const [ouvert, setOuvert] = useState(false)
   const [titre, setTitre] = useState(diagnostic.json_ia_brouillon.titre ?? '')
   const [synthese, setSynthese] = useState(diagnostic.json_ia_brouillon.synthese ?? '')
   const [etapes, setEtapes] = useState<Etape[]>(diagnostic.json_ia_brouillon.etapes ?? [])
   const [packs, setPacks] = useState<Pack[]>(diagnostic.json_ia_brouillon.packs_proposes ?? [])
   const [commentaireExpert, setCommentaireExpert] = useState(diagnostic.commentaire_expert ?? '')
-  const [langueRapport, setLangueRapport] = useState<'fr' | 'en' | 'ar'>('fr')
+  const [langueRapport, setLangueRapport] = useState<'fr' | 'en' | 'ar'>(langue)
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
 
@@ -168,7 +172,7 @@ export default function ValidationItem({
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs px-2 py-1 rounded-full bg-slate-800">
-                    {diagnostic.recommandations_json.segment.categorie}
+                    {diagnostic.recommandations_json.segment.categorie.replace(/_/g, ' ')}
                   </span>
                   <span className="text-xs px-2 py-1 rounded-full bg-slate-800">
                     {diagnostic.recommandations_json.segment.urgence === 'haute'
@@ -253,7 +257,7 @@ export default function ValidationItem({
 
           <div className="space-y-2">
             <label className="text-xs text-slate-400 uppercase">
-              {t('champ_etapes')} ({diagnostic.json_ia_brouillon.methodologie})
+              {estImmo ? tt("Plan d'acquisition immobilier") : t('champ_etapes')} ({diagnostic.json_ia_brouillon.methodologie})
             </label>
             {etapes.map((etape, i) => (
               <div key={i} className="rounded-lg bg-slate-950 border border-slate-700 p-2 space-y-1">
@@ -273,11 +277,18 @@ export default function ValidationItem({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs text-slate-400 uppercase">{t('packs_proposes')}</label>
+              <label className="text-xs text-slate-400 uppercase">
+                {estImmo ? tt("Biens suggérés (catalogue de l'agence)") : t('packs_proposes')}
+              </label>
               <button onClick={ajouterPack} className="text-accent text-xs underline">
-                {t('ajouter_pack')}
+                {estImmo ? tt("+ Ajouter un bien") : t('ajouter_pack')}
               </button>
             </div>
+            {estImmo && packs.length === 0 && (
+              <p className="text-xs text-slate-500 italic">
+                {tt("Aucun bien dans votre catalogue : ajoutez vos fiches de propriétés dans l'onglet Catalogue pour qu'elles soient proposées ici.")}
+              </p>
+            )}
             {packs.map((pack, i) => (
               <div
                 key={i}
@@ -286,7 +297,7 @@ export default function ValidationItem({
                 <input
                   value={pack.nom}
                   onChange={(e) => majPack(i, 'nom', e.target.value)}
-                  placeholder={t('nom_du_pack')}
+                  placeholder={estImmo ? tt("Nom du bien") : t('nom_du_pack')}
                   className="md:col-span-2 bg-transparent border-b border-slate-700 text-sm p-1"
                 />
                 <input

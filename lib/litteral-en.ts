@@ -1,5 +1,12 @@
 // Traductions anglaises des textes francais ecrits en dur (voir lib/litteral.ts)
 export const LITTERAL_EN: Record<string, string> = {
+  "Changer le logo": "Change logo",
+  "Retirer le logo": "Remove logo",
+  "Plan d'acquisition immobilier": "Real estate acquisition plan",
+  "Biens suggérés (catalogue de l'agence)": "Suggested properties (agency catalogue)",
+  "+ Ajouter un bien": "+ Add a property",
+  "Nom du bien": "Property name",
+  "Aucun bien dans votre catalogue : ajoutez vos fiches de propriétés dans l'onglet Catalogue pour qu'elles soient proposées ici.": "No property in your catalogue yet: add your property listings in the Catalogue tab so they can be suggested here.",
   "Gras": "Bold",
   "Italique": "Italic",
   "• Liste": "• List",

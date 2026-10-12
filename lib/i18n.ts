@@ -2,6 +2,7 @@ export type Langue = 'fr' | 'en' | 'ar'
 
 export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
   fr: {
+    hero_puce_zone: 'Golfe · USD',
     secteur_unique_sous_titre: 'Choisissez votre activité pour créer votre compte',
     onglet_ciblage: 'Ciblage',
     onglet_cibles: 'Cibles',
@@ -404,11 +405,11 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     se_connecter_nav: 'Se connecter',
     sinscrire_nav: "S'inscrire",
     hero_badge: 'Commercialisation assistée par IA',
-    hero_titre_1: 'Le diagnostic commercial',
-    hero_titre_2: "d'un expert",
-    hero_titre_3: "à la vitesse d'une IA.",
+    hero_titre_1: '',
+    hero_titre_2: 'La commercialisation',
+    hero_titre_3: "à la vitesse de l'IA.",
     hero_description:
-      "PiloBrain automatise le ciblage, la qualification et le suivi de vos prospects — en Tunisie comme à l'international — pour que votre équipe passe son temps à conclure, pas à chercher.",
+      "PiloBrain automatise le ciblage, la qualification et le suivi de vos prospects, pour que votre équipe passe son temps à conclure, pas à chercher.",
     decouvrir_cta: 'Découvrir PiloBrain →',
     voir_demo_cta: 'Voir une démo',
     pour_qui_label: 'Pour qui',
@@ -481,6 +482,7 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     diag_serveur_trop_lent: 'Le serveur met trop de temps à répondre. Merci de réessayer.',
   },
   en: {
+    hero_puce_zone: 'Gulf · USD',
     secteur_unique_sous_titre: 'Choose your business type to create your account',
     onglet_ciblage: 'Targeting',
     onglet_cibles: 'Targets',
@@ -871,11 +873,11 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     se_connecter_nav: 'Log in',
     sinscrire_nav: 'Sign up',
     hero_badge: 'AI-assisted sales enablement',
-    hero_titre_1: 'The sales diagnostic',
-    hero_titre_2: 'of an expert',
+    hero_titre_1: '',
+    hero_titre_2: 'Commercializing',
     hero_titre_3: 'at the speed of AI.',
     hero_description:
-      'PiloBrain automates targeting, qualification, and follow-up of your prospects — in Tunisia and internationally — so your team spends its time closing, not searching.',
+      'PiloBrain automates targeting, qualification, and follow-up of your prospects, so your team spends its time closing, not searching.',
     decouvrir_cta: 'Discover PiloBrain →',
     voir_demo_cta: 'Watch a demo',
     pour_qui_label: 'Who it’s for',
@@ -946,6 +948,7 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     diag_serveur_trop_lent: 'The server is taking too long to respond. Please try again.',
   },
   ar: {
+    hero_puce_zone: 'الخليج · USD',
     secteur_unique_sous_titre: 'اختر نشاطك لإنشاء حسابك',
     onglet_ciblage: 'الاستهداف',
     onglet_cibles: 'الأهداف',
@@ -1335,11 +1338,11 @@ export const TRADUCTIONS: Record<Langue, Record<string, string>> = {
     se_connecter_nav: 'تسجيل الدخول',
     sinscrire_nav: 'إنشاء حساب',
     hero_badge: 'تسويق مدعوم بالذكاء الاصطناعي',
-    hero_titre_1: 'التشخيص التجاري',
-    hero_titre_2: 'لخبير',
+    hero_titre_1: '',
+    hero_titre_2: 'التسويق التجاري',
     hero_titre_3: 'بسرعة الذكاء الاصطناعي.',
     hero_description:
-      'تعمل PiloBrain على أتمتة الاستهداف والتأهيل ومتابعة عملائك المحتملين — في تونس وعلى المستوى الدولي — حتى يقضي فريقك وقته في الإغلاق لا في البحث.',
+      'تعمل PiloBrain على أتمتة الاستهداف والتأهيل ومتابعة عملائك المحتملين، حتى يقضي فريقك وقته في الإغلاق لا في البحث.',
     decouvrir_cta: 'اكتشف PiloBrain ←',
     voir_demo_cta: 'مشاهدة عرض توضيحي',
     pour_qui_label: 'لمن هذا',

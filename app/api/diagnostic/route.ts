@@ -9,6 +9,16 @@ import { zonePourPays, argumentVenteParZone, deviseParZone } from '@/lib/pays'
 import { genererSignalIA } from '@/lib/classification'
 import { enregistrerSanteApi } from '@/lib/sante-api'
 import { enregistrerUsageIA } from '@/lib/usage-ia'
+import {
+  analyserProspectImmobilier,
+  construirePromptImmobilier,
+  normaliserBrouillonImmobilier,
+  reponsesValides,
+  texteReponses,
+  libelleOption,
+  OBJECTIFS_IMMO,
+  ZONES_IMMO,
+} from '@/lib/immobilier'
 
 // Vercel coupe une fonction serverless a 10s par defaut (plan Hobby). Un essai
 // Gemini suivi d'un essai Anthropic en secours peut largement depasser ce delai,
@@ -151,7 +161,11 @@ async function genererBrouillon(probleme: string, systemPrompt: string, modeCibl
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, probleme } = await req.json()
+    const { token, probleme: problemeRecu, langue, immobilier } = await req.json()
+    // Questionnaire immobilier (Qatar) : le texte "probleme" est reconstruit cote serveur a partir des reponses
+    const langueContenu: 'fr' | 'en' = langue === 'fr' ? 'fr' : 'en'
+    const reponsesImmo = reponsesValides(immobilier) ? immobilier : null
+    const probleme: string = reponsesImmo ? texteReponses(reponsesImmo, langueContenu) : problemeRecu
 
     if (!token || !probleme || probleme.trim().length < 10) {
       return NextResponse.json({ error: 'Donnees invalides' }, { status: 400 })
@@ -176,7 +190,7 @@ export async function POST(req: NextRequest) {
     const { data: diagnostic, error: findError } = await supabaseAdmin
       .from('diagnostics')
       .select(
-        'id, target_id, client_id, clients(mode_ciblage, email, nom_entreprise), verticals(prompt_ia_config), targets(poste_ou_budget, entreprise_ou_objectif, country)'
+        'id, target_id, client_id, clients(mode_ciblage, email, nom_entreprise), verticals(prompt_ia_config, slug), targets(poste_ou_budget, entreprise_ou_objectif, country)'
       )
       .eq('token_acces', token)
       .single()
@@ -210,15 +224,25 @@ export async function POST(req: NextRequest) {
       ? `${promptVertical}\n\n${contexteZone}`
       : contexteZone
 
-    const systemPrompt = construirePrompt(
-      modeCiblage,
-      promptVerticalAvecZone,
-      (catalogueData ?? []) as OffreCatalogue[]
-    )
+    // @ts-ignore - jointures Supabase typees dynamiquement
+    const verticalImmobilier = diagnostic.verticals?.slug === 'immobilier' && reponsesImmo !== null
+    const systemPrompt = verticalImmobilier
+      ? construirePromptImmobilier(promptVertical, (catalogueData ?? []) as OffreCatalogue[], langueContenu)
+      : construirePrompt(modeCiblage, promptVerticalAvecZone, (catalogueData ?? []) as OffreCatalogue[])
 
     // 2. Generation du brouillon (reel ou simule en secours) - JAMAIS montre au prospect
     const resultatGeneration = await genererBrouillon(probleme, systemPrompt, modeCiblage)
-    const brouillon = resultatGeneration.brouillon
+    // Immobilier : plan d'acquisition en 5 etapes + fiches du catalogue de l'agence (pas de "pack formation")
+    const brouillon: Record<string, unknown> =
+      verticalImmobilier && reponsesImmo
+        ? normaliserBrouillonImmobilier(
+            resultatGeneration.fournisseur ? (resultatGeneration.brouillon as never) : null,
+            reponsesImmo,
+            (catalogueData ?? []) as OffreCatalogue[],
+            langueContenu,
+            !resultatGeneration.fournisseur
+          )
+        : (resultatGeneration.brouillon as Record<string, unknown>)
 
     if (resultatGeneration.fournisseur) {
       await enregistrerUsageIA({
@@ -249,15 +273,21 @@ export async function POST(req: NextRequest) {
       | string
       | null
       | undefined
-    const { segment, score, recommandations, contenuMarketing } = analyserProspect({
-      phraseProspect: probleme,
-      posteOuBudget,
-    })
-    const explicationScore = genererExplicationScore({
-      segment,
-      phraseProspect: probleme,
-    })
-    const besoinSousJacent = genererBesoinSousJacent(segment.categorie)
+    const analyseImmo = verticalImmobilier && reponsesImmo ? analyserProspectImmobilier(reponsesImmo, langueContenu) : null
+    const analyseGenerique = analyseImmo
+      ? null
+      : analyserProspect({ phraseProspect: probleme, posteOuBudget })
+    const segment: { categorie: string; urgence: string; budget_mentionne: boolean } = (analyseImmo ??
+      analyseGenerique!).segment
+    const score: number = (analyseImmo ?? analyseGenerique!).score
+    const recommandations = (analyseImmo ?? analyseGenerique!).recommandations
+    const contenuMarketing = (analyseImmo ?? analyseGenerique!).contenuMarketing
+    const explicationScore = analyseImmo
+      ? analyseImmo.explicationScore
+      : genererExplicationScore({ segment: analyseGenerique!.segment, phraseProspect: probleme })
+    const besoinSousJacent = analyseImmo
+      ? analyseImmo.besoinSousJacent
+      : genererBesoinSousJacent(analyseGenerique!.segment.categorie)
 
     if (diagnostic.target_id) {
       await supabaseAdmin
@@ -266,7 +296,9 @@ export async function POST(req: NextRequest) {
           segment_categorie: segment.categorie,
           segment_urgence: segment.urgence,
           score_chaleur: score,
-          signal_ia: genererSignalIA({
+          signal_ia: analyseImmo && reponsesImmo
+            ? `💡 ${langueContenu === 'fr' ? 'Signal détecté' : 'Signal detected'} : ${libelleOption(OBJECTIFS_IMMO, reponsesImmo.objectif, langueContenu)} — ${libelleOption(ZONES_IMMO, reponsesImmo.zone, langueContenu)}, ${reponsesImmo.budget_qar.toLocaleString('en-US')} QAR.`
+            : genererSignalIA({
             poste: posteOuBudget ?? null,
             entreprise: entrepriseOuObjectif ?? null,
             segmentCategorie: segment.categorie,
@@ -286,6 +318,7 @@ export async function POST(req: NextRequest) {
           contenuMarketing,
           explicationScore,
           besoinSousJacent,
+          ...(analyseImmo ? { immobilier: analyseImmo.immobilier } : {}),
         },
       })
       .eq('id', diagnostic.id)

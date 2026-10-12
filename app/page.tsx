@@ -415,9 +415,6 @@ export default function Home() {
         {/* HERO */}
         <section className="grid grid-cols-1 md:grid-cols-[1.05fr_.95fr] gap-14 items-center py-16 md:py-20">
           <div>
-            <span className="inline-flex items-center gap-2 text-[12.5px] tracking-wide uppercase text-teal bg-teal-light dark:bg-white/10 dark:text-[#6FCF9E] px-3 py-1.5 rounded-full font-bold">
-              ● {t('hero_badge')}
-            </span>
             <h1 className="font-serif italic font-medium text-[32px] md:text-[44px] leading-[1.14] mt-5 mb-5 text-navy-deep dark:text-cream">
               {t('hero_titre_1')} <span className="not-italic text-teal font-semibold">{t('hero_titre_2')}</span>,
               <br />
@@ -469,7 +466,7 @@ export default function Home() {
                 <span className="w-2 h-2 rounded-full bg-[#22C58B]" /> Score 82/100
               </div>
               <div className="absolute bottom-[18%] right-[10%] bg-white rounded-xl px-[13px] py-[10px] shadow-lg text-[12.5px] font-bold flex items-center gap-2 text-navy-deep">
-                <span className="w-2 h-2 rounded-full bg-gold" /> Golfe · USD
+                <span className="w-2 h-2 rounded-full bg-gold" /> {t('hero_puce_zone')}
               </div>
             </div>
           </div>

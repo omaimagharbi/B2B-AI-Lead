@@ -1,6 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import type { Recommandation, ContenuMarketing, Segment } from '@/lib/strategie'
+import { libelleOption, OBJECTIFS_IMMO, ZONES_IMMO, TYPES_BIEN_IMMO, type ReponsesImmo } from '@/lib/immobilier'
+
+// Textes du rapport interne selon la langue de l'interface du cabinet (fr / en)
+const TXT = {
+  fr: {
+    urgence: { haute: '🟥 Urgent', moyenne: '🟨 Modéré', basse: '🟩 Planification' } as Record<string, string>,
+    priorite: { haute: '🔴 Priorité haute', moyenne: '🟠 Priorité moyenne', basse: '⚪ Priorité basse' } as Record<string, string>,
+    titreStd: "Plan d'Action & Diagnostic de Formation Personnalisé",
+    titreImmo: "Plan d'Action & Diagnostic Immobilier Personnalisé",
+    tabTitre: "Plan d'action & diagnostic",
+    pour: 'Pour',
+    preAnalyse: (nom: string, date: string) => `Pré-analysé par l'IA et validé par ${nom} · ${date}`,
+    interne: 'Usage interne — ne pas transmettre tel quel au prospect',
+    score: 'Score de chaleur du lead',
+    categorie: 'Catégorie',
+    budget: '💰 Budget évoqué',
+    analyse: 'Analyse de la situation actuelle',
+    depuis: (v: string) => `Cette situation dure depuis <b>${v}</b>. `,
+    dejaTente: (v: string) => `Déjà tenté : ${v}.`,
+    reco: 'Recommandations commerciales',
+    recoSous: "Guide d'entretien recommandé pour votre appel",
+    contenu: 'Stratégie de contenu & attractivité',
+    contenuSous: 'Idée de publication liée à ce profil de prospect',
+    format: 'Format suggéré',
+    planStd: "Plan d'action pédagogique recommandé",
+    planImmo: "Plan d'Acquisition Immobilier en 5 étapes",
+    methodo: 'Méthodologie',
+    etape: 'Étape',
+    solutionStd: 'Solution recommandée du catalogue',
+    solutionImmo: 'Bien recommandé du catalogue',
+    commentaire: "💬 Commentaire de l'expert",
+    ctaStd: "👉 Bloquer un créneau d'échange",
+    ctaImmo: '👉 Réserver mon créneau de visite 3D',
+    prospect: 'Prospect',
+    expert: 'votre expert',
+    budgetImmo: 'Budget',
+  },
+  en: {
+    urgence: { haute: '🟥 Urgent', moyenne: '🟨 Moderate', basse: '🟩 Planning' } as Record<string, string>,
+    priorite: { haute: '🔴 High priority', moyenne: '🟠 Medium priority', basse: '⚪ Low priority' } as Record<string, string>,
+    titreStd: 'Personalised Action Plan & Training Diagnostic',
+    titreImmo: 'Personalised Real Estate Action Plan & Diagnostic',
+    tabTitre: 'Action plan & diagnostic',
+    pour: 'For',
+    preAnalyse: (nom: string, date: string) => `Pre-analysed by AI and validated by ${nom} · ${date}`,
+    interne: 'Internal use — do not forward as-is to the prospect',
+    score: 'Lead heat score',
+    categorie: 'Category',
+    budget: '💰 Budget mentioned',
+    analyse: 'Analysis of the current situation',
+    depuis: (v: string) => `This situation has lasted <b>${v}</b>. `,
+    dejaTente: (v: string) => `Already tried: ${v}.`,
+    reco: 'Sales recommendations',
+    recoSous: 'Recommended talking guide for your call',
+    contenu: 'Content & attractiveness strategy',
+    contenuSous: 'Publication idea linked to this prospect profile',
+    format: 'Suggested format',
+    planStd: 'Recommended training action plan',
+    planImmo: 'Real Estate Acquisition Plan in 5 steps',
+    methodo: 'Methodology',
+    etape: 'Step',
+    solutionStd: 'Recommended solution from the catalogue',
+    solutionImmo: 'Recommended property from the catalogue',
+    commentaire: "💬 Expert's comment",
+    ctaStd: '👉 Block a discussion slot',
+    ctaImmo: '👉 Book my 3D tour slot',
+    prospect: 'Prospect',
+    expert: 'your expert',
+    budgetImmo: 'Budget',
+  },
+}
 
 function echapperHtml(texte: string): string {
   return texte
@@ -46,7 +117,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     .select(
       `id, phrase_brute_prospect, json_ia_brouillon, json_expert_valide, recommandations_json,
        commentaire_expert, created_at,
-       clients(nom_entreprise, logo_url),
+       clients(nom_entreprise, logo_url, langue_preferee),
        targets(nom, entreprise_ou_objectif, poste_ou_budget, telephone, email, country, segment_categorie, segment_urgence, score_chaleur)`
     )
     .eq('token_acces', params.token)
@@ -57,7 +128,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   }
 
   // @ts-ignore - jointures Supabase typees dynamiquement
-  const client = diagnostic.clients as { nom_entreprise: string; logo_url: string | null } | null
+  const client = diagnostic.clients as { nom_entreprise: string; logo_url: string | null; langue_preferee?: string | null } | null
   // @ts-ignore - jointures Supabase typees dynamiquement
   const target = diagnostic.targets as {
     nom: string
@@ -78,6 +149,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     contenuMarketing: ContenuMarketing
     explicationScore?: string
     besoinSousJacent?: string
+    immobilier?: ReponsesImmo & { visa?: string }
   } | null
 
   const brouillon = (diagnostic.json_expert_valide ?? diagnostic.json_ia_brouillon) as {
@@ -88,12 +160,23 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     packs_proposes?: { nom: string; prix_indicatif: number; description: string }[]
   } | null
 
+  const L: 'fr' | 'en' = client?.langue_preferee === 'fr' ? 'fr' : 'en'
+  const R = TXT[L]
+  const immo = reco?.immobilier ?? null
+  const resumeImmo = immo
+    ? [
+        libelleOption(OBJECTIFS_IMMO, immo.objectif, L),
+        libelleOption(ZONES_IMMO, immo.zone, L),
+        libelleOption(TYPES_BIEN_IMMO, immo.type_bien, L),
+        `${R.budgetImmo} ${Number(immo.budget_qar).toLocaleString(L === 'fr' ? 'fr-FR' : 'en-US')} QAR`,
+      ].join(' · ')
+    : null
   const score = reco?.score ?? target?.score_chaleur ?? 0
   const couleurScore = score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444'
   const urgence = reco?.segment.urgence ?? target?.segment_urgence ?? 'moyenne'
   const champs = parserReponseStructuree(diagnostic.phrase_brute_prospect)
   const solutionRecommandee = brouillon?.packs_proposes?.[0] ?? null
-  const dateRapport = new Date(diagnostic.created_at ?? Date.now()).toLocaleDateString('fr-FR', {
+  const dateRapport = new Date(diagnostic.created_at ?? Date.now()).toLocaleDateString(L === 'fr' ? 'fr-FR' : 'en-GB', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -101,10 +184,10 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const reservationUrl = `${(process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')}/reserver/${params.token}`
 
   const html = `<!DOCTYPE html>
-<html lang="fr">
+<html lang="${L}">
 <head>
 <meta charset="utf-8" />
-<title>Plan d'action & diagnostic - ${echapperHtml(target?.nom ?? 'Prospect')}</title>
+<title>${R.tabTitre} - ${echapperHtml(target?.nom ?? R.prospect)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <script>try{if(localStorage.getItem('pilobrain_theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}</script>
@@ -145,35 +228,35 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   <script>document.getElementById('theme-btn').addEventListener('click',function(){var d=document.documentElement.classList.toggle('dark');try{localStorage.setItem('pilobrain_theme',d?'dark':'light')}catch(e){}})</script>
   <div class="conteneur">
     <div class="badges" style="margin-bottom:10px;">
-      <span class="badge">${echapperHtml(LABEL_URGENCE[urgence] ?? urgence)}</span>
+      <span class="badge">${echapperHtml(R.urgence[urgence] ?? urgence)}</span>
     </div>
-    <h1>Plan d'Action & Diagnostic de Formation Personnalisé</h1>
+    <h1>${immo ? R.titreImmo : R.titreStd}</h1>
     <p class="sous-titre">
-      Pour ${echapperHtml(target?.nom ?? 'Prospect')}${target?.poste_ou_budget ? ' — ' + echapperHtml(target.poste_ou_budget) : ''}${target?.entreprise_ou_objectif ? ' — ' + echapperHtml(target.entreprise_ou_objectif) : ''}<br/>
-      Pré-analysé par l'IA et validé par ${echapperHtml(client?.nom_entreprise ?? 'votre expert')} · ${echapperHtml(dateRapport)}<br/>
-      <span style="color:var(--muted2);">Usage interne — ne pas transmettre tel quel au prospect</span>
+      ${R.pour} ${echapperHtml(target?.nom ?? R.prospect)}${target?.poste_ou_budget ? ' — ' + echapperHtml(target.poste_ou_budget) : ''}${target?.entreprise_ou_objectif ? ' — ' + echapperHtml(target.entreprise_ou_objectif) : ''}<br/>
+      ${R.preAnalyse(echapperHtml(client?.nom_entreprise ?? R.expert), echapperHtml(dateRapport))}<br/>
+      <span style="color:var(--muted2);">${R.interne}</span>
     </p>
 
     <div class="carte">
-      <h2>Score de chaleur du lead</h2>
+      <h2>${R.score}</h2>
       <div class="score" style="color:${couleurScore}">${score}/100</div>
       <div class="badges" style="margin-top:10px;">
-        ${reco ? `<span class="badge">${echapperHtml(LABEL_URGENCE[reco.segment.urgence] ?? reco.segment.urgence)}</span>` : ''}
-        ${reco ? `<span class="badge">Categorie : ${echapperHtml(reco.segment.categorie)}</span>` : ''}
-        ${reco?.segment.budget_mentionne ? `<span class="badge">💰 Budget evoque</span>` : ''}
+        ${reco ? `<span class="badge">${echapperHtml(R.urgence[reco.segment.urgence] ?? reco.segment.urgence)}</span>` : ''}
+        ${reco ? `<span class="badge">${R.categorie} : ${echapperHtml(reco.segment.categorie.replace(/_/g, ' '))}</span>` : ''}
+        ${reco?.segment.budget_mentionne ? `<span class="badge">${R.budget}</span>` : ''}
       </div>
       ${reco?.explicationScore ? `<p class="explication">${echapperHtml(reco.explicationScore)}</p>` : ''}
     </div>
 
     <div class="carte">
-      <h2>Analyse de la situation actuelle</h2>
-      <p style="font-style:italic; color:var(--text2);">"${echapperHtml(champs.defi || diagnostic.phrase_brute_prospect || '')}"</p>
+      <h2>${R.analyse}</h2>
+      <p style="font-style:italic; color:var(--text2);">"${echapperHtml(resumeImmo ?? (champs.defi || diagnostic.phrase_brute_prospect || ''))}"</p>
       ${reco?.besoinSousJacent ? `<p class="besoin">${echapperHtml(reco.besoinSousJacent)}</p>` : ''}
       ${
-        champs.depuisQuand || champs.dejaEssaye
+        !immo && (champs.depuisQuand || champs.dejaEssaye)
           ? `<p style="color:var(--muted);font-size:13px;margin-top:10px;">
-              ${champs.depuisQuand ? `Cette situation dure depuis <b>${echapperHtml(champs.depuisQuand)}</b>. ` : ''}
-              ${champs.dejaEssaye ? `Déjà tenté : ${echapperHtml(champs.dejaEssaye)}.` : ''}
+              ${champs.depuisQuand ? R.depuis(echapperHtml(champs.depuisQuand)) : ''}
+              ${champs.dejaEssaye ? R.dejaTente(echapperHtml(champs.dejaEssaye)) : ''}
             </p>`
           : ''
       }
@@ -182,12 +265,12 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     ${
       reco && reco.recommandations.length > 0
         ? `<div class="carte">
-      <h2>Recommandations commerciales</h2>
-      <p class="soustitre-carte">Guide d'entretien recommandé pour votre appel</p>
+      <h2>${R.reco}</h2>
+      <p class="soustitre-carte">${R.recoSous}</p>
       ${reco.recommandations
         .map(
           (r) => `<div class="reco">
-        <div class="reco-titre">${echapperHtml(r.titre)} <span style="font-weight:400;font-size:11px;color:var(--muted);">(${echapperHtml(LABEL_PRIORITE[r.priorite] ?? r.priorite)})</span></div>
+        <div class="reco-titre">${echapperHtml(r.titre)} <span style="font-weight:400;font-size:11px;color:var(--muted);">(${echapperHtml(R.priorite[r.priorite] ?? r.priorite)})</span></div>
         <div class="reco-action">${echapperHtml(r.action)}</div>
         ${
           r.questions && r.questions.length > 0
@@ -206,11 +289,11 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     ${
       reco?.contenuMarketing
         ? `<div class="carte">
-      <h2>Stratégie de contenu & attractivité</h2>
-      <p class="soustitre-carte">Idée de publication liée à ce profil de prospect</p>
+      <h2>${R.contenu}</h2>
+      <p class="soustitre-carte">${R.contenuSous}</p>
       <p><b>${echapperHtml(reco.contenuMarketing.titre)}</b></p>
       <p style="color:var(--text2);font-size:13px;">${echapperHtml(reco.contenuMarketing.accroche_linkedin)}</p>
-      <p style="color:var(--muted);font-size:12px;">Format suggere : ${echapperHtml(reco.contenuMarketing.format_suggere)}</p>
+      <p style="color:var(--muted);font-size:12px;">${R.format} : ${echapperHtml(reco.contenuMarketing.format_suggere)}</p>
     </div>`
         : ''
     }
@@ -218,12 +301,12 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     ${
       brouillon
         ? `<div class="carte">
-      <h2>Plan d'action pédagogique recommandé</h2>
-      <p class="soustitre-carte">Méthodologie ${echapperHtml(brouillon.methodologie ?? '')}</p>
+      <h2>${immo ? R.planImmo : R.planStd}</h2>
+      <p class="soustitre-carte">${R.methodo} ${echapperHtml(brouillon.methodologie ?? '')}</p>
       <p><b>${echapperHtml(brouillon.titre ?? '')}</b></p>
       <p style="color:var(--text2);font-size:13px;">${echapperHtml(brouillon.synthese ?? '')}</p>
       ${(brouillon.etapes ?? [])
-        .map((e) => `<div class="etape"><b>${echapperHtml(e.nom)}</b><p>${echapperHtml(e.description)}</p></div>`)
+        .map((e, i) => `<div class="etape"><b>${immo ? `${R.etape} ${i + 1} · ` : ''}${echapperHtml(e.nom)}</b><p>${echapperHtml(e.description)}</p></div>`)
         .join('')}
     </div>`
         : ''
@@ -232,7 +315,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     ${
       solutionRecommandee
         ? `<div class="carte">
-      <h2>Solution recommandée du catalogue</h2>
+      <h2>${immo ? R.solutionImmo : R.solutionStd}</h2>
       <p><b>📦 ${echapperHtml(solutionRecommandee.nom)}</b>${solutionRecommandee.prix_indicatif ? ` — ${solutionRecommandee.prix_indicatif}` : ''}</p>
       <p style="color:var(--text2);font-size:13px;">${echapperHtml(solutionRecommandee.description ?? '')}</p>
     </div>`
@@ -242,13 +325,13 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     ${
       diagnostic.commentaire_expert
         ? `<div class="carte">
-      <h2>💬 Commentaire de l'expert</h2>
+      <h2>${R.commentaire}</h2>
       <p style="color:var(--text2);font-size:13px;font-style:italic;">${echapperHtml(diagnostic.commentaire_expert)}</p>
     </div>`
         : ''
     }
 
-    <a href="${reservationUrl}" class="cta">👉 Bloquer un créneau d'échange</a>
+    <a href="${reservationUrl}" class="cta">${immo ? R.ctaImmo : R.ctaStd}</a>
   </div>
 </body>
 </html>`

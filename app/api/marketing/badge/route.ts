@@ -16,9 +16,15 @@ function construireSvg(params: {
   montantTotal: number
   devise: string
   nbClients: number
+  langue: 'fr' | 'en'
 }): string {
-  const { nomCabinet, montantTotal, devise, nbClients } = params
-  const montantFormate = montantTotal.toLocaleString('fr-FR')
+  const { nomCabinet, montantTotal, devise, nbClients, langue } = params
+  const montantFormate = montantTotal.toLocaleString(langue === 'en' ? 'en-US' : 'fr-FR')
+  const texteMissions = langue === 'en' ? 'of missions supported' : 'de missions accompagnees'
+  const texteClients =
+    langue === 'en'
+      ? `${nbClients} client${nbClients > 1 ? 's' : ''} supported · Powered by PiloBrain`
+      : `${nbClients} client${nbClients > 1 ? 's' : ''} accompagne${nbClients > 1 ? 's' : ''} · Propulse par PiloBrain`
 
   return `<svg width="360" height="140" viewBox="0 0 360 140" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -32,8 +38,8 @@ function construireSvg(params: {
   <text x="40" y="77" font-family="Arial, sans-serif" font-size="20" fill="#F0CC7A" text-anchor="middle">🏆</text>
   <text x="78" y="38" font-family="Arial, sans-serif" font-size="13" fill="#7C8794">${echapperXml(nomCabinet)}</text>
   <text x="78" y="66" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#ffffff">${montantFormate} ${echapperXml(devise)}</text>
-  <text x="78" y="86" font-family="Arial, sans-serif" font-size="12" fill="#7C8794">de missions accompagnees</text>
-  <text x="78" y="112" font-family="Arial, sans-serif" font-size="12" fill="#1F6F78" font-weight="bold">${nbClients} client${nbClients > 1 ? 's' : ''} accompagne${nbClients > 1 ? 's' : ''} · Propulse par PiloBrain</text>
+  <text x="78" y="86" font-family="Arial, sans-serif" font-size="12" fill="#7C8794">${texteMissions}</text>
+  <text x="78" y="112" font-family="Arial, sans-serif" font-size="12" fill="#1F6F78" font-weight="bold">${texteClients}</text>
 </svg>`
 }
 
@@ -43,18 +49,19 @@ export async function GET(req: NextRequest) {
 
   const { data: client } = await supabaseAdmin
     .from('clients')
-    .select('id, nom_entreprise, client_countries(country_code)')
+    .select('id, nom_entreprise, langue_preferee, client_countries(country_code)')
     .eq('token_badge_public', token)
     .single()
 
   if (!client) return NextResponse.json({ error: 'Badge introuvable' }, { status: 404 })
 
   // Zone/devise deduite du premier pays cible du cabinet (meme logique que
-  // le reste de la plateforme) - a defaut, Tunisie par convention.
+  // le reste de la plateforme) - a defaut, dollar US (USD).
   // @ts-ignore - jointure Supabase typee dynamiquement
   const premierPays = client.client_countries?.[0]?.country_code as string | undefined
-  const zone = zonePourPays(premierPays ?? 'TN')
-  const devise = deviseParZone(zone)
+  const devise = premierPays ? deviseParZone(zonePourPays(premierPays)) : 'USD'
+  // @ts-ignore - colonne ajoutee par migration (langue de l'interface du cabinet)
+  const langueBadge: 'fr' | 'en' = client.langue_preferee === 'fr' ? 'fr' : 'en'
 
   const { count: nbClients } = await supabaseAdmin
     .from('leads_packs')
@@ -75,6 +82,7 @@ export async function GET(req: NextRequest) {
     montantTotal,
     devise,
     nbClients: nbClients ?? 0,
+    langue: langueBadge,
   })
 
   return new NextResponse(svg, {

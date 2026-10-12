@@ -1019,6 +1019,26 @@ export default function DashboardPage() {
     setMaj(false)
   }
 
+  // Logo de l'entreprise : televerse depuis le cadre de couverture de la carte profil
+  const televerserLogo = async (fichier: File) => {
+    if (!client) return
+    const { data: u } = await supabase.auth.getUser()
+    const chemin = `${u.user?.id ?? client.id}/${Date.now()}-${fichier.name}`
+    const { error } = await supabase.storage.from('logos').upload(chemin, fichier)
+    if (error) {
+      alert(tt("Échec de l'upload du fichier"))
+      return
+    }
+    const { data } = supabase.storage.from('logos').getPublicUrl(chemin)
+    await supabase.from('clients').update({ logo_url: data.publicUrl }).eq('id', client.id)
+    setClient({ ...client, logo_url: data.publicUrl })
+  }
+  const retirerLogo = async () => {
+    if (!client) return
+    await supabase.from('clients').update({ logo_url: null }).eq('id', client.id)
+    setClient({ ...client, logo_url: null })
+  }
+
   const changerLangue = async (nouvelleLangue: Langue) => {
     if (!client) return
     setClient({ ...client, langue_preferee: nouvelleLangue })
@@ -2614,14 +2634,39 @@ export default function DashboardPage() {
                 className="max-h-14 max-w-[75%] object-contain rounded-md bg-white p-1.5"
               />
             ) : (
-              <button
-                type="button"
-                onClick={() => setOngletActif('equipe')}
-                className="text-[11px] text-white/60 hover:text-white border border-dashed border-white/30 rounded-lg px-3 py-2"
-              >
-                {tt("+ Logo de l'entreprise")}</button>
+              <label className="cursor-pointer text-[11px] text-white/60 hover:text-white border border-dashed border-white/30 rounded-lg px-3 py-2">
+                {tt("+ Logo de l'entreprise")}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) televerserLogo(f)
+                  }}
+                />
+              </label>
             )}
           </div>
+          {client.logo_url && (
+            <div className="flex justify-end gap-3 px-3 pt-1 text-[10px] text-white/50">
+              <label className="cursor-pointer hover:text-white">
+                {tt("Changer le logo")}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) televerserLogo(f)
+                  }}
+                />
+              </label>
+              <button type="button" onClick={retirerLogo} className="hover:text-white">
+                {tt("Retirer le logo")}
+              </button>
+            </div>
+          )}
           <div className="px-3 pb-3">
             <div className="-mt-6 mb-2">
               {monPhotoUrl ? (
@@ -2662,7 +2707,7 @@ export default function DashboardPage() {
             <button
               key={onglet.id}
               onClick={() => setOngletActif(onglet.id)}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap text-left transition ${
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold md:whitespace-normal whitespace-nowrap leading-tight text-left transition ${
                 ongletActif === onglet.id
                   ? 'bg-white/10 text-white'
                   : 'text-white/70 hover:text-white hover:bg-white/5'
@@ -2958,60 +3003,6 @@ export default function DashboardPage() {
                 )}
               </div>
             </section>
-
-            {/* PERSONNALISATION DU MESSAGE ET DU LOGO */}
-            <section className="space-y-4">
-              <h2 className="text-lg font-semibold">{t('message_personnalise')}</h2>
-              <p className="text-slate-500 text-xs">
-                {tt("Utilise")}{' '}<code className="text-accent">{'{nom}'}</code>,{' '}
-                <code className="text-accent">{'{cabinet}'}</code> {tt("et")}{' '}
-                <code className="text-accent">{'{lien}'}</code> {tt("dans ton texte — ils seront automatiquement remplacés. Le lien de désinscription est toujours ajouté automatiquement à la fin (obligation légale).")}</p>
-
-              <div className="flex flex-wrap gap-2">
-                {templatesPourVertical(verticalSlug).map((tpl) => (
-                  <button
-                    key={tpl.titre}
-                    onClick={() => {
-                      setMessageInput(tpl.texte)
-                      enregistrerMessage(tpl.texte)
-                    }}
-                    className="text-xs px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 hover:border-accent transition"
-                  >
-                    📄 {tpl.titre}
-                  </button>
-                ))}
-              </div>
-
-              <textarea
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onBlur={() => enregistrerMessage()}
-                placeholder={tt("Bonjour {nom},\n\n{cabinet} vous invite a decrire votre situation, un expert etudiera votre dossier :\n{lien}")}
-                className="w-full h-28 rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm"
-              />
-
-              <div className="space-y-2">
-                <p className="text-slate-400 text-sm">
-                  {t('logo')}{' '}
-                  <span className="text-slate-600">{tt("(URL d'image hébergée en ligne)")}</span>
-                </p>
-                <input
-                  value={logoInput}
-                  onChange={(e) => setLogoInput(e.target.value)}
-                  onBlur={enregistrerLogo}
-                  placeholder={tt("https://ton-site.com/logo.png")}
-                  className="w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-sm"
-                />
-                {logoInput && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={logoInput}
-                    alt={tt("Aperçu logo")}
-                    className="h-12 mt-2 rounded bg-white p-1"
-                  />
-                )}
-              </div>
-            </section>
           </>
         )}
 
@@ -3088,10 +3079,7 @@ export default function DashboardPage() {
             </div>
             {messageImportCSV && <p className="text-sm text-slate-300">{messageImportCSV}</p>}
 
-            {targets.filter((tg) => tg.statut === 'nouveau').length === 0 ? (
-              <p className="text-slate-500 text-sm italic">
-                {tt("Aucune cible non contactée pour le moment. Les prospects déjà contactés se trouvent dans l'onglet Pipeline.")}</p>
-            ) : (
+            {targets.filter((tg) => tg.statut === 'nouveau').length === 0 ? null : (
               <>
                 {membresEquipe.length > 1 && (
                   <div className="flex gap-2">
