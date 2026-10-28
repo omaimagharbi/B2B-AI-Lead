@@ -1,0 +1,364 @@
+'use client'
+
+import { useState } from 'react'
+import RichTextEditor from '@/components/RichTextEditor'
+import { traduire, type Langue } from '@/lib/i18n'
+import { tt } from '@/lib/litteral'
+
+type Etape = { nom: string; description: string }
+type Pack = { nom: string; prix_indicatif: number; description: string }
+type Brouillon = {
+  titre: string
+  synthese: string
+  methodologie: string
+  etapes: Etape[]
+  packs_proposes: Pack[]
+  _simule?: boolean
+}
+
+type DiagnosticEnAttente = {
+  id: string
+  token_acces: string
+  phrase_brute_prospect: string | null
+  json_ia_brouillon: Brouillon
+  lien_ouvert_at: string | null
+  commentaire_expert?: string | null
+  recommandations_json: {
+    segment: { categorie: string; urgence: string; budget_mentionne: boolean }
+    score: number
+    recommandations: { titre: string; action: string; priorite: string; questions?: string[] }[]
+    contenuMarketing: { titre: string; accroche_linkedin: string; format_suggere: string }
+    explicationScore?: string
+    besoinSousJacent?: string
+    immobilier?: unknown
+  } | null
+  targets: { nom: string } | { nom: string }[] | null
+}
+
+export default function ValidationItem({
+  diagnostic,
+  onValide,
+  langue = 'fr',
+  secteurBadge,
+}: {
+  diagnostic: DiagnosticEnAttente
+  onValide: () => void
+  langue?: Langue
+  secteurBadge?: string
+}) {
+  const t = (cle: string) => traduire(langue, cle)
+  // Diagnostic immobilier (Qatar) : plan en 5 etapes + biens du catalogue au lieu des packs formation
+  const estImmo = !!diagnostic.recommandations_json?.immobilier
+  const [ouvert, setOuvert] = useState(false)
+  const [titre, setTitre] = useState(diagnostic.json_ia_brouillon.titre ?? '')
+  const [synthese, setSynthese] = useState(diagnostic.json_ia_brouillon.synthese ?? '')
+  const [etapes, setEtapes] = useState<Etape[]>(diagnostic.json_ia_brouillon.etapes ?? [])
+  const [packs, setPacks] = useState<Pack[]>(diagnostic.json_ia_brouillon.packs_proposes ?? [])
+  const [commentaireExpert, setCommentaireExpert] = useState(diagnostic.commentaire_expert ?? '')
+  const [langueRapport, setLangueRapport] = useState<'fr' | 'en' | 'ar'>(langue)
+  const [envoi, setEnvoi] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
+
+  const nomProspect = Array.isArray(diagnostic.targets)
+    ? diagnostic.targets[0]?.nom
+    : diagnostic.targets?.nom
+
+  const majEtape = (i: number, champ: keyof Etape, valeur: string) => {
+    setEtapes((prev) => prev.map((e, idx) => (idx === i ? { ...e, [champ]: valeur } : e)))
+  }
+
+  const majPack = (i: number, champ: keyof Pack, valeur: string) => {
+    setPacks((prev) =>
+      prev.map((p, idx) =>
+        idx === i ? { ...p, [champ]: champ === 'prix_indicatif' ? Number(valeur) : valeur } : p
+      )
+    )
+  }
+
+  const ajouterPack = () => {
+    setPacks((prev) => [...prev, { nom: 'Nouveau pack', prix_indicatif: 0, description: '' }])
+  }
+
+  const supprimerPack = (i: number) => {
+    setPacks((prev) => prev.filter((_, idx) => idx !== i))
+  }
+
+  const validerEtEnvoyer = async () => {
+    setErreur(null)
+    setEnvoi(true)
+
+    try {
+      const res = await fetch('/api/diagnostic/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          diagnostic_id: diagnostic.id,
+          json_expert_valide: {
+            titre,
+            synthese,
+            methodologie: diagnostic.json_ia_brouillon.methodologie,
+            etapes,
+          },
+          packs,
+          commentaire_expert: commentaireExpert,
+          langue_rapport: langueRapport,
+        }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setErreur(data.error ?? t('erreur_validation'))
+        setEnvoi(false)
+        return
+      }
+
+      onValide()
+    } catch {
+      setErreur(t('erreur_serveur'))
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
+      <button
+        onClick={() => setOuvert(!ouvert)}
+        className="w-full p-4 flex items-center justify-between text-left"
+      >
+        <div>
+          <p className="font-semibold flex items-center gap-2 flex-wrap">
+            {nomProspect ?? 'Prospect'}
+            {secteurBadge && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 font-normal">
+                🗂️ {secteurBadge}
+              </span>
+            )}
+          </p>
+          <p className="text-slate-400 text-sm italic">
+            "{diagnostic.phrase_brute_prospect?.slice(0, 100)}
+            {(diagnostic.phrase_brute_prospect?.length ?? 0) > 100 ? '...' : ''}"
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            {diagnostic.lien_ouvert_at
+              ? `👁️ ${t('lien_ouvert_le')} ${new Date(diagnostic.lien_ouvert_at).toLocaleDateString('fr-FR')}`
+              : `👁️‍🗨️ ${t('lien_pas_ouvert')}`}
+          </p>
+        </div>
+        <span className="text-slate-300 text-sm">
+          {ouvert ? t('fermer_fleche') : t('relire_valider')}
+        </span>
+      </button>
+
+      {ouvert && (
+        <div className="p-4 pt-0 space-y-4 border-t border-slate-800">
+          {erreur && (
+            <div className="text-red-400 bg-red-950/40 border border-red-800 rounded-lg p-3 text-sm">
+              {erreur}
+            </div>
+          )}
+
+          {diagnostic.json_ia_brouillon._simule ? (
+            <div className="text-xs px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300">
+              {t('mode_simule')}
+            </div>
+          ) : (
+            <div className="text-xs px-3 py-2 rounded-lg bg-green-950/40 border border-green-800 text-green-400">
+              {t('contenu_genere_ia')}
+            </div>
+          )}
+
+          {diagnostic.recommandations_json && (
+            <div className="rounded-lg bg-slate-950 border border-slate-700 p-3 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs px-2 py-1 rounded-full bg-slate-800">
+                    {diagnostic.recommandations_json.segment.categorie.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded-full bg-slate-800">
+                    {diagnostic.recommandations_json.segment.urgence === 'haute'
+                      ? `🔴 ${t('urgent')}`
+                      : diagnostic.recommandations_json.segment.urgence === 'basse'
+                      ? `🟢 ${t('pas_presse')}`
+                      : `🟠 ${t('moyen')}`}
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded-full font-semibold bg-slate-800">
+                    🔥 {diagnostic.recommandations_json.score}/100
+                  </span>
+                </div>
+                <a
+                  href={`/api/rapport/${diagnostic.token_acces}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-accent underline"
+                >
+                  {t('voir_rapport_complet')}
+                </a>
+              </div>
+
+              {diagnostic.recommandations_json.explicationScore && (
+                <p className="text-xs text-slate-500 italic">
+                  {diagnostic.recommandations_json.explicationScore}
+                </p>
+              )}
+
+              {diagnostic.recommandations_json.besoinSousJacent && (
+                <p className="text-sm text-sky-400 font-medium">
+                  {diagnostic.recommandations_json.besoinSousJacent}
+                </p>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-xs text-slate-400 uppercase">{t('strategie_suggeree')}</p>
+                {diagnostic.recommandations_json.recommandations.map((r, i) => (
+                  <div key={i} className="text-sm">
+                    <span className="font-semibold">{r.titre}</span>
+                    <span className="text-slate-400"> — {r.action}</span>
+                    {r.questions && r.questions.length > 0 && (
+                      <ul className="list-disc list-inside text-slate-400 mt-1 ml-2">
+                        {r.questions.map((q, qi) => (
+                          <li key={qi}>{q}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {diagnostic.recommandations_json.contenuMarketing && (
+                <div className="space-y-1 border-t border-slate-800 pt-2">
+                  <p className="text-xs text-slate-400 uppercase">{t('contenu_marketing_suggere')}</p>
+                  <p className="text-sm font-semibold">
+                    {diagnostic.recommandations_json.contenuMarketing.titre}
+                  </p>
+                  <p className="text-sm text-slate-300">
+                    {diagnostic.recommandations_json.contenuMarketing.accroche_linkedin}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {t('format_label')} : {diagnostic.recommandations_json.contenuMarketing.format_suggere}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-xs text-slate-400 uppercase">{t('champ_titre')}</label>
+            <input
+              value={titre}
+              onChange={(e) => setTitre(e.target.value)}
+              className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs text-slate-400 uppercase">{t('champ_synthese')}</label>
+            <RichTextEditor value={synthese} onChange={setSynthese} />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs text-slate-400 uppercase">
+              {estImmo ? tt("Plan d'acquisition immobilier") : t('champ_etapes')} ({diagnostic.json_ia_brouillon.methodologie})
+            </label>
+            {etapes.map((etape, i) => (
+              <div key={i} className="rounded-lg bg-slate-950 border border-slate-700 p-2 space-y-1">
+                <input
+                  value={etape.nom}
+                  onChange={(e) => majEtape(i, 'nom', e.target.value)}
+                  className="w-full bg-transparent font-semibold text-sm"
+                />
+                <textarea
+                  value={etape.description}
+                  onChange={(e) => majEtape(i, 'description', e.target.value)}
+                  className="w-full bg-transparent text-slate-400 text-sm h-12"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-slate-400 uppercase">
+                {estImmo ? tt("Biens suggérés (catalogue de l'agence)") : t('packs_proposes')}
+              </label>
+              <button onClick={ajouterPack} className="text-accent text-xs underline">
+                {estImmo ? tt("+ Ajouter un bien") : t('ajouter_pack')}
+              </button>
+            </div>
+            {estImmo && packs.length === 0 && (
+              <p className="text-xs text-slate-500 italic">
+                {tt("Aucun bien dans votre catalogue : ajoutez vos fiches de propriétés dans l'onglet Catalogue pour qu'elles soient proposées ici.")}
+              </p>
+            )}
+            {packs.map((pack, i) => (
+              <div
+                key={i}
+                className="rounded-lg bg-slate-950 border border-slate-700 p-2 grid grid-cols-1 md:grid-cols-4 gap-2 items-start"
+              >
+                <input
+                  value={pack.nom}
+                  onChange={(e) => majPack(i, 'nom', e.target.value)}
+                  placeholder={estImmo ? tt("Nom du bien") : t('nom_du_pack')}
+                  className="md:col-span-2 bg-transparent border-b border-slate-700 text-sm p-1"
+                />
+                <input
+                  type="number"
+                  value={pack.prix_indicatif}
+                  onChange={(e) => majPack(i, 'prix_indicatif', e.target.value)}
+                  placeholder={t('prix')}
+                  className="bg-transparent border-b border-slate-700 text-sm p-1"
+                />
+                <button
+                  onClick={() => supprimerPack(i)}
+                  className="text-red-400 text-xs underline text-left"
+                >
+                  {t('supprimer')}
+                </button>
+                <textarea
+                  value={pack.description}
+                  onChange={(e) => majPack(i, 'description', e.target.value)}
+                  placeholder={t('description_placeholder')}
+                  className="md:col-span-4 bg-transparent text-slate-400 text-xs h-10"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs text-slate-400 uppercase">
+              {t('commentaire_perso_label')}
+            </label>
+            <textarea
+              value={commentaireExpert}
+              onChange={(e) => setCommentaireExpert(e.target.value)}
+              placeholder={t('commentaire_perso_placeholder')}
+              className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm h-16"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs text-slate-400 uppercase">
+              {t('langue_rapport_label')}
+            </label>
+            <select
+              value={langueRapport}
+              onChange={(e) => setLangueRapport(e.target.value as 'fr' | 'en' | 'ar')}
+              className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+            >
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+              <option value="ar">العربية (Arabe Fusha)</option>
+            </select>
+          </div>
+
+          <button
+            onClick={validerEtEnvoyer}
+            disabled={envoi}
+            className="w-full py-3 rounded-lg bg-accent text-slate-950 font-semibold disabled:opacity-50 hover:opacity-90 transition"
+          >
+            {envoi ? t('envoi_en_cours') : t('valider_envoyer')}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
