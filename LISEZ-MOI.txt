@@ -1,0 +1,17 @@
+PATCH V9 = seulement les 67 fichiers nouveaux ou modifies par rapport a ton projet d'origine (moins de 100 : GitHub les accepte en une fois).
+Tout le reste de ton projet (dont tout le dossier app/api existant) ne change pas : NE PAS le renvoyer.
+
+METHODE 1 - Site GitHub (upload)
+ 1. Dezipper ce fichier. Vous obtenez le dossier PATCH-V9.
+ 2. GitHub > ton depot > branche "version" > Add file > Upload files.
+ 3. Ouvrir le dossier PATCH-V9, selectionner TOUT son contenu (les dossiers app et lib + les fichiers a la racine) et le glisser dans la page.
+    Dans la liste, chaque fichier doit afficher son chemin complet (app/immo/page.tsx, lib/immo-os/store.tsx...).
+    Si tu vois un fichier SANS chemin (layout.tsx, page.tsx, globals.css tout seuls) : clique sur sa croix X, il irait a la racine par erreur.
+ 4. Commit changes.
+ 5. Supprimer les anciens dossiers (voir A-SUPPRIMER-sur-GitHub.txt).
+
+METHODE 2 - si l'upload refuse encore (github.dev, sans rien installer)
+ 1. Ouvrir ton depot sur GitHub, choisir la branche "version", appuyer sur la touche point ( . ) : un editeur VS Code s'ouvre dans le navigateur.
+ 2. Glisser les dossiers app et lib du patch dans l'explorateur de gauche (accepter "Remplacer"). Glisser aussi les fichiers racine (vercel.json, next.config.js, README.md, .env.local.example).
+ 3. Clic droit sur chaque dossier de A-SUPPRIMER-sur-GitHub.txt > Supprimer.
+ 4. Icone "Source Control" > message > Commit & Push.

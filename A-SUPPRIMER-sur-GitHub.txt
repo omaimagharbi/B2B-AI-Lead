@@ -1,0 +1,17 @@
+DOSSIERS A SUPPRIMER SUR GITHUB (s'ils existent, a cause des versions envoyees avant)
+Un upload GitHub n'efface jamais les anciens fichiers. Pour chaque dossier : l'ouvrir > bouton "..." > "Delete directory" > Commit.
+
+  app/api/immo/[entity]
+  app/api/immo/all
+  app/api/immo/me
+  app/api/immo/seed
+  app/api/immo/assistant
+  app/api/immo/whatsapp
+  app/api/immo/capture
+  app/api/immo/targets
+  app/api/immo/upload
+  app/api/immo/visits
+  app/api/cron/immo-rappels
+  app/lead/[agency]
+
+Dans app/api/immo il ne doit rester QUE le dossier  [[...path]]
