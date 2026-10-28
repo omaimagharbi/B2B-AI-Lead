@@ -51,6 +51,39 @@ export function deviseParZone(zone: Zone): 'TND' | 'USD' | 'EUR' {
   return 'EUR'
 }
 
+// Fuseau horaire IANA associe a chaque pays gere par la plateforme, pour le
+// calcul des creneaux de reservation (voir lib/google-calendar.ts). Un seul
+// fuseau par pays (les pays a fuseaux multiples comme US/Canada n'ont
+// qu'une valeur representative - limite acceptee, le cabinet peut choisir
+// un autre fuseau de la liste si le sien differe).
+export const TIMEZONES_DISPONIBLES: { zone: string; label: string }[] = [
+  { zone: 'Africa/Tunis', label: 'Tunisie (UTC+1)' },
+  { zone: 'Africa/Algiers', label: 'Algérie (UTC+1)' },
+  { zone: 'Africa/Casablanca', label: 'Maroc (UTC+1)' },
+  { zone: 'Asia/Dubai', label: 'Émirats Arabes Unis (UTC+4)' },
+  { zone: 'Asia/Riyadh', label: 'Arabie Saoudite (UTC+3)' },
+  { zone: 'Asia/Qatar', label: 'Qatar (UTC+3)' },
+  { zone: 'Europe/Paris', label: 'France (UTC+1/+2)' },
+  { zone: 'Europe/Brussels', label: 'Belgique (UTC+1/+2)' },
+  { zone: 'Europe/Madrid', label: 'Espagne (UTC+1/+2)' },
+  { zone: 'Europe/Rome', label: 'Italie (UTC+1/+2)' },
+  { zone: 'Europe/Luxembourg', label: 'Luxembourg (UTC+1/+2)' },
+  { zone: 'Europe/Amsterdam', label: 'Pays-Bas (UTC+1/+2)' },
+  { zone: 'Europe/London', label: 'Royaume-Uni (UTC+0/+1)' },
+  { zone: 'Europe/Zurich', label: 'Suisse (UTC+1/+2)' },
+  { zone: 'Europe/Berlin', label: 'Allemagne (UTC+1/+2)' },
+  { zone: 'America/Toronto', label: 'Canada - Est (UTC-5/-4)' },
+  { zone: 'America/Winnipeg', label: 'Canada - Centre (UTC-6/-5)' },
+  { zone: 'America/Edmonton', label: 'Canada - Rocheuses (UTC-7/-6)' },
+  { zone: 'America/Vancouver', label: 'Canada - Pacifique (UTC-8/-7)' },
+  { zone: 'America/New_York', label: 'États-Unis - Est (UTC-5/-4)' },
+  { zone: 'America/Chicago', label: 'États-Unis - Centre (UTC-6/-5)' },
+  { zone: 'America/Denver', label: 'États-Unis - Rocheuses (UTC-7/-6)' },
+  { zone: 'America/Los_Angeles', label: 'États-Unis - Pacifique (UTC-8/-7)' },
+  { zone: 'Africa/Abidjan', label: "Côte d'Ivoire (UTC+0)" },
+  { zone: 'Africa/Dakar', label: 'Sénégal (UTC+0)' },
+]
+
 // Argument de vente a injecter dans le prompt IA du diagnostic, adapte a la
 // zone du prospect (regle simple, pas d'IA generative pour ce choix).
 export function argumentVenteParZone(zone: Zone): string {

@@ -28,16 +28,21 @@ export async function enregistrerUsageIA(params: {
   fournisseur: 'anthropic' | 'gemini'
   tokensEntree: number
   tokensSortie: number
+  source?: string // ex. 'immo' : permet de compter l'usage par fonctionnalite (colonne ajoutee par la migration 72)
 }) {
-  const { clientId, fournisseur, tokensEntree, tokensSortie } = params
+  const { clientId, fournisseur, tokensEntree, tokensSortie, source } = params
   try {
-    await supabaseAdmin.from('usage_ia').insert({
+    const ligne = {
       client_id: clientId,
       fournisseur,
       tokens_entree: tokensEntree,
       tokens_sortie: tokensSortie,
       cout_estime_usd: estimerCoutUsd(fournisseur, tokensEntree, tokensSortie),
-    })
+    }
+    const payload: Record<string, unknown> = source ? { ...ligne, source } : ligne
+    const { error } = await supabaseAdmin.from('usage_ia').insert(payload)
+    // Colonne source absente (migration 72 pas faite) : on enregistre quand meme la consommation
+    if (error && source) await supabaseAdmin.from('usage_ia').insert(ligne)
   } catch (err) {
     console.error('Erreur enregistrement usage IA (non bloquant):', err)
   }

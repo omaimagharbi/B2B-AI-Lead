@@ -26,6 +26,13 @@ export const PROFESSIONS_PAR_VERTICAL: Record<string, string[]> = {
     'CEO de startup',
     'Directeur Général de startup',
   ],
+  immobilier: [
+    'Propriétaire vendeur',
+    'Investisseur locatif',
+    'Promoteur immobilier',
+    'Syndic de copropriété',
+    'Particulier acheteur',
+  ],
 }
 
 // Profils cibles en mode "Particulier" (vertical Cabinet de Formation uniquement)
