@@ -1,0 +1,53 @@
+/* Real Estate OS - theme isole (n'utilise pas les couleurs slate/white remappees du site) */
+.imo {
+  --bg: #F3F6FB; --card: #FFFFFF; --text: #0F2540; --muted: #66768C; --border: #E3E9F2; --soft: #F6F8FC;
+  --navy: #0B2447; --navy2: #112F5C; --gold: #C9A24B; --gold2: #E3C275; --blue: #2563EB;
+  --good: #16A34A; --warn: #F59E0B; --bad: #EF4444; --shadow: 0 1px 2px rgba(15,37,64,.05), 0 4px 14px rgba(15,37,64,.05);
+  background: var(--bg); color: var(--text); font-family: Poppins, Manrope, system-ui, sans-serif; min-height: 100vh;
+}
+.imo.imo-dark {
+  --bg: #08121F; --card: #0F2038; --text: #E8EEF7; --muted: #8FA3BD; --border: #1C3252; --soft: #0B192D; --shadow: 0 1px 2px rgba(0,0,0,.3);
+}
+.imo * { box-sizing: border-box; }
+.imo h1, .imo h2, .imo h3 { color: var(--text); margin: 0; }
+.imo-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+.imo-card-pad { padding: 16px; }
+.t-muted { color: var(--muted); } .t-main { color: var(--text); }
+.imo-input, .imo-select, .imo-textarea {
+  width: 100%; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 12px; font-size: 13.5px; outline: none; font-family: inherit;
+}
+.imo-input:focus, .imo-select:focus, .imo-textarea:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201,162,75,.18); }
+.imo-textarea { resize: vertical; min-height: 84px; }
+.imo-label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+.imo-btn {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; transition: .15s; white-space: nowrap; font-family: inherit;
+}
+.imo-btn:hover { border-color: var(--gold); }
+.imo-btn:disabled { opacity: .55; cursor: not-allowed; }
+.imo-btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.imo-btn-primary:hover { background: #1D4ED8; border-color: #1D4ED8; }
+.imo-btn-gold { background: linear-gradient(135deg, var(--gold2), var(--gold)); border-color: var(--gold); color: #0B2447; }
+.imo-btn-danger { color: var(--bad); }
+.imo-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 10px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.imo-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.imo-table th { text-align: left; font-size: 11.5px; color: var(--muted); font-weight: 600; padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.imo-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.imo-table tr:last-child td { border-bottom: none; }
+.imo-table tbody tr:hover { background: var(--soft); }
+.imo-nav { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; font-size: 14px; font-weight: 500; color: #C9D6EA; cursor: pointer; text-decoration: none; transition: .15s; }
+.imo-nav:hover { background: rgba(255,255,255,.07); color: #fff; }
+.imo-nav.active { background: linear-gradient(90deg, rgba(201,162,75,.95), rgba(201,162,75,.65)); color: #0B2447; font-weight: 700; }
+.imo-scroll::-webkit-scrollbar { width: 8px; height: 8px } .imo-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px }
+.imo-modal-back { position: fixed; inset: 0; background: rgba(5,12,25,.55); z-index: 80; display: flex; align-items: flex-start; justify-content: center; padding: 5vh 16px; overflow-y: auto; }
+.imo-bubble-in { background: var(--soft); border: 1px solid var(--border); border-radius: 14px 14px 14px 4px; }
+.imo-bubble-out { background: #DCF8C6; color: #0F2540; border-radius: 14px 14px 4px 14px; }
+.imo-dark .imo-bubble-out { background: #1F5C3A; color: #E8F7EE; }
+.imo-ai { background: linear-gradient(160deg, #0B2447, #123B73); color: #E8EEF7; border-radius: 14px; }
+.imo-kanban-col.drag-over { outline: 2px dashed var(--gold); }
+@keyframes imo-pulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+.imo-dots span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin: 0 2px; animation: imo-pulse 1s infinite; }
+.imo-dots span:nth-child(2) { animation-delay: .2s } .imo-dots span:nth-child(3) { animation-delay: .4s }
+@media (max-width: 1024px) { .imo-sidebar { position: fixed; z-index: 70; transform: translateX(-100%); transition: .2s; height: 100vh; } .imo[dir=rtl] .imo-sidebar { transform: translateX(100%); } .imo-sidebar.open, .imo[dir=rtl] .imo-sidebar.open { transform: none; } }
+.imo[dir=rtl] .imo-table th { text-align: right; }

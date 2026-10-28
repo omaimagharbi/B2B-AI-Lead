@@ -1,0 +1,14 @@
+PATCH V9b - 66 fichiers (sans le dossier a crochets, que GitHub refuse d'uploader).
+
+IMPORTANT sur l'upload GitHub : le chemin enregistre = chemin A PARTIR du dossier que tu glisses.
+ -> Reste sur la page d'upload a la RACINE du depot (branche version) et glisse les DEUX dossiers  app  et  lib  entiers,
+    plus les 4 fichiers de la racine : vercel.json, next.config.js, README.md, .env.local.example.
+ -> NE PAS entrer dans les sous-dossiers pour glisser un dossier plus profond (ex. webhook) : il partirait a la racine.
+ -> Dans la liste d'envoi, TOUS les chemins doivent commencer par  app/  ou  lib/  ou etre un des 4 fichiers racine.
+    Un chemin comme  /webhook/whatsapp/route.ts  ou un fichier seul  page.tsx  = erreur : clique sur sa croix X.
+
+ORDRE :
+ 1. Upload des dossiers app + lib + 4 fichiers racine  >  Commit changes.
+ 2. Creer a la main le fichier decrit dans  COLLER-route-immo.txt  (Add file > Create new file).
+ 3. Supprimer les anciens dossiers listes dans  A-SUPPRIMER-sur-GitHub.txt  (s'ils existent).
+ 4. Attendre que Vercel redeploie (seul le dernier deploiement compte), puis ouvrir /immo.
