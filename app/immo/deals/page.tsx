@@ -13,7 +13,7 @@ const blank = (): Partial<Deal> => ({ title: '', property_id: null, party_name: 
 const comm = (d: Deal) => (d.value * d.commission_pct) / 100
 
 export default function DealsPage() {
-  const { data, agents, create, update, remove, notify } = useImmo()
+  const { data, agents, create, update, remove, notify, canDelete } = useImmo()
   const [st, setSt] = useState('')
   const [edit, setEdit] = useState<Partial<Deal> | null>(null)
   const list = useMemo(() => data.deals.filter((d) => !st || d.status === st), [data.deals, st])
@@ -58,7 +58,7 @@ export default function DealsPage() {
             <tbody>{list.map((d) => (
               <tr key={d.id}><td className="font-medium">{d.title}</td><td>{d.party_name ?? '-'}</td><td>{d.kind}</td><td>{qar(d.value)}</td><td>{qar(comm(d))} <span className="t-muted text-[11px]">({d.commission_pct}%)</span></td><td>{d.agent ?? '-'}</td>
                 <td><select className="imo-select" style={{ width: 140, padding: '4px 8px', color: meta(d.status).color, fontWeight: 600 }} value={d.status} onChange={(e) => update('deals', d.id, { status: e.target.value, closed_at: e.target.value === 'closed' ? new Date().toISOString() : null })}>{DEAL_STATUSES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select></td>
-                <td className="text-right whitespace-nowrap"><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(d)}><Pencil size={13} /></Btn> <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`deal "${d.title}"`) && remove('deals', d.id)}><Trash2 size={13} /></Btn></td></tr>
+                <td className="text-right whitespace-nowrap"><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(d)}><Pencil size={13} /></Btn> {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`deal "${d.title}"`) && remove('deals', d.id)}><Trash2 size={13} /></Btn>}</td></tr>
             ))}</tbody></table></div>
         )}
       </Card>

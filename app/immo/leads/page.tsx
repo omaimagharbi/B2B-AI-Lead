@@ -12,7 +12,7 @@ import { confirmDelete, useQueryParam } from '@/lib/immo-os/hooks'
 const blank = (agent = ''): Partial<Lead> => ({ name: '', phone: '', email: '', interest: '', property_id: null, budget: 0, status: 'new', source: 'whatsapp', agent, notes: '' })
 
 export default function LeadsPage() {
-  const { data, agents, create, update, remove, notify, me, callApi, reload, mode } = useImmo()
+  const { data, agents, create, update, remove, notify, me, callApi, reload, mode, canDelete } = useImmo()
   const manager = !!me && ['proprietaire', 'admin', 'directeur_commercial'].includes(me.role)
   const [imp, setImp] = useState<{ items: any[]; sel: Set<string>; busy: boolean } | null>(null)
   const openImport = async () => {
@@ -102,7 +102,7 @@ export default function LeadsPage() {
                         <Btn style={{ padding: '3px 7px' }} onClick={() => toClient(l)} title="Convert to client" aria-label="Convert to client"><UserCheck size={12} /></Btn>
                         <Btn style={{ padding: '3px 7px' }} onClick={() => toDeal(l)} title="Create deal" aria-label="Create deal"><Handshake size={12} /></Btn>
                         <Btn style={{ padding: '3px 7px' }} onClick={() => setEdit(l)} aria-label="Edit"><Pencil size={12} /></Btn>
-                        <Btn kind="danger" style={{ padding: '3px 7px' }} onClick={() => confirmDelete(`lead "${l.name}"`) && remove('leads', l.id)} aria-label="Delete"><Trash2 size={12} /></Btn>
+                        {canDelete && <Btn kind="danger" style={{ padding: '3px 7px' }} onClick={() => confirmDelete(`lead "${l.name}"`) && remove('leads', l.id)} aria-label="Delete"><Trash2 size={12} /></Btn>}
                       </div>
                       {l.agent && <div className="t-muted text-[11px] mt-1.5">Agent: {l.agent}</div>}
                     </div>

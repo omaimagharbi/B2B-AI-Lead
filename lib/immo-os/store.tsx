@@ -20,6 +20,8 @@ type Ctx = {
   data: Data
   agency: string
   clientId: string | null
+  canDelete: boolean
+  aiUsage: { used: number; limit: number } | null
   logo: string | null
   me: { id: string; name: string; role: string; photo: string | null } | null
   team: Member[]
@@ -61,6 +63,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
   const [agency, setAgency] = useState('My Agency')
   const [logo, setLogo] = useState<string | null>(null)
   const [clientId, setClientId] = useState<string | null>(null)
+  const [aiUsage, setAiUsage] = useState<{ used: number; limit: number } | null>(null)
   const [me, setMe] = useState<Ctx['me']>(null)
   const [team, setTeam] = useState<Member[]>([])
   const [dark, setDark] = useState(false)
@@ -113,6 +116,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       }
       setAgency(meRes.json.agency)
       setClientId(meRes.json.clientId ?? null)
+      if (meRes.json.ai) setAiUsage(meRes.json.ai)
       setLogo(meRes.json.logo)
       setMe(meRes.json.me)
       setTeam(meRes.json.team)
@@ -293,7 +297,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
 
   return (
     <C.Provider
-      value={{ mode, data, agency, clientId, logo, me, team, agents, liveEmpty, dark, toggleDark, lang, setLang, t, create, update, remove, seedLive, resetDemo, sendWhatsapp, ai, uploadPhoto, callApi: api, reload, notify, toasts }}
+      value={{ mode, data, agency, clientId, canDelete: isManager(me?.role), aiUsage, logo, me, team, agents, liveEmpty, dark, toggleDark, lang, setLang, t, create, update, remove, seedLive, resetDemo, sendWhatsapp, ai, uploadPhoto, callApi: api, reload, notify, toasts }}
     >
       {children}
     </C.Provider>

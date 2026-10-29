@@ -12,7 +12,7 @@ const KIND_COLOR: Record<string, string> = { buyer: '#2563EB', seller: '#F97316'
 const blank = (): Partial<RClient> => ({ name: '', phone: '', email: '', nationality: '', kind: 'buyer', budget: 0, preferred_areas: '', notes: '', agent: '' })
 
 export default function ClientsPage() {
-  const { data, agents, create, update, remove, notify } = useImmo()
+  const { data, agents, create, update, remove, notify, canDelete } = useImmo()
   const [q, setQ] = useState('')
   const [kind, setKind] = useState('')
   const [edit, setEdit] = useState<Partial<RClient> | null>(null)
@@ -45,7 +45,7 @@ export default function ClientsPage() {
               <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => setSel(c)}>
                 <td><div className="flex items-center gap-2"><Avatar name={c.name} size={28} /><div><div className="font-medium">{c.name}</div><div className="text-[11.5px] t-muted">{c.email ?? c.nationality ?? ''}</div></div></div></td>
                 <td><Badge color={KIND_COLOR[c.kind]}>{c.kind}</Badge></td><td>{c.phone ?? '-'}</td><td>{c.budget ? qar(c.budget) : '-'}</td><td className="t-muted">{c.preferred_areas ?? '-'}</td><td>{c.agent ?? '-'}</td><td className="t-muted">{ago(c.created_at)}</td>
-                <td className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(c)}><Pencil size={13} /></Btn> <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`client "${c.name}"`) && remove('clients', c.id)}><Trash2 size={13} /></Btn></td>
+                <td className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(c)}><Pencil size={13} /></Btn> {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`client "${c.name}"`) && remove('clients', c.id)}><Trash2 size={13} /></Btn>}</td>
               </tr>))}</tbody></table></div>
         )}
       </Card>

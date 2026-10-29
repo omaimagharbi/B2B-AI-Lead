@@ -1,0 +1,23 @@
+PATCH V10 -> V11 : 8 fichiers seulement (rien d'autre ne change).
+
+Ce que ca ajoute :
+ - Parametres : barre "AI usage this month" (requetes IA utilisees / limite).
+ - Les boutons Supprimer sont caches pour les agents (seuls les gestionnaires les voient).
+
+COMMENT (pour chaque fichier) : sur GitHub, branche version, ouvre le MEME dossier que dans ce patch,
+puis Add file > Upload files, glisse le fichier de ce dossier, Commit changes.
+(Le fichier porte le meme nom que celui du depot : il le remplace.)
+
+ORDRE A RESPECTER (store en premier, sinon un deploiement intermediaire echoue) :
+ 1. lib/immo-os/store.tsx
+ 2. app/immo/settings/page.tsx
+ 3. app/immo/properties/page.tsx
+ 4. app/immo/leads/page.tsx
+ 5. app/immo/clients/page.tsx
+ 6. app/immo/owners/page.tsx
+ 7. app/immo/deals/page.tsx
+ 8. app/immo/marketing/page.tsx
+
+ATTENTION : 7 de ces fichiers s'appellent tous "page.tsx". Verifie le DOSSIER avant de glisser :
+ le page.tsx du dossier  settings  va dans app/immo/settings , celui de  properties  dans app/immo/properties , etc.
+Chaque commit lance un deploiement Vercel : seul le DERNIER compte, les intermediaires valides ne gênent pas.

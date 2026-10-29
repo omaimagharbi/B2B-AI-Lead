@@ -12,7 +12,7 @@ import { confirmDelete } from '@/lib/immo-os/hooks'
 const blank = (): Partial<Owner> => ({ name: '', phone: '', email: '', notes: '' })
 
 export default function OwnersPage() {
-  const { data, create, update, remove, notify } = useImmo()
+  const { data, create, update, remove, notify, canDelete } = useImmo()
   const [q, setQ] = useState('')
   const [edit, setEdit] = useState<Partial<Owner> | null>(null)
   const [sel, setSel] = useState<Owner | null>(null)
@@ -47,7 +47,7 @@ export default function OwnersPage() {
                   <td className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <Link href="/immo/whatsapp"><Btn style={{ padding: '4px 8px' }}><MessageCircle size={13} /></Btn></Link>{' '}
                     <Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(o)}><Pencil size={13} /></Btn>{' '}
-                    <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`owner "${o.name}"`) && remove('owners', o.id)}><Trash2 size={13} /></Btn>
+                    {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`owner "${o.name}"`) && remove('owners', o.id)}><Trash2 size={13} /></Btn>}
                   </td>
                 </tr>
               )

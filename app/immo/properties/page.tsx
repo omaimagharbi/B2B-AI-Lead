@@ -13,7 +13,7 @@ const STATUS_COLOR: Record<string, string> = { available: '#16A34A', reserved: '
 const blank = (): Partial<Property> => ({ title: '', type: 'apartment', listing: 'sale', status: 'available', area: AREAS[0], price: 0, beds: 0, baths: 0, size_m2: 0, featured: false, owner_id: null, image_url: '', description: '' })
 
 export default function PropertiesPage() {
-  const { data, create, update, remove, notify, clientId, uploadPhoto } = useImmo()
+  const { data, create, update, remove, notify, clientId, uploadPhoto, canDelete } = useImmo()
   const [uploading, setUploading] = useState(false)
   const onFile = async (f?: File | null) => {
     if (!f) return
@@ -85,7 +85,7 @@ export default function PropertiesPage() {
                   <Btn style={{ padding: '5px 9px' }} onClick={() => setEdit(p)} aria-label="Edit"><Pencil size={13} /></Btn>
                   <Link href={`/immo/marketing?property=${p.id}`}><Btn style={{ padding: '5px 9px' }}><Megaphone size={13} /> Ad</Btn></Link>
                   <Btn style={{ padding: '5px 9px' }} onClick={() => copyLink(p.id)} title="Copy the lead form link for this property"><Link2 size={13} /> Link</Btn>
-                  <Btn kind="danger" style={{ padding: '5px 9px', marginLeft: 'auto' }} aria-label="Delete" onClick={() => confirmDelete(`"${p.title}"`) && remove('properties', p.id)}><Trash2 size={13} /></Btn>
+                  {canDelete && <Btn kind="danger" style={{ padding: '5px 9px', marginLeft: 'auto' }} aria-label="Delete" onClick={() => confirmDelete(`"${p.title}"`) && remove('properties', p.id)}><Trash2 size={13} /></Btn>}
                 </div>
               </div>
             </Card>
@@ -97,7 +97,7 @@ export default function PropertiesPage() {
           <tbody>{list.map((p) => (
             <tr key={p.id}><td className="font-medium">{p.title}{p.featured && <Star size={12} className="inline ml-1" style={{ color: '#F5C542', fill: '#F5C542' }} />}</td><td>{p.type}</td><td>{p.area}</td><td>{qar(p.price)}{p.listing === 'rent' ? '/mo' : ''}</td><td>{p.beds}</td><td>{p.size_m2} m²</td><td>{owner(p.owner_id) ?? '-'}</td>
               <td><Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge></td>
-              <td className="text-right whitespace-nowrap"><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(p)}><Pencil size={13} /></Btn> <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`"${p.title}"`) && remove('properties', p.id)}><Trash2 size={13} /></Btn></td></tr>
+              <td className="text-right whitespace-nowrap"><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(p)}><Pencil size={13} /></Btn> {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`"${p.title}"`) && remove('properties', p.id)}><Trash2 size={13} /></Btn>}</td></tr>
           ))}</tbody></table></div></Card>
       )}
 

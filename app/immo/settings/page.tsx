@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { confirmDelete } from '@/lib/immo-os/hooks'
 
 export default function SettingsPage() {
-  const { mode, agency, clientId, me, dark, toggleDark, resetDemo, seedLive, liveEmpty, notify } = useImmo()
+  const { mode, agency, clientId, aiUsage, me, dark, toggleDark, resetDemo, seedLive, liveEmpty, notify } = useImmo()
   const router = useRouter()
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const formUrl = clientId ? `${origin}/lead?a=${clientId}` : ''
@@ -34,6 +34,16 @@ export default function SettingsPage() {
               {liveEmpty && <div><Btn kind="gold" onClick={seedLive}><Sparkles size={14} /> Load sample Qatar data</Btn></div>}
             </div>
           )}
+        </Card>
+        <Card>
+          <CardTitle icon={<Sparkles size={17} />} title="AI usage this month" />
+          {aiUsage ? (
+            <div className="text-[13px] flex flex-col gap-2">
+              <div className="flex justify-between"><span>{aiUsage.used} of {aiUsage.limit} requests used</span><b>{aiUsage.limit > 0 ? Math.min(100, Math.round((aiUsage.used / aiUsage.limit) * 100)) : 100}%</b></div>
+              <div className="h-2 rounded-full" style={{ background: 'var(--border)' }}><div className="h-2 rounded-full" style={{ width: `${aiUsage.limit > 0 ? Math.min(100, (aiUsage.used / aiUsage.limit) * 100) : 100}%`, background: aiUsage.used >= aiUsage.limit ? '#EF4444' : aiUsage.used / Math.max(1, aiUsage.limit) > 0.8 ? '#F59E0B' : '#2563EB' }} /></div>
+              <div className="t-muted">Counts assistant, ads, replies and reports. When the limit is reached the AI stops until next month (standard templates still work).</div>
+            </div>
+          ) : <div className="text-[13px] t-muted">Usage becomes available once migration 72 is applied.</div>}
         </Card>
         <Card>
           <CardTitle icon={<Webhook size={17} />} title="Integrations" />

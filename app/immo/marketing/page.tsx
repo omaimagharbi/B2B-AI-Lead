@@ -13,7 +13,7 @@ const CH_LABEL: Record<string, string> = { instagram: 'Instagram', facebook: 'Fa
 const TONES = ['luxury', 'friendly', 'professional', 'urgent']
 
 export default function MarketingPage() {
-  const { data, ai, create, update, remove, notify } = useImmo()
+  const { data, ai, create, update, remove, notify, canDelete } = useImmo()
   const pre = useQueryParam('property')
   const [pid, setPid] = useState('')
   const [channel, setChannel] = useState('instagram')
@@ -77,7 +77,7 @@ export default function MarketingPage() {
                     <Btn style={{ padding: '4px 9px' }} onClick={() => copy(a.content)}><Copy size={12} /> Copy</Btn>
                     <Btn style={{ padding: '4px 9px' }} onClick={() => update('ads', a.id, { status: a.status === 'draft' ? 'published' : 'draft' })}><Check size={12} /> {a.status === 'draft' ? 'Mark published' : 'Published'}</Btn>
                     <Badge color={a.status === 'published' ? '#16A34A' : '#F59E0B'}>{a.status}</Badge>
-                    <Btn kind="danger" style={{ padding: '4px 9px', marginLeft: 'auto' }} onClick={() => confirmDelete('this ad') && remove('ads', a.id)}><Trash2 size={12} /></Btn>
+                    {canDelete && <Btn kind="danger" style={{ padding: '4px 9px', marginLeft: 'auto' }} onClick={() => confirmDelete('this ad') && remove('ads', a.id)}><Trash2 size={12} /></Btn>}
                   </div>
                 </div>
               )
