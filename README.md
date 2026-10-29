@@ -49,10 +49,10 @@ Espace immobilier (Qatar) : Dashboard, Properties, Leads (kanban), Clients, Owne
 4. Ouvrir `/immo` (ou le bouton dore "PiloBrain Real Estate" en haut du dashboard).
 Si le build Vercel echoue : copier les lignes rouges en bas du log. Si Vercel refuse le nombre de crons, supprimer le bloc `/api/immo/cron-rappels` dans vercel.json.
 
-## Limite Vercel Hobby (12 fonctions) - IMPORTANT
-Toutes les routes `/api/immo/*` sont servies par UNE SEULE fonction : `app/api/immo/[[...path]]/route.ts` (le code des endpoints est dans `lib/immo-os/api/`). Le formulaire public `/lead?a=<ID>` est une page statique.
-**Un upload GitHub n'efface pas les anciens fichiers.** Si une version precedente a ete envoyee, SUPPRIMER ces dossiers du depot (sinon ils recreent des fonctions) :
-- `app/api/immo/[entity]`, `app/api/immo/all`, `app/api/immo/me`, `app/api/immo/seed`, `app/api/immo/assistant`, `app/api/immo/whatsapp`, `app/api/immo/capture`, `app/api/immo/targets`, `app/api/immo/upload`, `app/api/immo/visits`
-- `app/api/cron/immo-rappels`
-- `app/lead/[agency]`
-Seul doit rester dans `app/api/immo/` : le dossier `[[...path]]`.
+## Limite Vercel Hobby (12 fonctions)
+Tout le Real Estate OS cote serveur est servi par UNE SEULE fonction : `app/api/immo/route.ts` (appel `/api/immo?r=<nom>`; le code des endpoints est dans `lib/immo-os/api/`). Le formulaire public `/lead?a=<ID>` est une page statique. Les rappels de leads (48 h) tournent dans le cron existant `/api/cron/relances` : aucun cron ni fonction en plus.
+Aucun nom de dossier special (crochets) : tout s'uploade normalement.
+
+## STRUCTURE ATTENDUE DU DEPOT (a la racine)
+`app/` (avec dedans : admin, api, auth, dashboard, immo, lead, ... + layout.tsx, page.tsx, globals.css), `components/`, `lib/`, `public/`, `package.json`, `next.config.js`, `tsconfig.json`, `vercel.json`...
+Erreur Vercel "Couldn't find any `pages` or `app` directory" = le dossier `app` n'est pas a la racine du depot.

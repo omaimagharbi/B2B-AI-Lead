@@ -1,0 +1,198 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { envoyerWhatsapp, envoyerEmail, construireMessage } from '@/lib/notifications'
+import { canalParPays } from '@/lib/pays'
+import { logErreur } from '@/lib/erreurs'
+
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+const LIMITE_PACKS_ESSAI_GRATUIT = 3
+
+export async function POST(req: NextRequest) {
+  try {
+    const { target_id, type_envoi, canal_force, previsualiser, diagnostic_id_existant, message_final } =
+      await req.json()
+    // type_envoi : 'diagnostic' (par defaut, cree un diagnostic + lien) ou 'message'
+    // (envoie juste le message personnalise du cabinet, sans creer de diagnostic)
+    const typeEnvoi: 'diagnostic' | 'message' = type_envoi === 'message' ? 'message' : 'diagnostic'
+    // canal_force : 'linkedin' ou 'facebook' -> aucun appel API (texte a copier-coller ;
+    // Meta interdit le demarchage a froid via l'API Messenger, donc ce canal ne peut
+    // techniquement pas etre automatise comme WhatsApp/Email). 'email' -> force l'envoi
+    // par email meme si le pays de la cible pointe normalement vers WhatsApp (utile
+    // quand WhatsApp n'est pas encore fiable/configure - le cabinet garde la main).
+    const forceLinkedin = canal_force === 'linkedin'
+    const forceFacebook = canal_force === 'facebook'
+    const forceEmail = canal_force === 'email'
+    const forceWhatsapp = canal_force === 'whatsapp'
+    // previsualiser : etape 1 (facultative) - on prepare le texte exact (avec le vrai lien
+    // de diagnostic si applicable) SANS l'envoyer, pour que le cabinet puisse le relire
+    // (et au besoin le modifier) avant confirmation. On cree bien le diagnostic des cette
+    // etape (pour avoir le vrai lien dans le texte previsualise), mais on n'envoie rien et
+    // on ne marque pas la cible comme contactee tant que ce n'est pas confirme.
+    const enPrevisualisation = previsualiser === true
+
+    if (!target_id) {
+      return NextResponse.json({ error: 'target_id manquant' }, { status: 400 })
+    }
+
+    const { data: target, error: targetError } = await supabaseAdmin
+      .from('targets')
+      .select(
+        'id, nom, telephone, email, country, client_id, statut, ne_plus_contacter, token_desinscription'
+      )
+      .eq('id', target_id)
+      .single()
+
+    if (targetError || !target) {
+      return NextResponse.json({ error: 'Cible introuvable' }, { status: 404 })
+    }
+
+    if (target.ne_plus_contacter) {
+      return NextResponse.json({ error: 'Ce prospect s\'est désinscrit' }, { status: 400 })
+    }
+
+    if (target.statut !== 'nouveau') {
+      return NextResponse.json({ error: 'Cette cible a deja ete contactee' }, { status: 400 })
+    }
+
+    const { data: client, error: clientError } = await supabaseAdmin
+      .from('clients')
+      .select('id, vertical_id, nom_entreprise, statut_abonnement, message_personnalise, logo_url')
+      .eq('id', target.client_id)
+      .single()
+
+    if (clientError || !client) {
+      return NextResponse.json({ error: 'Client introuvable' }, { status: 404 })
+    }
+
+    // Etape 14 - Monetisation : limite d'essai gratuit (basee sur les packs vendus)
+    if (client.statut_abonnement === 'trial') {
+      const { count } = await supabaseAdmin
+        .from('leads_packs')
+        .select('*, diagnostics!inner(client_id)', { count: 'exact', head: true })
+        .eq('diagnostics.client_id', client.id)
+
+      if ((count ?? 0) >= LIMITE_PACKS_ESSAI_GRATUIT) {
+        return NextResponse.json(
+          {
+            error: `Limite de l'essai gratuit atteinte. Passez a un abonnement payant pour continuer.`,
+            limite_atteinte: true,
+          },
+          { status: 403 }
+        )
+      }
+    }
+
+    const canal = forceLinkedin
+      ? 'linkedin'
+      : forceFacebook
+      ? 'facebook'
+      : forceEmail
+      ? 'email'
+      : forceWhatsapp
+      ? 'whatsapp'
+      : canalParPays(target.country ?? 'FR')
+
+    if (!forceLinkedin && !forceFacebook && canal === 'whatsapp' && !target.telephone) {
+      return NextResponse.json({ error: "Cette cible n'a pas de telephone" }, { status: 400 })
+    }
+    if (!forceLinkedin && !forceFacebook && canal === 'email' && !target.email) {
+      return NextResponse.json({ error: "Cette cible n'a pas d'email" }, { status: 400 })
+    }
+
+    // On cree le diagnostic uniquement si on envoie un lien de diagnostic (statut
+    // par defaut 'brouillon_ia', token auto-genere). Pour un simple message pro,
+    // pas de diagnostic cree. Si on confirme un envoi deja previsualise, on reutilise
+    // le diagnostic cree a la previsualisation au lieu d'en recreer un second.
+    let lien = SITE_URL
+    let diagnosticId: string | undefined
+    if (typeEnvoi === 'diagnostic') {
+      if (diagnostic_id_existant) {
+        const { data: diagExistant } = await supabaseAdmin
+          .from('diagnostics')
+          .select('token_acces')
+          .eq('id', diagnostic_id_existant)
+          .eq('target_id', target.id)
+          .single()
+        if (diagExistant) {
+          lien = `${SITE_URL}/diagnostic/${diagExistant.token_acces}`
+          diagnosticId = diagnostic_id_existant
+        }
+      }
+
+      if (lien === SITE_URL) {
+        const { data: diagnostic, error: diagError } = await supabaseAdmin
+          .from('diagnostics')
+          .insert({
+            target_id: target.id,
+            client_id: client.id,
+            vertical_id: client.vertical_id,
+          })
+          .select('id, token_acces')
+          .single()
+
+        if (diagError || !diagnostic) {
+          return NextResponse.json({ error: 'Erreur creation diagnostic' }, { status: 500 })
+        }
+
+        lien = `${SITE_URL}/diagnostic/${diagnostic.token_acces}`
+        diagnosticId = diagnostic.id
+      }
+    }
+
+    const lienDesinscription = `${SITE_URL}/desinscription/${target.token_desinscription}`
+    const messageParDefaut =
+      typeEnvoi === 'diagnostic'
+        ? `Bonjour ${target.nom},\n\n${client.nom_entreprise} vous invite a decrire votre situation (15 secondes), un expert etudiera votre dossier personnellement :\n${lien}`
+        : `Bonjour ${target.nom},\n\n${client.nom_entreprise} souhaitait vous contacter personnellement. N'hesitez pas a repondre a ce message si vous avez des questions.`
+    const message =
+      typeof message_final === 'string' && message_final.trim()
+        ? message_final
+        : construireMessage(
+            client.message_personnalise,
+            { nom: target.nom, cabinet: client.nom_entreprise, lien, lienDesinscription },
+            messageParDefaut
+          )
+
+    // Etape previsualisation : on renvoie le texte exact (avec le vrai lien) sans
+    // rien envoyer ni marquer la cible comme contactee - le cabinet confirme ensuite.
+    if (enPrevisualisation) {
+      return NextResponse.json({
+        succes: true,
+        previsualisation: true,
+        canal,
+        type_envoi: typeEnvoi,
+        message,
+        diagnostic_id: diagnosticId,
+      })
+    }
+
+    if (forceLinkedin || forceFacebook) {
+      // Rien a envoyer automatiquement : LinkedIn n'a pas d'API branchee ici, et
+      // Facebook Messenger interdit le demarchage a froid (le prospect doit avoir
+      // ecrit en premier). Le message est simplement renvoye au cabinet pour qu'il
+      // le copie-colle lui-meme.
+    } else if (canal === 'whatsapp') {
+      await envoyerWhatsapp(target.telephone!, message, client.logo_url)
+    } else {
+      await envoyerEmail(target.email!, message, client.logo_url)
+    }
+
+    await supabaseAdmin.from('outreach_campaigns').insert({
+      client_id: client.id,
+      target_id: target.id,
+      canal,
+      template_message: message,
+      statut: 'envoye',
+      type_envoi: typeEnvoi,
+      date_envoi: new Date().toISOString(),
+    })
+
+    await supabaseAdmin.from('targets').update({ statut: 'contacte', dernier_canal_contact: canal }).eq('id', target.id)
+
+    return NextResponse.json({ succes: true, canal, type_envoi: typeEnvoi, message })
+  } catch (err) {
+    console.error('Erreur /api/outreach/send:', err)
+    await logErreur('/api/outreach/send', err)
+    return NextResponse.json({ error: "Erreur serveur lors de l'envoi" }, { status: 500 })
+  }
+}

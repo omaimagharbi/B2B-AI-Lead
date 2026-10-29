@@ -104,7 +104,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
         router.replace('/auth')
         return
       }
-      const meRes = await api('/api/immo/me')
+      const meRes = await api('/api/immo?r=me')
       if (!meRes.ok) {
         notify(meRes.json?.error ?? 'Could not load your agency', 'err')
         setMode('demo')
@@ -117,7 +117,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       setMe(meRes.json.me)
       setTeam(meRes.json.team)
 
-      const all = await api('/api/immo/all')
+      const all = await api('/api/immo?r=all')
       if (all.ok && all.json.demo === false) {
         setData({ ...EMPTY_DATA, ...all.json.data })
         setMode('live')
@@ -144,7 +144,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
     if (mode !== 'live') return
     const id = setInterval(async () => {
       if (document.visibilityState !== 'visible') return
-      const all = await api('/api/immo/all')
+      const all = await api('/api/immo?r=all')
       if (all.ok && all.json.data) setData((d) => ({ ...d, messages: all.json.data.messages ?? d.messages, leads: all.json.data.leads ?? d.leads }))
     }, 30000)
     return () => clearInterval(id)
@@ -174,7 +174,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       })
       return r
     }
-    const res = await api(`/api/immo/${e}`, { method: 'POST', body: JSON.stringify(row) })
+    const res = await api(`/api/immo?r=${e}`, { method: 'POST', body: JSON.stringify(row) })
     if (!res.ok) {
       notify(res.json?.error ?? 'Could not save', 'err')
       return null
@@ -191,7 +191,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       return n
     })
     if (mode === 'demo') return
-    const res = await api(`/api/immo/${e}`, { method: 'PATCH', body: JSON.stringify({ id, ...patch }) })
+    const res = await api(`/api/immo?r=${e}`, { method: 'PATCH', body: JSON.stringify({ id, ...patch }) })
     if (!res.ok) {
       setData(before)
       notify(res.json?.error ?? 'Update failed', 'err')
@@ -207,7 +207,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       return n
     })
     if (mode === 'demo') return
-    const res = await api(`/api/immo/${e}?id=${id}`, { method: 'DELETE' })
+    const res = await api(`/api/immo?r=${e}&id=${id}`, { method: 'DELETE' })
     if (!res.ok) {
       setData(before)
       notify(res.json?.error ?? 'Delete failed', 'err')
@@ -216,9 +216,9 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
 
   const seedLive = async () => {
     const demo = makeDemo()
-    const res = await api('/api/immo/seed', { method: 'POST', body: JSON.stringify(demo) })
+    const res = await api('/api/immo?r=seed', { method: 'POST', body: JSON.stringify(demo) })
     if (!res.ok) return notify(res.json?.error ?? 'Seeding failed', 'err')
-    const all = await api('/api/immo/all')
+    const all = await api('/api/immo?r=all')
     if (all.ok && all.json.data) setData({ ...EMPTY_DATA, ...all.json.data })
     notify('Sample data loaded')
   }
@@ -236,7 +236,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       notify('Saved (demo mode - nothing was actually sent)')
       return
     }
-    const res = await api('/api/immo/whatsapp', { method: 'POST', body: JSON.stringify({ name, phone, body }) })
+    const res = await api('/api/immo?r=whatsapp', { method: 'POST', body: JSON.stringify({ name, phone, body }) })
     if (!res.ok) return notify(res.json?.error ?? 'Could not send', 'err')
     setData((d) => ({ ...d, messages: [res.json.row, ...d.messages] }))
     if (res.json.sent) notify('Message sent on WhatsApp')
@@ -253,7 +253,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       const fd = new FormData()
       fd.append('file', blob, 'photo.jpg')
       const { data: s } = await supabase.auth.getSession()
-      const res = await fetch('/api/immo/upload', { method: 'POST', headers: { Authorization: `Bearer ${s.session?.access_token ?? ''}` }, body: fd })
+      const res = await fetch('/api/immo?r=upload', { method: 'POST', headers: { Authorization: `Bearer ${s.session?.access_token ?? ''}` }, body: fd })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { notify(json.error ?? 'Upload failed', 'err'); return null }
       return json.url as string
@@ -265,12 +265,12 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
 
   const reload = async () => {
     if (mode !== 'live') return
-    const all = await api('/api/immo/all')
+    const all = await api('/api/immo?r=all')
     if (all.ok && all.json.data) setData({ ...EMPTY_DATA, ...all.json.data })
   }
 
   const ai: Ctx['ai'] = async (m, prompt, opts) => {
-    const res = await api('/api/immo/assistant', {
+    const res = await api('/api/immo?r=assistant', {
       method: 'POST',
       body: JSON.stringify({ mode: m, prompt, context: opts?.context ?? '', extra: opts?.extra, language: opts?.language ?? lang }),
     })

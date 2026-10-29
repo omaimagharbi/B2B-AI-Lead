@@ -16,10 +16,6 @@
     {
       "path": "/api/cron/sync-email",
       "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/immo/cron-rappels",
-      "schedule": "0 5 * * *"
     }
   ]
 }
