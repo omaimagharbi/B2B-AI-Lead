@@ -23,7 +23,11 @@ export async function POST(req: NextRequest, { params }: { params: { entity: str
   const row: Record<string, unknown> = { ...sanitize(c.e!, body), client_id: c.auth!.clientId }
   // Un agent cree toujours pour lui-meme
   if (!isManager(c.viewer!.role) && SCOPED.has(c.e!)) row.agent = c.viewer!.name
-  const { data, error } = await supabaseAdmin.from(c.table!).insert(row).select('*').single()
+  let { data, error } = await supabaseAdmin.from(c.table!).insert(row).select('*').single()
+  if (error?.code === 'PGRST204' && 'category' in row) { // colonne category absente (migration 73 pas faite) : on enregistre sans elle
+    const { category, ...sans } = row
+    ;({ data, error } = await supabaseAdmin.from(c.table!).insert(sans).select('*').single())
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ row: data })
 }
@@ -43,7 +47,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { entity: st
   }
   const patch = sanitize(c.e!, body)
   if (!isManager(c.viewer!.role)) delete patch.agent // un agent ne peut pas se reassigner / reassigner un lead
-  const { data, error } = await supabaseAdmin.from(c.table!).update(patch).eq('id', body.id).eq('client_id', c.auth!.clientId).select('*').single()
+  let { data, error } = await supabaseAdmin.from(c.table!).update(patch).eq('id', body.id).eq('client_id', c.auth!.clientId).select('*').single()
+  if (error?.code === 'PGRST204' && 'category' in patch) {
+    const { category, ...sans } = patch
+    ;({ data, error } = await supabaseAdmin.from(c.table!).update(sans).eq('id', body.id).eq('client_id', c.auth!.clientId).select('*').single())
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ row: data })
 }

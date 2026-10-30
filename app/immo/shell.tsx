@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Building2, Target, Users, UserSquare2, MessageCircle, Bot, Megaphone, Handshake, BarChart3, UsersRound, Settings,
-  Search, Bell, Menu, Moon, Sun, LogOut, FlaskConical,
+  Search, Bell, Menu, Moon, Sun, LogOut, FlaskConical, CalendarDays,
 } from 'lucide-react'
 import { ImmoProvider, useImmo } from '@/lib/immo-os/store'
 import { supabase } from '@/lib/supabase'
@@ -17,6 +17,7 @@ const NAV = [
   { href: '/immo', k: 'dashboard', icon: LayoutDashboard },
   { href: '/immo/properties', k: 'properties', icon: Building2 },
   { href: '/immo/leads', k: 'leads', icon: Target },
+  { href: '/immo/visits', k: 'calendar', icon: CalendarDays },
   { href: '/immo/clients', k: 'clients', icon: Users },
   { href: '/immo/owners', k: 'owners', icon: UserSquare2 },
   { href: '/immo/whatsapp', k: 'whatsapp', icon: MessageCircle },
@@ -91,8 +92,8 @@ function Frame({ children }: { children: ReactNode }) {
         </aside>
 
         <div className="flex-1 min-w-0 flex flex-col">
-          <header className="sticky top-0 z-40 flex items-center gap-3 px-4 sm:px-6 h-[84px] overflow-visible" style={{ background: 'linear-gradient(90deg,#0B2447 0%,#0F2D5C 55%,#14407F 100%)', borderBottom: '2px solid rgba(201,162,75,.55)' }}>
-            <div className="absolute inset-y-0 right-0 w-[62%] pointer-events-none overflow-hidden hidden md:block" style={{ maskImage: 'linear-gradient(90deg,transparent,#000 40%)', WebkitMaskImage: 'linear-gradient(90deg,transparent,#000 40%)' }}>
+          <header className="imo-hd sticky top-0 z-40 flex items-center gap-3 px-4 sm:px-6 h-[84px] overflow-visible" style={{ background: 'linear-gradient(90deg,#0B2447 0%,#0F2D5C 55%,#14407F 100%)', borderBottom: '2px solid rgba(201,162,75,.55)' }}>
+            <div className="imo-hd-sky absolute inset-y-0 right-0 w-[62%] pointer-events-none overflow-hidden hidden md:block" style={{ maskImage: 'linear-gradient(90deg,transparent,#000 40%)', WebkitMaskImage: 'linear-gradient(90deg,transparent,#000 40%)' }}>
               <Skyline height={84} opacity={0.75} style={{ position: 'absolute', right: 0, bottom: 0 }} />
             </div>
             <button className="lg:hidden relative" style={{ color: '#fff' }} onClick={() => setOpen(!open)} aria-label="Menu"><Menu size={22} /></button>
@@ -142,7 +143,7 @@ function Frame({ children }: { children: ReactNode }) {
                 <Avatar name={me.name} size={34} src={me.photo} />
                 <div className="leading-tight">
                   <div className="text-[13px] font-semibold" style={{ color: '#fff' }}>{me.name}</div>
-                  <div className="text-[11px]" style={{ color: '#A9BAD3' }}>{me.role}</div>
+                  <div className="text-[11px]" style={{ color: '#A9BAD3' }}>{({ proprietaire: 'Owner', admin: 'Admin', directeur_commercial: 'Sales director', membre: 'Agent' } as Record<string, string>)[me.role] ?? me.role}</div>
                 </div>
               </div>
             )}

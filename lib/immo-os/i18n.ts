@@ -6,6 +6,7 @@ const D: Record<string, [string, string, string]> = {
   'nav.dashboard': ['Dashboard', 'Tableau de bord', 'لوحة التحكم'],
   'nav.properties': ['Properties', 'Biens', 'العقارات'],
   'nav.leads': ['Leads', 'Prospects', 'العملاء المحتملون'],
+  'nav.calendar': ['Calendar', 'Calendrier', 'التقويم'],
   'nav.clients': ['Clients', 'Clients', 'العملاء'],
   'nav.owners': ['Owners', 'Propriétaires', 'الملّاك'],
   'nav.whatsapp': ['WhatsApp', 'WhatsApp', 'واتساب'],

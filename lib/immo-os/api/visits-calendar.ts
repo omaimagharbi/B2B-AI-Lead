@@ -4,6 +4,7 @@ import { contexteImmo } from '@/lib/immo-os/ctx'
 import { isUuid } from '@/lib/immo-os/server'
 import { canWrite } from '@/lib/immo-os/permissions'
 import { creerEvenementGoogle } from '@/lib/google-calendar'
+import { VISIT_CATEGORIES } from '@/lib/immo-os/types'
 
 // Ajoute une visite au Google Calendar de l'agence (connecte depuis le dashboard PiloBrain).
 export async function POST(req: NextRequest) {
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   const debut = new Date(visit.starts_at)
   try {
     const eventId = await creerEvenementGoogle(cab, {
-      titre: `Viewing: ${prop?.title ?? 'Property'}${prop?.area ? ` (${prop.area})` : ''} - ${visit.contact_name}`,
+      titre: `${VISIT_CATEGORIES.find((c) => c.v === visit.category)?.l ?? 'Viewing'}: ${prop?.title ?? 'Property'}${prop?.area ? ` (${prop.area})` : ''} - ${visit.contact_name}`,
       description: [`Client: ${visit.contact_name}`, visit.contact_phone ? `Phone: ${visit.contact_phone}` : '', visit.agent ? `Agent: ${visit.agent}` : '', visit.notes ?? ''].filter(Boolean).join('\n'),
       debut,
       fin: new Date(debut.getTime() + (visit.duration_min || 45) * 60000),

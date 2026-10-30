@@ -71,7 +71,7 @@ export default function LeadsPage() {
 
   return (
     <div>
-      <PageHead icon={<Target size={28} />} title="Leads" sub="Drag a card to move it through your pipeline" right={<>{manager && <Btn onClick={openImport}><Download size={15} /> Import prospects</Btn>}<Link href="/immo/visits"><Btn><CalendarDays size={15} /> Visits</Btn></Link><Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> Add lead</Btn></>} />
+      <PageHead icon={<Target size={28} />} title="Leads" sub="Drag a card to move it through your pipeline" right={<>{manager && <Btn onClick={openImport}><Download size={15} /> Import prospects</Btn>}<Link href="/immo/visits"><Btn><CalendarDays size={15} /> Calendar</Btn></Link><Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> Add lead</Btn></>} />
       <Card className="mb-4">
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[200px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 t-muted" /><input className="imo-input" style={{ paddingLeft: 32 }} placeholder="Search lead or interest…" value={q} onChange={(e) => setQ(e.target.value)} /></div>

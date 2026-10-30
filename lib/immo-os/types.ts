@@ -39,8 +39,9 @@ export type Ad = {
 }
 
 export type VisitStatus = 'scheduled' | 'done' | 'cancelled' | 'no_show'
+export type VisitCategory = 'viewing' | 'meeting' | 'signing' | 'call' | 'followup' | 'other'
 export type Visit = {
-  id: string; property_id?: string | null; lead_id?: string | null; contact_name: string; contact_phone?: string | null
+  id: string; category?: VisitCategory | null; property_id?: string | null; lead_id?: string | null; contact_name: string; contact_phone?: string | null
   agent?: string | null; starts_at: string; duration_min: number; status: VisitStatus; notes?: string | null
   calendar_event_id?: string | null; created_at: string
 }
@@ -61,7 +62,7 @@ export const ENTITIES: Record<Entity, { table: string; fields: string[] }> = {
   deals: { table: 're_deals', fields: ['title', 'property_id', 'party_name', 'kind', 'value', 'commission_pct', 'status', 'agent', 'closed_at'] },
   messages: { table: 're_messages', fields: ['contact_name', 'contact_phone', 'direction', 'body', 'unread'] },
   ads: { table: 're_ads', fields: ['property_id', 'channel', 'language', 'tone', 'content', 'status'] },
-  visits: { table: 're_visits', fields: ['property_id', 'lead_id', 'contact_name', 'contact_phone', 'agent', 'starts_at', 'duration_min', 'status', 'notes'] },
+  visits: { table: 're_visits', fields: ['property_id', 'lead_id', 'contact_name', 'contact_phone', 'agent', 'starts_at', 'duration_min', 'status', 'notes', 'category'] },
 }
 export const ENTITY_KEYS = Object.keys(ENTITIES) as Entity[]
 
@@ -104,4 +105,14 @@ export const AGENTS_DEFAULT = ['Ahmed Al Saadi', 'Sara Khalid', 'John Smith', 'L
 export const VISIT_STATUSES: { v: VisitStatus; l: string; color: string }[] = [
   { v: 'scheduled', l: 'Scheduled', color: '#2563EB' }, { v: 'done', l: 'Done', color: '#16A34A' },
   { v: 'cancelled', l: 'Cancelled', color: '#64748B' }, { v: 'no_show', l: 'No-show', color: '#EF4444' },
+]
+
+// Categories d'agenda (couleurs type Google Calendar). Le texte est fonce sur fond clair pour rester lisible.
+export const VISIT_CATEGORIES: { v: VisitCategory; l: string; color: string; bg: string }[] = [
+  { v: 'viewing', l: 'Viewing', color: '#1D4ED8', bg: '#DBEAFE' },
+  { v: 'meeting', l: 'Client meeting', color: '#6D28D9', bg: '#EDE9FE' },
+  { v: 'signing', l: 'Contract signing', color: '#15803D', bg: '#DCFCE7' },
+  { v: 'call', l: 'Call', color: '#B45309', bg: '#FEF3C7' },
+  { v: 'followup', l: 'Follow-up', color: '#0F766E', bg: '#CCFBF1' },
+  { v: 'other', l: 'Other', color: '#475569', bg: '#E2E8F0' },
 ]

@@ -51,3 +51,10 @@
 .imo-dots span:nth-child(2) { animation-delay: .2s } .imo-dots span:nth-child(3) { animation-delay: .4s }
 @media (max-width: 1024px) { .imo-sidebar { position: fixed; z-index: 70; transform: translateX(-100%); transition: .2s; height: 100vh; } .imo[dir=rtl] .imo-sidebar { transform: translateX(100%); } .imo-sidebar.open, .imo[dir=rtl] .imo-sidebar.open { transform: none; } }
 .imo[dir=rtl] .imo-table th { text-align: right; }
+
+/* En-tete : la skyline reste STRICTEMENT derriere les controles (sinon elle les recouvre et ils paraissent delaves) */
+.imo-hd-sky { z-index: 0; }
+.imo-hd > :not(.imo-hd-sky) { position: relative; z-index: 1; }
+.imo-hd select, .imo-hd button { cursor: pointer; }
+/* Menu de gauche fixe sur grand ecran : reste visible quand on fait defiler la page */
+@media (min-width: 1025px) { .imo-sidebar { position: sticky; top: 0; height: 100vh; align-self: flex-start; overflow-y: auto; } }
