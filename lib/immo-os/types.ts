@@ -39,7 +39,7 @@ export type Ad = {
 }
 
 export type VisitStatus = 'scheduled' | 'done' | 'cancelled' | 'no_show'
-export type VisitCategory = 'viewing' | 'meeting' | 'signing' | 'call' | 'followup' | 'other'
+export type VisitCategory = 'viewing' | 'meeting' | 'signing' | 'call' | 'followup' | 'team' | 'other'
 export type Visit = {
   id: string; category?: VisitCategory | null; property_id?: string | null; lead_id?: string | null; contact_name: string; contact_phone?: string | null
   agent?: string | null; starts_at: string; duration_min: number; status: VisitStatus; notes?: string | null
@@ -114,5 +114,6 @@ export const VISIT_CATEGORIES: { v: VisitCategory; l: string; color: string; bg:
   { v: 'signing', l: 'Contract signing', color: '#15803D', bg: '#DCFCE7' },
   { v: 'call', l: 'Call', color: '#B45309', bg: '#FEF3C7' },
   { v: 'followup', l: 'Follow-up', color: '#0F766E', bg: '#CCFBF1' },
+  { v: 'team', l: 'Team meeting', color: '#BE185D', bg: '#FCE7F3' },
   { v: 'other', l: 'Other', color: '#475569', bg: '#E2E8F0' },
 ]

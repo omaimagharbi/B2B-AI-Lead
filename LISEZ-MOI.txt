@@ -1,38 +1,16 @@
-PATCH V10 -> V12  (18 fichiers, rien d'autre ne change)
-Contient aussi les 8 fichiers du patch V11 : tu peux l'appliquer que tu aies fait le patch V11 ou non.
+PATCH V12 -> V13 : 4 fichiers seulement. Aucune migration SQL a faire.
 
 CE QUE CA CHANGE
- 1. Barre du haut : la skyline ne recouvre plus la recherche, la langue, le profil. Le role s'affiche en anglais (Owner / Agent).
- 2. Menu de gauche fixe : il reste visible quand on fait defiler la page.
- 3. Nouveau menu "Calendar" : vrai calendrier Mois / Semaine / Liste, avec 6 categories en couleur
-    (Viewing, Client meeting, Contract signing, Call, Follow-up, Other), filtres par categorie et par agent.
- 4. Usage IA affiche dans Parametres, boutons Supprimer caches pour les agents (patch V11).
+ - Menu de gauche : les 13 entrees (dont Team et Settings) restent toujours accessibles, meme sur un ecran peu haut.
+ - Calendrier : nouvelle categorie "Team meeting" (rose).
 
-ETAPE A - SUPABASE (1 minute) : SQL Editor, coller, Run :
-    alter table re_visits add column if not exists category text not null default 'viewing';
- (Sans ca, le calendrier marche mais les categories ne sont pas enregistrees.)
+COMMENT : sur GitHub (branche version), ouvre le dossier indique, Add file > Upload files,
+glisse le fichier correspondant de ce patch, Commit changes. Respecte l'ordre :
 
-ETAPE B - GITHUB : pour CHAQUE fichier ci-dessous, ouvre sur GitHub (branche version) le MEME dossier,
- puis Add file > Upload files, glisse le fichier du patch qui est dans ce dossier, Commit changes.
- Respecte cet ORDRE (chaque commit lance un deploiement : seul le dernier compte, mais l'ordre evite des erreurs) :
-  1. lib/immo-os/types.ts
-  2. lib/immo-os/calendar.ts
-  3. lib/immo-os/i18n.ts
-  4. lib/immo-os/demo.ts
-  5. lib/immo-os/store.tsx
-  6. lib/immo-os/api/entity.ts
-  7. lib/immo-os/api/visits-calendar.ts
-  8. app/immo/immo.css
-  9. app/immo/settings/page.tsx
-  10. app/immo/properties/page.tsx
-  11. app/immo/leads/page.tsx
-  12. app/immo/clients/page.tsx
-  13. app/immo/owners/page.tsx
-  14. app/immo/deals/page.tsx
-  15. app/immo/marketing/page.tsx
-  16. app/immo/shell.tsx
-  17. app/immo/visits/page.tsx
+  1. lib/immo-os/types.ts      -> dossier lib/immo-os
+  2. lib/immo-os/demo.ts       -> dossier lib/immo-os
+  3. app/immo/immo.css         -> dossier app/immo
+  4. app/immo/shell.tsx        -> dossier app/immo
 
-ATTENTION : plusieurs fichiers s'appellent page.tsx. Regarde bien le DOSSIER (settings, properties, leads, clients,
- owners, deals, marketing, visits) avant de glisser. Le fichier 73_...sql est facultatif sur GitHub (utile pour memoire).
- Nouveaux fichiers (n'existent pas encore sur GitHub) : lib/immo-os/calendar.ts
+Chaque commit lance un deploiement Vercel : seul le dernier compte.
+Le 1 doit etre fait AVANT le 2 (demo.ts utilise la nouvelle categorie definie dans types.ts).

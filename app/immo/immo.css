@@ -58,3 +58,7 @@
 .imo-hd select, .imo-hd button { cursor: pointer; }
 /* Menu de gauche fixe sur grand ecran : reste visible quand on fait defiler la page */
 @media (min-width: 1025px) { .imo-sidebar { position: sticky; top: 0; height: 100vh; align-self: flex-start; overflow-y: auto; } }
+
+/* Menu de gauche : tous les elements restent visibles ; sur les ecrans peu hauts on compacte, puis le menu defile en entier */
+@media (min-width: 1025px) and (max-height: 860px) { .imo-nav { padding-top: 7px; padding-bottom: 7px; } .imo-side-sky { display: none; } }
+@media (min-width: 1025px) and (max-height: 700px) { .imo-nav { padding-top: 5px; padding-bottom: 5px; font-size: 13px; } }

@@ -79,6 +79,7 @@ export function makeDemo(): Data {
     { id: uid(), property_id: properties[0].id, lead_id: leads[0].id, contact_name: leads[0].name, contact_phone: leads[0].phone, agent: leads[0].agent, starts_at: at(1, 16), duration_min: 45, category: 'viewing', status: 'scheduled', notes: 'Wants the floor plan', calendar_event_id: null, created_at: daysAgo(1) },
     { id: uid(), property_id: properties[4].id, lead_id: leads[2].id, contact_name: leads[2].name, contact_phone: leads[2].phone, agent: leads[2].agent, starts_at: at(2, 11), duration_min: 30, category: 'meeting', status: 'scheduled', notes: null, calendar_event_id: null, created_at: daysAgo(1) },
     { id: uid(), property_id: properties[2].id, lead_id: leads[6].id, contact_name: leads[6].name, contact_phone: leads[6].phone, agent: leads[6].agent, starts_at: at(-2, 10), duration_min: 45, category: 'viewing', status: 'done', notes: 'Liked the garden', calendar_event_id: null, created_at: daysAgo(4) },
+    { id: uid(), property_id: null, lead_id: null, contact_name: 'Weekly sales meeting', contact_phone: null, agent: 'Ahmed Al Saadi', starts_at: at(3, 9), duration_min: 60, category: 'team', status: 'scheduled', notes: 'Pipeline review with the whole team', calendar_event_id: null, created_at: daysAgo(1) },
   ] as Data['visits']
   return { owners: o, properties, clients, leads, deals, messages, ads: [], visits }
 }

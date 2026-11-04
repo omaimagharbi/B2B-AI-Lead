@@ -64,7 +64,7 @@ function Frame({ children }: { children: ReactNode }) {
               <div className="text-[10.5px] tracking-[0.14em]" style={{ color: '#E3C275' }}>AI OPERATING SYSTEM</div>
             </div>
           </div>
-          <nav className="px-3 flex-1 flex flex-col gap-0.5 overflow-y-auto imo-scroll">
+          <nav className="px-3 flex-none flex flex-col gap-0.5">
             {NAV.map((n) => {
               const active = n.href === '/immo' ? path === '/immo' : path.startsWith(n.href)
               const Icon = n.icon
@@ -79,10 +79,10 @@ function Frame({ children }: { children: ReactNode }) {
               )
             })}
           </nav>
-          <div className="px-3 pb-2">
+          <div className="px-3 pb-2 pt-3 mt-auto">
             <Link href="/dashboard?classic=1" className="imo-nav text-[12.5px]"><LogOut size={16} /> {t('back')}</Link>
           </div>
-          <div className="relative overflow-hidden" style={{ height: 118 }}>
+          <div className="imo-side-sky relative overflow-hidden shrink-0" style={{ height: 118 }}>
             <Skyline height={92} opacity={0.9} style={{ position: 'absolute', bottom: 0, left: 0 }} />
             <div className="absolute bottom-2 left-0 right-0 text-center leading-tight">
               <div className="text-[13px] font-bold tracking-[0.18em]" style={{ color: '#E3C275' }}>QATAR</div>
