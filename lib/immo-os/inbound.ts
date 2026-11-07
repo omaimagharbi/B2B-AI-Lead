@@ -9,12 +9,12 @@ export { parseIncoming } from './inbound-pure'
 // Retourne true si le message a ete range dans l'inbox d'une agence immobilier, false sinon (a ignorer).
 export async function traiterMessageImmo(inc: Incoming): Promise<boolean> {
   // 1) Le numero est-il deja un lead / client / proprietaire d'une agence ?
-  let found: { client_id: string; name: string; leadId?: string } | null = null
+  let found: { client_id: string; name: string; leadId?: string; ownerId?: string } | null = null
   for (const [table, isLead] of [['re_leads', true], ['re_clients', false], ['re_owners', false]] as const) {
     const { data, error } = await supabaseAdmin.from(table).select('id, client_id, name, phone').not('phone', 'is', null).limit(5000)
     if (error) return false // tables absentes (migration 70 pas faite) : on ignore sans casser le webhook
     const hit = (data ?? []).find((r) => sameNumber(r.phone, inc.phone))
-    if (hit) { found = { client_id: hit.client_id, name: hit.name, leadId: isLead ? hit.id : undefined }; break }
+    if (hit) { found = { client_id: hit.client_id, name: hit.name, leadId: isLead ? hit.id : undefined, ownerId: table === 're_owners' ? hit.id : undefined }; break }
   }
 
   // 2) Numero inconnu : nouveau lead pour l'agence par defaut (une seule instance WhatsApp pour tous les cabinets)
@@ -34,6 +34,9 @@ export async function traiterMessageImmo(inc: Incoming): Promise<boolean> {
   } else if (found.leadId) {
     await supabaseAdmin.from('re_leads').update({ last_contact: new Date().toISOString() }).eq('id', found.leadId).eq('client_id', found.client_id)
   }
+
+  // Un proprietaire qui ecrit : son "dernier contact" est mis a jour (ignore si la migration 74 n'est pas faite)
+  if (found.ownerId) await supabaseAdmin.from('re_owners').update({ last_contact: new Date().toISOString() }).eq('id', found.ownerId).eq('client_id', found.client_id)
 
   // 3) Enregistrer le message ; un doublon GreenAPI (meme idMessage) est ignore silencieusement.
   const row = { client_id: found.client_id, contact_name: found.name, contact_phone: inc.phone, direction: 'in', body: inc.text, unread: true }

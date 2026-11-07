@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Building2, Target, Users, UserSquare2, MessageCircle, Bot, Megaphone, Handshake, BarChart3, UsersRound, Settings,
-  Search, Bell, Menu, Moon, Sun, LogOut, FlaskConical, CalendarDays,
+  Search, Bell, Menu, Moon, Sun, LogOut, FlaskConical, CalendarDays, TrendingUp,
 } from 'lucide-react'
 import { ImmoProvider, useImmo } from '@/lib/immo-os/store'
+import { isManager } from '@/lib/immo-os/permissions'
 import { supabase } from '@/lib/supabase'
 import { Avatar, LogoMark, Skyline } from '@/lib/immo-os/ui'
 import { ago } from '@/lib/immo-os/helpers'
@@ -25,6 +26,7 @@ const NAV = [
   { href: '/immo/marketing', k: 'marketing', icon: Megaphone },
   { href: '/immo/deals', k: 'deals', icon: Handshake },
   { href: '/immo/reports', k: 'reports', icon: BarChart3 },
+  { href: '/immo/market', k: 'market', icon: TrendingUp },
   { href: '/immo/team', k: 'team', icon: UsersRound },
   { href: '/immo/settings', k: 'settings', icon: Settings },
 ]
@@ -65,7 +67,7 @@ function Frame({ children }: { children: ReactNode }) {
             </div>
           </div>
           <nav className="px-3 flex-none flex flex-col gap-0.5">
-            {NAV.map((n) => {
+            {NAV.filter((n) => isManager(me?.role) || !me?.hidden?.includes(n.k) || ['dashboard', 'settings'].includes(n.k)).map((n) => {
               const active = n.href === '/immo' ? path === '/immo' : path.startsWith(n.href)
               const Icon = n.icon
               return (

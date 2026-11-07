@@ -24,7 +24,7 @@ export function filterForViewer<T extends Partial<Record<Entity, any[]>>>(data: 
 export function canWrite(entity: Entity, op: 'create' | 'update' | 'delete', v: Viewer, existing?: { agent?: string | null } | null): boolean {
   if (isManager(v.role)) return true
   if (op === 'delete') return false
-  if (entity === 'owners') return false
+  if (entity === 'owners' || entity === 'zones' || entity === 'hierarchy') return false // proprietaires et zones : gestionnaires seulement
   if (op === 'update' && AGENT_SCOPED.includes(entity)) return same(existing?.agent, v.name)
   return true
 }

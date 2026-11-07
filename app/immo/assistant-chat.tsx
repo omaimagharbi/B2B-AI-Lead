@@ -35,9 +35,9 @@ export default function AssistantChat({ compact = false }: { compact?: boolean }
   }
 
   const find = (text: string): Msg => {
-    const q = parseSearch(text)
+    const q = parseSearch(text, data.zones.filter((z) => z.level === 'zone').map((z) => z.name))
     const found = matchProperties(data.properties, q)
-    const crit = [q.type, q.area, q.listing, q.maxPrice ? `under ${qar(q.maxPrice)}` : null, q.minBeds ? `${q.minBeds}+ beds` : null].filter(Boolean).join(', ')
+    const crit = [q.type, q.tenure, q.area, q.listing, q.maxPrice ? `under ${qar(q.maxPrice)}` : null, q.minBeds ? `${q.minBeds}+ beds` : null].filter(Boolean).join(', ')
     return found.length
       ? { role: 'bot', text: `I found ${found.length} matching ${found.length > 1 ? 'properties' : 'property'}${crit ? ` (${crit})` : ''}:`, props: found.slice(0, 4) }
       : { role: 'bot', text: `No available property matches${crit ? ` (${crit})` : ''}. Try a higher budget or another area.` }
@@ -47,8 +47,8 @@ export default function AssistantChat({ compact = false }: { compact?: boolean }
     const t = text.trim()
     if (!t || busy) return
     setInput('')
-    const q = parseSearch(t)
-    const isSearch = !!(q.type || q.area || q.maxPrice || q.minBeds || q.listing) && /(find|show|search|looking|need|want|any|have)/i.test(t)
+    const q = parseSearch(t, data.zones.filter((z) => z.level === 'zone').map((z) => z.name))
+    const isSearch = !!(q.type || q.tenure || q.area || q.maxPrice || q.minBeds || q.listing) && /(find|show|search|looking|need|want|any|have)/i.test(t)
     await run(t, async () => {
       if (isSearch) return find(t)
       const r = await ai('chat', t, { context: ctx() })

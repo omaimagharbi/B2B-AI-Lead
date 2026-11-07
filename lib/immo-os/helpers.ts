@@ -1,4 +1,4 @@
-import type { Data, Lead, Property, PropType } from './types'
+import type { Data, Lead, Property, PropType, Tenure } from './types'
 import { AREAS } from './types'
 
 export const uid = (): string =>
@@ -55,17 +55,30 @@ export function scoreLead(l: Pick<Lead, 'budget' | 'status' | 'last_contact' | '
 export const isHot = (l: Lead) => l.score >= 75 && l.status !== 'won' && l.status !== 'lost'
 
 // Recherche en langage naturel : "villa in Lusail under 3m with 4 beds"
-export type Query = { type?: PropType; area?: string; maxPrice?: number; minBeds?: number; listing?: 'sale' | 'rent' }
-export function parseSearch(text: string): Query {
+export type Query = { tenure?: Tenure; type?: PropType; area?: string; maxPrice?: number; minBeds?: number; listing?: 'sale' | 'rent' }
+export function parseSearch(text: string, areas?: string[]): Query {
   const t = text.toLowerCase()
   const q: Query = {}
-  if (/villa/.test(t)) q.type = 'villa'
+  if (/hotel|hospitality/.test(t)) q.type = 'hotel'
+  else if (/industrial|factory/.test(t)) q.type = 'industrial'
+  else if (/mixed.?use/.test(t)) q.type = 'mixed_use'
+  else if (/penthouse/.test(t)) q.type = 'penthouse'
+  else if (/duplex/.test(t)) q.type = 'duplex'
+  else if (/compound/.test(t)) q.type = 'compound'
+  else if (/labou?r camp|staff accommodation/.test(t)) q.type = 'labour_camp'
+  else if (/showroom/.test(t)) q.type = 'showroom'
+  else if (/warehouse|storage/.test(t)) q.type = 'warehouse'
+  else if (/farm/.test(t)) q.type = 'farm'
+  else if (/building|tower/.test(t)) q.type = 'building'
+  else if (/villa/.test(t)) q.type = 'villa'
   else if (/townhouse/.test(t)) q.type = 'townhouse'
   else if (/apartment|flat|studio/.test(t)) q.type = 'apartment'
   else if (/office/.test(t)) q.type = 'office'
   else if (/shop|retail/.test(t)) q.type = 'shop'
   else if (/land|plot/.test(t)) q.type = 'land'
-  q.area = AREAS.find((a) => t.includes(a.toLowerCase()))
+  if (/freehold/.test(t)) q.tenure = 'freehold'
+  else if (/usufruct/.test(t)) q.tenure = 'usufruct'
+  q.area = [...(areas ?? []), ...AREAS].find((a) => t.includes(a.toLowerCase()))
   if (/\b(rent|rental|lease)\b/.test(t)) q.listing = 'rent'
   else if (/\b(buy|sale|purchase)\b/.test(t)) q.listing = 'sale'
   const m = t.match(/(?:under|below|max|budget|up to|<)\s*(?:qar\s*)?([\d.,]+)\s*(m|million|k|thousand)?/)
@@ -82,7 +95,7 @@ export function parseSearch(text: string): Query {
 export function matchProperties(props: Property[], q: Query): Property[] {
   return props
     .filter((p) => p.status === 'available')
-    .filter((p) => (!q.type || p.type === q.type) && (!q.area || p.area === q.area) && (!q.listing || p.listing === q.listing))
+    .filter((p) => (!q.type || p.type === q.type) && (!q.tenure || p.tenure === q.tenure) && (!q.area || p.area === q.area) && (!q.listing || p.listing === q.listing))
     .filter((p) => (!q.maxPrice || p.price <= q.maxPrice) && (!q.minBeds || p.beds >= q.minBeds))
     .sort((a, b) => Number(b.featured) - Number(a.featured) || a.price - b.price)
 }
@@ -90,7 +103,7 @@ export function matchProperties(props: Property[], q: Query): Property[] {
 // Resume compact des donnees, envoye a l'IA comme contexte (jamais de cle, jamais de donnees d'autres cabinets).
 export function contextSummary(d: Data): string {
   const avail = d.properties.filter((p) => p.status === 'available')
-  const props = avail.slice(0, 25).map((p) => `${p.title} | ${p.type} | ${p.listing} | ${p.area} | ${qar(p.price)} | ${p.beds}bd/${p.baths}ba | ${p.size_m2}m2`).join('\n')
+  const props = avail.slice(0, 25).map((p) => `${p.title} | ${p.type} | ${p.listing} | ${p.area} | ${qar(p.price)} | ${p.beds}bd/${p.baths}ba | ${p.size_m2}m2${p.tenure ? ` | ${p.tenure}${p.tenure === 'usufruct' && p.usufruct_years ? ` ${p.usufruct_years}y` : ''}` : ''}`).join('\n')
   const open = d.leads.filter((l) => l.status !== 'won' && l.status !== 'lost')
   const byStatus = ['new', 'qualified', 'viewing', 'negotiation'].map((s) => `${s}:${open.filter((l) => l.status === s).length}`).join(', ')
   const closed = d.deals.filter((x) => x.status === 'closed')

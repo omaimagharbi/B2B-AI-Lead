@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { authentifierClientUser } from '@/lib/auth-api'
 import { isManager } from '@/lib/immo-os/permissions'
 import { ENTITIES, type Entity } from '@/lib/immo-os/types'
-import { sanitize, isUuid, tableAbsente } from '@/lib/immo-os/server'
+import { sanitize, isUuid, tableAbsente, colonneAbsente } from '@/lib/immo-os/server'
 
 // Insere le jeu de donnees d'exemple dans le cabinet courant, uniquement si l'espace est encore vide.
 export async function POST(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if ((count ?? 0) > 0) return NextResponse.json({ error: 'Workspace is not empty' }, { status: 409 })
 
   const body = await req.json().catch(() => ({}))
-  const ordre: Entity[] = ['owners', 'properties', 'clients', 'leads', 'deals', 'messages', 'visits']
+  const ordre: Entity[] = ['zones', 'owners', 'properties', 'clients', 'leads', 'deals', 'messages', 'visits']
   for (const e of ordre) {
     const rows = Array.isArray(body?.[e]) ? (body[e] as Record<string, unknown>[]).slice(0, 100) : []
     if (!rows.length) continue
@@ -26,9 +26,19 @@ export async function POST(req: NextRequest) {
       ...(typeof r.created_at === 'string' ? { created_at: r.created_at } : {}),
       client_id: auth.clientId,
     }))
-    const { error } = await supabaseAdmin.from(ENTITIES[e].table).insert(payload)
+    // Colonnes d'une migration pas encore faite (74) : retirees de chaque ligne au lieu de faire echouer le chargement
+    let error: { code?: string; message?: string } | null = null
+    const dropAll = new Set<string>()
+    for (let i = 0; i < 8; i++) {
+      const rows2 = payload.map((r) => { const c = { ...r } as Record<string, unknown>; dropAll.forEach((k) => delete c[k]); return c })
+      const res = await supabaseAdmin.from(ENTITIES[e].table).insert(rows2)
+      error = res.error
+      const col = colonneAbsente(error)
+      if (!col || dropAll.has(col)) break
+      dropAll.add(col)
+    }
     if (error) {
-      if (e === 'visits' && tableAbsente(error)) continue // migration 72 pas encore faite : on saute les visites
+      if ((e === 'visits' || e === 'zones') && tableAbsente(error)) continue // migration pas encore faite : on saute
       return NextResponse.json({ error: `${e}: ${error.message}` }, { status: 400 })
     }
   }

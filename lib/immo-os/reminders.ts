@@ -48,3 +48,21 @@ export function planReminders(due: RLead[], members: RMember[], agencies: RAgenc
   }
   return out
 }
+
+// Leads orphelins : actifs, sans agent OU dont l'agent n'est plus dans l'equipe (agent retire). Un message par agence, au directeur.
+export type OLead = { id: string; client_id: string; name: string; status: string; agent: string | null }
+export function orphanLeads(leads: OLead[], members: RMember[]): OLead[] {
+  const known = new Set(members.map((m) => `${m.client_id}|${String(m.nom_complet ?? '').trim().toLowerCase()}`))
+  return leads.filter((l) => ACTIVE_STATUSES.includes(l.status) && (!l.agent || !known.has(`${l.client_id}|${l.agent.trim().toLowerCase()}`)))
+}
+export function planOrphanAlerts(orphans: OLead[], agencies: RAgency[], maxShown = 10): RMessage[] {
+  const out: RMessage[] = []
+  for (const ag of agencies) {
+    const mine = orphans.filter((l) => l.client_id === ag.id)
+    if (!mine.length || digits(ag.whatsapp_directeur ?? '').length < 8) continue
+    const shown = mine.slice(0, maxShown)
+    out.push({ clientId: ag.id, to: ag.whatsapp_directeur!, leadIds: shown.map((l) => l.id),
+      text: `Unassigned leads${ag.nom_entreprise ? ` - ${ag.nom_entreprise}` : ''}: ${mine.length} active lead${mine.length > 1 ? 's have' : ' has'} no agent (agent removed or never assigned) - ${shown.map((l) => l.name).join(', ')}${mine.length > shown.length ? ` and ${mine.length - shown.length} more` : ''}. Reassign them from the Team page.` })
+  }
+  return out
+}

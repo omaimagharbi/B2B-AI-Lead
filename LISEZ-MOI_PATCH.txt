@@ -1,0 +1,4 @@
+PATCH CUMULATIF V13 -> V16 (lots 1, 2 et 3 + corrections). A appliquer sur la V13 ORIGINALE (rien d autre a faire avant).
+A SUPPRIMER du depot : 00_MIGRATIONS_70_a_72_combinees.sql (remplace par 00_MIGRATIONS_70_a_76_combinees.sql).
+SUPABASE : executer UNE FOIS 00_MIGRATIONS_70_a_76_combinees.sql dans le SQL Editor (idempotent : sans risque si 70 a 73 ont deja ete lances).
+Variable optionnelle : IMMO_CLAUDE_MODEL. Pas de nouvelle route, pas de nouveau cron.

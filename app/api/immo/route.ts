@@ -10,6 +10,9 @@ import * as targets from '@/lib/immo-os/api/targets'
 import * as upload from '@/lib/immo-os/api/upload'
 import * as visitsCalendar from '@/lib/immo-os/api/visits-calendar'
 import * as cronRappels from '@/lib/immo-os/api/cron-rappels'
+import * as reassign from '@/lib/immo-os/api/reassign'
+import * as journal from '@/lib/immo-os/api/journal'
+import * as historique from '@/lib/immo-os/api/historique'
 import * as entity from '@/lib/immo-os/api/entity'
 
 // UNE SEULE fonction serverless pour tout le Real Estate OS (plan Vercel Hobby : nombre de fonctions limite).
@@ -24,6 +27,9 @@ type Mod = Partial<Record<'GET' | 'POST' | 'PATCH' | 'DELETE', Handler>>
 const ROUTES: Record<string, Mod> = {
   all, me, seed, assistant, whatsapp, capture, targets, upload,
   'visits/calendar': visitsCalendar,
+  'leads/reassign': reassign, // reassignation en masse (lot 2)
+  activity: journal, // journal d'activite (gestionnaires)
+  assignments: historique, // historique des affectations de leads
   'cron-rappels': cronRappels, // appele par le cron Vercel (vercel.json)
 }
 

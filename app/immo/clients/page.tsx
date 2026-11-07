@@ -9,10 +9,10 @@ import { ago, downloadCsv, qar } from '@/lib/immo-os/helpers'
 import { confirmDelete } from '@/lib/immo-os/hooks'
 
 const KIND_COLOR: Record<string, string> = { buyer: '#2563EB', seller: '#F97316', tenant: '#0891B2', investor: '#7C3AED' }
-const blank = (): Partial<RClient> => ({ name: '', phone: '', email: '', nationality: '', kind: 'buyer', budget: 0, preferred_areas: '', notes: '', agent: '' })
+const blank = (): Partial<RClient> => ({ name: '', phone: '', email: '', nationality: '', kind: 'buyer', budget: 0, preferred_areas: '', notes: '', agent: '', beds_wanted: null })
 
 export default function ClientsPage() {
-  const { data, agents, create, update, remove, notify, canDelete } = useImmo()
+  const { data, agents, create, update, remove, notify, canDelete, t } = useImmo()
   const [q, setQ] = useState('')
   const [kind, setKind] = useState('')
   const [edit, setEdit] = useState<Partial<RClient> | null>(null)
@@ -63,7 +63,7 @@ export default function ClientsPage() {
               <div className="imo-card p-3"><div className="text-[20px] font-bold">{ms.length}</div><div className="text-[11.5px] t-muted">Messages</div></div>
             </div>
             <div className="text-[13px] flex flex-col gap-1.5">
-              <div><b>Budget:</b> {sel.budget ? qar(sel.budget) : '-'}</div><div><b>Preferred areas:</b> {sel.preferred_areas ?? '-'}</div><div><b>Nationality:</b> {sel.nationality ?? '-'}</div><div><b>Agent:</b> {sel.agent ?? '-'}</div><div><b>Notes:</b> {sel.notes ?? '-'}</div>
+              <div><b>Budget:</b> {sel.budget ? qar(sel.budget) : '-'}</div><div><b>Preferred areas:</b> {sel.preferred_areas ?? '-'}</div><div><b>{t('beds.wanted')}:</b> {sel.beds_wanted ?? '-'}</div><div><b>Nationality:</b> {sel.nationality ?? '-'}</div><div><b>Agent:</b> {sel.agent ?? '-'}</div><div><b>Notes:</b> {sel.notes ?? '-'}</div>
               {ds.map((d) => <div key={d.id} className="t-muted">Deal: {d.title} · {qar(d.value)} · {d.status}</div>)}
             </div>
           </Modal>
@@ -79,6 +79,7 @@ export default function ClientsPage() {
             <Field label="Email"><input className="imo-input" value={edit.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
             <Field label="Nationality"><input className="imo-input" value={edit.nationality ?? ''} onChange={(e) => set('nationality', e.target.value)} /></Field>
             <Field label="Budget (QAR)"><input type="number" min={0} className="imo-input" value={edit.budget ?? 0} onChange={(e) => set('budget', Number(e.target.value))} /></Field>
+            <Field label={t('beds.wanted')}><input type="number" min={0} max={20} className="imo-input" value={edit.beds_wanted ?? ''} onChange={(e) => set('beds_wanted', e.target.value === '' ? null : Number(e.target.value))} /></Field>
             <Field label="Preferred areas"><input className="imo-input" value={edit.preferred_areas ?? ''} onChange={(e) => set('preferred_areas', e.target.value)} placeholder="Lusail, The Pearl" /></Field>
             <Field label="Agent"><select className="imo-select" value={edit.agent ?? ''} onChange={(e) => set('agent', e.target.value)}><option value="">- unassigned -</option>{agents.map((a) => <option key={a}>{a}</option>)}</select></Field>
             <div className="sm:col-span-2"><Field label="Notes"><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field></div>

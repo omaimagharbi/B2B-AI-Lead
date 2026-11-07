@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useId, type ReactNode, type CSSProperties } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useId, useState, type ReactNode, type CSSProperties } from 'react'
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Property } from './types'
 import { initials } from './helpers'
 
@@ -138,7 +138,10 @@ function Windows({ x, y, cols, rows, w = 7, h = 9, gx = 5, gy = 6, fill = '#BFE3
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) out.push(<rect key={`${r}-${c}`} x={x + c * (w + gx)} y={y + r * (h + gy)} width={w} height={h} rx="1" fill={fill} opacity={(r + c) % 4 === 0 ? 0.55 : 0.95} />)
   return <g>{out}</g>
 }
-export function PropArt({ type, h = 110, rounded = 10, tint = 0 }: { type: string; h?: number; rounded?: number; tint?: number }) {
+// Les types ajoutes (penthouse, duplex...) reutilisent l'illustration du type le plus proche.
+const ART_OF: Record<string, string> = { penthouse: 'apartment', duplex: 'apartment', building: 'apartment', compound: 'villa', showroom: 'shop', warehouse: 'shop', farm: 'land', labour_camp: 'townhouse', hotel: 'apartment', industrial: 'shop', mixed_use: 'apartment' }
+export function PropArt({ type: rawType, h = 110, rounded = 10, tint = 0 }: { type: string; h?: number; rounded?: number; tint?: number }) {
+  const type = ART_OF[rawType] ?? rawType
   const id = useId().replace(/:/g, '')
   const sky = ['#6EC0EE', '#8FCBF0', '#7DB9E8'][tint % 3]
   return (
@@ -181,10 +184,11 @@ export function PropArt({ type, h = 110, rounded = 10, tint = 0 }: { type: strin
     </svg>
   )
 }
-export function PropImage({ p, h = 110, rounded = 10 }: { p: Pick<Property, 'type' | 'image_url' | 'title'>; h?: number; rounded?: number }) {
-  if (p.image_url)
+export function PropImage({ p, h = 110, rounded = 10 }: { p: Pick<Property, 'type' | 'image_url' | 'title'> & { photos?: string[] | null }; h?: number; rounded?: number }) {
+  const cover = p.image_url || p.photos?.[0]
+  if (cover)
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={p.image_url} alt={p.title} style={{ width: '100%', height: h, objectFit: 'cover', borderRadius: rounded }} />
+    return <img src={cover} alt={p.title} style={{ width: '100%', height: h, objectFit: 'cover', borderRadius: rounded }} />
   return <PropArt type={p.type} h={h} rounded={rounded} tint={p.title.length} />
 }
 
@@ -212,5 +216,32 @@ export function LogoMark({ size = 40 }: { size?: number }) {
       {[[4, 16, 6], [12, 8, 6], [20, 2, 6], [28, 12, 6]].map(([x, y, w], i) => <rect key={i} x={x} y={y} width={w} height={38 - y} rx="1" fill="url(#lg)" />)}
       <path d="M2 36 L38 36" stroke="#F3D88F" strokeWidth="2" />
     </svg>
+  )
+}
+
+// Galerie plein ecran des photos d'un bien (fleches + clavier). Textes via le dictionnaire (props prev/next/close).
+export function Gallery({ photos, start = 0, onClose, labels }: { photos: string[]; start?: number; onClose: () => void; labels: { prev: string; next: string; close: string } }) {
+  const [i, setI] = useState(Math.min(Math.max(0, start), Math.max(0, photos.length - 1)))
+  const go = (d: number) => setI((x) => (x + d + photos.length) % photos.length)
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); else if (e.key === 'ArrowRight') go(1); else if (e.key === 'ArrowLeft') go(-1) }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photos.length])
+  if (!photos.length) return null
+  return (
+    <div className="imo-modal-back" style={{ background: 'rgba(0,0,0,.85)' }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="relative w-full" style={{ maxWidth: 980 }} dir="ltr">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={photos[i]} alt="" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: 10 }} />
+        <button onClick={onClose} aria-label={labels.close} className="absolute top-2 right-2 rounded-full p-1.5" style={{ background: 'rgba(0,0,0,.55)', color: '#fff' }}><X size={18} /></button>
+        {photos.length > 1 && (<>
+          <button onClick={() => go(-1)} aria-label={labels.prev} className="absolute top-1/2 left-2 rounded-full p-2 -translate-y-1/2" style={{ background: 'rgba(0,0,0,.55)', color: '#fff' }}><ChevronLeft size={20} /></button>
+          <button onClick={() => go(1)} aria-label={labels.next} className="absolute top-1/2 right-2 rounded-full p-2 -translate-y-1/2" style={{ background: 'rgba(0,0,0,.55)', color: '#fff' }}><ChevronRight size={20} /></button>
+          <div className="text-center mt-2 text-[13px]" style={{ color: '#fff' }}>{i + 1} / {photos.length}</div>
+        </>)}
+      </div>
+    </div>
   )
 }

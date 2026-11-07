@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { envoyerEmail } from '@/lib/notifications'
+import { logActivity } from '@/lib/immo-os/activity'
 
 // Genere un mot de passe temporaire simple (lettres + chiffres, sans caracteres
 // ambigus comme 0/O ou 1/l) que le cabinet transmet lui-meme a son collegue.
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
 
     const { data: clientUser } = await supabaseAdmin
       .from('client_users')
-      .select('client_id')
+      .select('id, client_id, role, nom_complet')
       .eq('auth_user_id', userData.user.id)
       .single()
 
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
       emailEnvoye = false
     }
 
+    await logActivity({ clientId: clientUser.client_id, id: clientUser.id, name: clientUser.nom_complet ?? '', role: clientUser.role }, { action: 'team_invite', entity: 'team', label: String(nom_complet ?? '').trim(), details: { role: roleFinal } })
     return NextResponse.json({ succes: true, motDePasseTemporaire, emailEnvoye })
   } catch (err) {
     console.error('Erreur /api/team/invite:', err)

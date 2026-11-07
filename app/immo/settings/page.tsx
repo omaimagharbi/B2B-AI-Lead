@@ -6,9 +6,10 @@ import { useImmo } from '@/lib/immo-os/store'
 import { Badge, Btn, Card, CardTitle, PageHead } from '@/lib/immo-os/ui'
 import { supabase } from '@/lib/supabase'
 import { confirmDelete } from '@/lib/immo-os/hooks'
+import ZonesCard from './zones-card'
 
 export default function SettingsPage() {
-  const { mode, agency, clientId, aiUsage, me, dark, toggleDark, resetDemo, seedLive, liveEmpty, notify } = useImmo()
+  const { mode, agency, clientId, aiUsage, aiModel, t, me, dark, toggleDark, resetDemo, seedLive, liveEmpty, notify } = useImmo()
   const router = useRouter()
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const formUrl = clientId ? `${origin}/lead?a=${clientId}` : ''
@@ -44,6 +45,7 @@ export default function SettingsPage() {
               <div className="t-muted">Counts assistant, ads, replies and reports. When the limit is reached the AI stops until next month (standard templates still work).</div>
             </div>
           ) : <div className="text-[13px] t-muted">Usage becomes available once migration 72 is applied.</div>}
+          <div className="text-[13px] mt-3"><b>{t('ai.model')}:</b> {aiModel?.model ? <code dir="ltr">{aiModel.model}</code> : <span className="t-muted">{t('ai.model.none')}</span>}</div>
         </Card>
         <Card>
           <CardTitle icon={<Webhook size={17} />} title="Integrations" />
@@ -54,6 +56,7 @@ export default function SettingsPage() {
             {clientId && <div><b className="t-main">Your agency ID</b> (value for WHATSAPP_IMMO_CLIENT_ID): <code style={{ userSelect: 'all' }}>{clientId}</code></div>}
           </div>
         </Card>
+        <ZonesCard />
         <Card className="lg:col-span-2">
           <CardTitle icon={<Link2 size={17} />} title="Lead capture form" />
           {formUrl ? (

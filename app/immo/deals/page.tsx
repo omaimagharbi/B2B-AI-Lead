@@ -35,7 +35,7 @@ export default function DealsPage() {
   }
   const onProp = (id: string) => {
     const p = data.properties.find((x) => x.id === id)
-    setEdit((e) => ({ ...e, property_id: id || null, ...(p ? { title: e?.title || `${p.title} - ${p.area}`, value: p.price, kind: p.listing, commission_pct: p.listing === 'rent' ? 8 : 2 } : {}) }))
+    setEdit((e) => ({ ...e, property_id: id || null, ...(p ? { title: e?.title || `${p.title} - ${p.area}`, value: p.price, kind: p.listing, commission_pct: p.commission_pct || (p.listing === 'rent' ? 8 : 2) } : {}) }))
   }
 
   return (

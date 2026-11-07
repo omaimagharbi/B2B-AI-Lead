@@ -14,11 +14,14 @@ type View = 'month' | 'week' | 'list'
 const cat = (v: Visit) => VISIT_CATEGORIES.find((c) => c.v === (v.category ?? 'viewing')) ?? VISIT_CATEGORIES[0]
 const stat = (s: string) => VISIT_STATUSES.find((x) => x.v === s)!
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const LOC: Record<string, string> = { en: 'en-GB', fr: 'fr-FR', ar: 'ar-QA-u-nu-latn' }
 
 export default function VisitsPage() {
-  const { data, agents, me, create, update, remove, sendWhatsapp, notify, mode, callApi, canDelete } = useImmo()
+  const { t, lang, data, agents, me, create, update, remove, sendWhatsapp, notify, mode, callApi, canDelete } = useImmo()
   const today = new Date()
+  const loc = LOC[lang] ?? 'en-GB'
+  const dow = (i: number) => new Date(2023, 0, 1 + i).toLocaleDateString(loc, { weekday: 'short' }) // 2023-01-01 = dimanche : index 0 = Sun
+  const catL = (v: string) => t('cat.' + v)
   const [view, setView] = useState<View>('month')
   const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth(), ref: today })
   const [hidden, setHidden] = useState<Set<VisitCategory>>(new Set())
@@ -77,18 +80,18 @@ export default function VisitsPage() {
   }
   const goToday = () => setCursor({ year: today.getFullYear(), month: today.getMonth(), ref: today })
   const title = view === 'week'
-    ? (() => { const w = weekDays(cursor.ref); return `${w[0].toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${w[6].toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` })()
-    : new Date(cursor.year, cursor.month, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+    ? (() => { const w = weekDays(cursor.ref); return `${w[0].toLocaleDateString(loc, { day: 'numeric', month: 'short' })} - ${w[6].toLocaleDateString(loc, { day: 'numeric', month: 'short', year: 'numeric' })}` })()
+    : new Date(cursor.year, cursor.month, 1).toLocaleDateString(loc, { month: 'long', year: 'numeric' })
 
   const chip = (v: Visit, full = false) => {
     const c = cat(v)
     const off = v.status === 'cancelled' || v.status === 'no_show'
     return (
-      <button key={v.id} onClick={(e) => { e.stopPropagation(); setEdit({ ...v, local: toLocalInput(v.starts_at) }) }} title={`${c.l} · ${v.contact_name}`}
+      <button key={v.id} onClick={(e) => { e.stopPropagation(); setEdit({ ...v, local: toLocalInput(v.starts_at) }) }} title={`${catL(c.v)} · ${v.contact_name}`}
         className="w-full text-left rounded-md px-1.5 py-1 text-[11.5px] leading-tight block truncate"
         style={{ background: c.bg, color: c.color, borderLeft: `3px solid ${c.color}`, opacity: off ? 0.55 : 1, textDecoration: off ? 'line-through' : 'none', fontWeight: 600 }}>
         {v.status === 'done' ? '✓ ' : ''}{hhmm(v.starts_at)} {v.contact_name}
-        {full && <span style={{ fontWeight: 400, display: 'block' }}>{propOf(v.property_id)?.title ?? c.l}{v.agent ? ` · ${v.agent}` : ''}</span>}
+        {full && <span style={{ fontWeight: 400, display: 'block' }}>{propOf(v.property_id)?.title ?? catL(c.v)}{v.agent ? ` · ${v.agent}` : ''}</span>}
       </button>
     )
   }
@@ -101,7 +104,7 @@ export default function VisitsPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="text-[18px] font-bold w-[64px]">{hhmm(v.starts_at)}</div>
           <div className="min-w-0 flex-1">
-            <div className="font-semibold">{v.contact_name} <Badge color={c.color}>{c.l}</Badge> <Badge color={stat(v.status).color}>{stat(v.status).l}</Badge>{v.calendar_event_id && <span className="ml-1"><Badge color="#16A34A">In Google Calendar</Badge></span>}</div>
+            <div className="font-semibold">{v.contact_name} <Badge color={c.color}>{catL(c.v)}</Badge> <Badge color={stat(v.status).color}>{stat(v.status).l}</Badge>{v.calendar_event_id && <span className="ml-1"><Badge color="#16A34A">In Google Calendar</Badge></span>}</div>
             <div className="text-[12.5px] t-muted">{p ? `${p.title} · ${p.area}` : 'No property selected'} · {v.duration_min} min{v.agent ? ` · ${v.agent}` : ''}{v.notes ? ` · ${v.notes}` : ''}</div>
           </div>
           <div className="flex gap-1.5 flex-wrap">
@@ -123,17 +126,17 @@ export default function VisitsPage() {
     <div>
       <PageHead icon={<CalendarDays size={28} />} title="Calendar" sub="Viewings, meetings, signings and calls - colour-coded by category"
         right={<>
-          <div className="flex gap-1">{(['month', 'week', 'list'] as View[]).map((v) => <Btn key={v} onClick={() => setView(v)} style={view === v ? { borderColor: 'var(--gold)', fontWeight: 700 } : undefined}>{v[0].toUpperCase() + v.slice(1)}</Btn>)}</div>
-          <Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> New event</Btn>
+          <div className="flex gap-1">{(['month', 'week', 'list'] as View[]).map((v) => <Btn key={v} onClick={() => setView(v)} style={view === v ? { borderColor: 'var(--gold)', fontWeight: 700 } : undefined}>{t('cal.' + v)}</Btn>)}</div>
+          <Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> {t('cal.new')}</Btn>
         </>} />
 
       <Card className="mb-4">
         <div className="flex flex-wrap items-center gap-3">
           {view !== 'list' && (
             <div className="flex items-center gap-1.5">
-              <Btn onClick={() => go(-1)} aria-label="Previous" style={{ padding: '6px 9px' }}><ChevronLeft size={16} /></Btn>
-              <Btn onClick={goToday}>Today</Btn>
-              <Btn onClick={() => go(1)} aria-label="Next" style={{ padding: '6px 9px' }}><ChevronRight size={16} /></Btn>
+              <Btn onClick={() => go(-1)} aria-label={t('cal.prev')} style={{ padding: '6px 9px' }}><ChevronLeft size={16} /></Btn>
+              <Btn onClick={goToday}>{t('cal.today')}</Btn>
+              <Btn onClick={() => go(1)} aria-label={t('cal.next')} style={{ padding: '6px 9px' }}><ChevronRight size={16} /></Btn>
               <div className="font-bold text-[16px] ml-2 min-w-[150px]">{title}</div>
             </div>
           )}
@@ -143,12 +146,13 @@ export default function VisitsPage() {
               return (
                 <button key={c.v} onClick={() => toggleCat(c.v)} aria-pressed={on} className="rounded-full px-3 py-1 text-[12px] font-semibold flex items-center gap-1.5"
                   style={{ background: on ? c.bg : 'transparent', color: on ? c.color : 'var(--muted)', border: `1px solid ${on ? c.color : 'var(--border)'}` }}>
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.color, opacity: on ? 1 : 0.35 }} />{c.l}
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.color, opacity: on ? 1 : 0.35 }} />{catL(c.v)}
                 </button>
               )
             })}
           </div>
-          {isManager && <select aria-label="Filter by agent" className="imo-select" style={{ width: 180 }} value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)}><option value="">All agents</option>{agents.map((a) => <option key={a}>{a}</option>)}</select>}
+          <div className="basis-full text-[11.5px] t-muted">{t('cal.legend')}</div>
+          {isManager && <select aria-label="Filter by agent" className="imo-select" style={{ width: 180 }} value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)}><option value="">{t('cal.allagents')}</option>{agents.map((a) => <option key={a}>{a}</option>)}</select>}
         </div>
       </Card>
 
@@ -156,7 +160,7 @@ export default function VisitsPage() {
         <Card pad={false} style={{ overflow: 'hidden' }}>
           <div className="overflow-x-auto imo-scroll"><div style={{ minWidth: 760 }}>
             <div className="grid grid-cols-7" style={{ borderBottom: '1px solid var(--border)' }}>
-              {DOW.map((d, i) => <div key={d} className="text-center text-[12px] font-semibold py-2 t-muted" style={{ background: i === 5 || i === 6 ? 'var(--soft)' : undefined }}>{d}</div>)}
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => dow(i)).map((d, i) => <div key={d} className="text-center text-[12px] font-semibold py-2 t-muted" style={{ background: i === 5 || i === 6 ? 'var(--soft)' : undefined }}>{d}</div>)}
             </div>
             <div className="grid grid-cols-7">
               {monthGrid(cursor.year, cursor.month).map((d) => {
@@ -188,7 +192,7 @@ export default function VisitsPage() {
             return (
               <Card key={k} pad={false} style={{ background: isWeekend(d) ? 'var(--soft)' : undefined, borderColor: isToday ? 'var(--gold)' : undefined }}>
                 <button onClick={() => setEdit(blank(d))} className="w-full text-left px-2.5 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
-                  <span className="text-[12.5px] font-bold">{DOW[d.getDay()]} {d.getDate()}</span><Plus size={13} className="t-muted" />
+                  <span className="text-[12.5px] font-bold">{dow(d.getDay())} {d.getDate()}</span><Plus size={13} className="t-muted" />
                 </button>
                 <div className="p-2 flex flex-col gap-1.5 min-h-[180px]">
                   {(byDay[k] ?? []).map((v) => chip(v, true))}
@@ -202,10 +206,10 @@ export default function VisitsPage() {
 
       {view === 'list' && (
         <div className="flex flex-col gap-4">
-          {list.length === 0 && <Card><Empty title="No events" action={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={14} /> New event</Btn>} /></Card>}
+          {list.length === 0 && <Card><Empty title={t('cal.none')} action={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={14} /> {t('cal.new')}</Btn>} /></Card>}
           {list.map(([k, vs]) => (
             <div key={k}>
-              <div className="text-[13px] font-semibold mb-2 t-muted">{new Date(vs[0].starts_at).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+              <div className="text-[13px] font-semibold mb-2 t-muted">{new Date(vs[0].starts_at).toLocaleDateString(loc, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
               <div className="flex flex-col gap-2.5">{vs.map((v) => row(v))}</div>
             </div>
           ))}
@@ -213,21 +217,21 @@ export default function VisitsPage() {
       )}
 
       {dayOpen && (
-        <Modal title={dayOpen.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} onClose={() => setDayOpen(null)} wide>
+        <Modal title={dayOpen.toLocaleDateString(loc, { weekday: 'long', day: 'numeric', month: 'long' })} onClose={() => setDayOpen(null)} wide>
           <div className="flex flex-col gap-2">{(byDay[dayKey(dayOpen)] ?? []).map((v) => row(v))}</div>
           <div className="mt-4"><Btn kind="primary" onClick={() => { const d = dayOpen; setDayOpen(null); setEdit(blank(d)) }}><Plus size={14} /> Add event this day</Btn></div>
         </Modal>
       )}
 
       {edit && (
-        <Modal title={edit.id ? 'Edit event' : 'New event'} onClose={() => setEdit(null)} wide>
+        <Modal title={edit.id ? t('cal.edit') : t('cal.new')} onClose={() => setEdit(null)} wide>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="imo-label">Category</label>
               <div className="flex flex-wrap gap-1.5">
                 {VISIT_CATEGORIES.map((c) => { const on = (edit.category ?? 'viewing') === c.v; return (
                   <button key={c.v} type="button" aria-pressed={on} onClick={() => setEdit({ ...edit, category: c.v })} className="rounded-full px-3 py-1 text-[12.5px] font-semibold"
-                    style={{ background: on ? c.bg : 'transparent', color: on ? c.color : 'var(--muted)', border: `1.5px solid ${on ? c.color : 'var(--border)'}` }}>{c.l}</button>) })}
+                    style={{ background: on ? c.bg : 'transparent', color: on ? c.color : 'var(--muted)', border: `1.5px solid ${on ? c.color : 'var(--border)'}` }}>{catL(c.v)}</button>) })}
               </div>
             </div>
             <div className="sm:col-span-2"><Field label="From a lead (fills name, phone and property)"><select className="imo-select" value={edit.lead_id ?? ''} onChange={(e) => pickLead(e.target.value)}><option value="">- none -</option>{data.leads.filter((l) => !['won', 'lost'].includes(l.status)).map((l) => <option key={l.id} value={l.id}>{l.name}{l.interest ? ` · ${l.interest}` : ''}</option>)}</select></Field></div>

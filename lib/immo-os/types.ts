@@ -2,27 +2,40 @@
 // Partage entre le navigateur (formulaires) et les routes API (validation).
 
 export type Listing = 'sale' | 'rent'
-export type PropType = 'apartment' | 'villa' | 'townhouse' | 'office' | 'shop' | 'land'
+export type PropType =
+  | 'apartment' | 'villa' | 'townhouse' | 'office' | 'shop' | 'land'
+  | 'penthouse' | 'duplex' | 'compound' | 'building' | 'showroom' | 'warehouse' | 'farm' | 'labour_camp'
+  | 'hotel' | 'industrial' | 'mixed_use'
+export type Tenure = 'freehold' | 'usufruct'
+export type ZoneLevel = 'municipality' | 'zone' | 'project'
 export type PropStatus = 'available' | 'reserved' | 'sold' | 'rented'
 export type LeadStatus = 'new' | 'qualified' | 'viewing' | 'negotiation' | 'won' | 'lost'
 export type LeadSource = 'whatsapp' | 'website' | 'referral' | 'portal' | 'walk_in' | 'prospecting'
 export type ClientKind = 'buyer' | 'seller' | 'tenant' | 'investor'
 export type DealStatus = 'negotiation' | 'offer' | 'contract' | 'closed' | 'cancelled'
 
-export type Owner = { id: string; name: string; phone?: string | null; email?: string | null; notes?: string | null; created_at: string }
+export type Owner = {
+  id: string; name: string; phone?: string | null; email?: string | null; notes?: string | null
+  responsible?: string | null; last_contact?: string | null; created_at: string
+}
+export type Hierarchy = { id: string; member_id: string; is_lead: boolean; reports_to?: string | null; created_at: string }
+export type Activity = { id: string; actor_id?: string | null; actor_name: string; actor_role?: string | null; action: string; entity?: string | null; record_id?: string | null; label?: string | null; details?: Record<string, any> | null; created_at: string }
+export type Assignment = { id: string; lead_id: string; lead_name?: string | null; from_agent?: string | null; to_agent?: string | null; by_name?: string | null; reason?: string | null; created_at: string }
+export type Zone = { id: string; level: ZoneLevel; name: string; name_ar?: string | null; parent_id?: string | null; created_at: string }
 export type Property = {
   id: string; title: string; type: PropType; listing: Listing; status: PropStatus; area?: string | null
   price: number; beds: number; baths: number; size_m2: number; owner_id?: string | null
-  image_url?: string | null; description?: string | null; featured: boolean; created_at: string
+  image_url?: string | null; photos?: string[] | null; description?: string | null; featured: boolean
+  commission_pct?: number | null; tenure?: Tenure | null; usufruct_years?: number | null; zone_id?: string | null; unit_no?: string | null; created_at: string
 }
 export type RClient = {
   id: string; name: string; phone?: string | null; email?: string | null; nationality?: string | null
-  kind: ClientKind; budget: number; preferred_areas?: string | null; notes?: string | null; agent?: string | null; created_at: string
+  kind: ClientKind; budget: number; preferred_areas?: string | null; notes?: string | null; agent?: string | null; beds_wanted?: number | null; created_at: string
 }
 export type Lead = {
   id: string; name: string; phone?: string | null; email?: string | null; interest?: string | null
   property_id?: string | null; budget: number; status: LeadStatus; source: LeadSource
-  agent?: string | null; score: number; notes?: string | null; last_contact: string; created_at: string
+  agent?: string | null; score: number; notes?: string | null; last_contact: string; beds_wanted?: number | null; created_at: string
 }
 export type Deal = {
   id: string; title: string; property_id?: string | null; party_name?: string | null; kind: Listing
@@ -46,18 +59,20 @@ export type Visit = {
   calendar_event_id?: string | null; created_at: string
 }
 
-export type Entity = 'owners' | 'properties' | 'clients' | 'leads' | 'deals' | 'messages' | 'ads' | 'visits'
+export type Entity = 'hierarchy' | 'zones' | 'owners' | 'properties' | 'clients' | 'leads' | 'deals' | 'messages' | 'ads' | 'visits'
 
 export const ENTITIES: Record<Entity, { table: string; fields: string[] }> = {
-  owners: { table: 're_owners', fields: ['name', 'phone', 'email', 'notes'] },
+  hierarchy: { table: 're_hierarchy', fields: ['member_id', 'is_lead', 'reports_to'] },
+  zones: { table: 're_zones', fields: ['level', 'name', 'name_ar', 'parent_id'] },
+  owners: { table: 're_owners', fields: ['name', 'phone', 'email', 'notes', 'responsible', 'last_contact'] },
   properties: {
     table: 're_properties',
-    fields: ['title', 'type', 'listing', 'status', 'area', 'price', 'beds', 'baths', 'size_m2', 'owner_id', 'image_url', 'description', 'featured'],
+    fields: ['title', 'type', 'listing', 'status', 'area', 'price', 'beds', 'baths', 'size_m2', 'owner_id', 'image_url', 'photos', 'description', 'featured', 'tenure', 'usufruct_years', 'zone_id', 'unit_no', 'commission_pct'],
   },
-  clients: { table: 're_clients', fields: ['name', 'phone', 'email', 'nationality', 'kind', 'budget', 'preferred_areas', 'notes', 'agent'] },
+  clients: { table: 're_clients', fields: ['name', 'phone', 'email', 'nationality', 'kind', 'budget', 'preferred_areas', 'notes', 'agent', 'beds_wanted'] },
   leads: {
     table: 're_leads',
-    fields: ['name', 'phone', 'email', 'interest', 'property_id', 'budget', 'status', 'source', 'agent', 'score', 'notes', 'last_contact'],
+    fields: ['name', 'phone', 'email', 'interest', 'property_id', 'budget', 'status', 'source', 'agent', 'score', 'notes', 'last_contact', 'beds_wanted'],
   },
   deals: { table: 're_deals', fields: ['title', 'property_id', 'party_name', 'kind', 'value', 'commission_pct', 'status', 'agent', 'closed_at'] },
   messages: { table: 're_messages', fields: ['contact_name', 'contact_phone', 'direction', 'body', 'unread'] },
@@ -67,15 +82,38 @@ export const ENTITIES: Record<Entity, { table: string; fields: string[] }> = {
 export const ENTITY_KEYS = Object.keys(ENTITIES) as Entity[]
 
 export type Data = {
-  owners: Owner[]; properties: Property[]; clients: RClient[]; leads: Lead[]
+  demoTeam?: { id: string; name: string; role: string; photo: string | null; phone: string | null }[]
+  activity?: Activity[]; assignments?: Assignment[] // mode demo seulement (en reel : lus via ?r=activity / ?r=assignments)
+  hierarchy: Hierarchy[]; zones: Zone[]; owners: Owner[]; properties: Property[]; clients: RClient[]; leads: Lead[]
   deals: Deal[]; messages: Message[]; ads: Ad[]; visits: Visit[]
 }
-export const EMPTY_DATA: Data = { owners: [], properties: [], clients: [], leads: [], deals: [], messages: [], ads: [], visits: [] }
+export const EMPTY_DATA: Data = { hierarchy: [], zones: [], owners: [], properties: [], clients: [], leads: [], deals: [], messages: [], ads: [], visits: [] }
 
 export const AREAS = ['The Pearl', 'Lusail', 'West Bay', 'West Bay Lagoon', 'Al Sadd', 'Al Dafna', 'Al Khor', 'Al Rayyan', 'Msheireb', 'Old Airport']
 export const PROP_TYPES: { v: PropType; l: string }[] = [
   { v: 'apartment', l: 'Apartment' }, { v: 'villa', l: 'Villa' }, { v: 'townhouse', l: 'Townhouse' },
   { v: 'office', l: 'Office' }, { v: 'shop', l: 'Shop' }, { v: 'land', l: 'Land' },
+  { v: 'penthouse', l: 'Penthouse' }, { v: 'duplex', l: 'Duplex' }, { v: 'compound', l: 'Compound' }, { v: 'building', l: 'Building' },
+  { v: 'showroom', l: 'Showroom' }, { v: 'warehouse', l: 'Warehouse' }, { v: 'farm', l: 'Farm' }, { v: 'labour_camp', l: 'Labour camp' },
+  { v: 'hotel', l: 'Hotel / hospitality' }, { v: 'industrial', l: 'Industrial' }, { v: 'mixed_use', l: 'Mixed use' },
+]
+export const TENURES: Tenure[] = ['freehold', 'usufruct']
+export const MAX_PHOTOS = 12
+// Niveaux de la hierarchie configurable : municipalite > zone > projet (l'unite = le bien)
+export const ZONE_LEVELS: ZoneLevel[] = ['municipality', 'zone', 'project']
+export const PARENT_LEVEL: Record<ZoneLevel, ZoneLevel | null> = { municipality: null, zone: 'municipality', project: 'zone' }
+// Les 8 municipalites du Qatar et leurs zones usuelles (modele propose en un clic dans Parametres)
+export const DEFAULT_MUNICIPALITIES: { name: string; name_ar: string; zones: { name: string; name_ar: string }[] }[] = [
+  { name: 'Doha', name_ar: 'الدوحة', zones: [
+    { name: 'The Pearl', name_ar: 'اللؤلؤة' }, { name: 'West Bay', name_ar: 'الخليج الغربي' }, { name: 'West Bay Lagoon', name_ar: 'لاجون الخليج الغربي' },
+    { name: 'Al Sadd', name_ar: 'السد' }, { name: 'Al Dafna', name_ar: 'الدفنة' }, { name: 'Msheireb', name_ar: 'مشيرب' }, { name: 'Old Airport', name_ar: 'المطار القديم' } ] },
+  { name: 'Al Daayen', name_ar: 'الضعاين', zones: [{ name: 'Lusail', name_ar: 'لوسيل' }] },
+  { name: 'Al Rayyan', name_ar: 'الريان', zones: [{ name: 'Al Rayyan', name_ar: 'الريان' }] },
+  { name: 'Al Khor', name_ar: 'الخور والذخيرة', zones: [{ name: 'Al Khor', name_ar: 'الخور' }] },
+  { name: 'Al Wakrah', name_ar: 'الوكرة', zones: [] },
+  { name: 'Umm Salal', name_ar: 'أم صلال', zones: [] },
+  { name: 'Al Shamal', name_ar: 'الشمال', zones: [] },
+  { name: 'Al Shahaniya', name_ar: 'الشحانية', zones: [] },
 ]
 export const LEAD_COLUMNS: { v: LeadStatus; l: string; color: string }[] = [
   { v: 'new', l: 'New', color: '#3B82F6' },

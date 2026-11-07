@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { envoyerWhatsapp } from '@/lib/notifications'
+import { logActivity } from '@/lib/immo-os/activity'
+import { ACTIVE_STATUSES } from '@/lib/immo-os/reminders'
 
 // Supprime un membre de l'equipe (commercial ou directeur commercial).
 // Reserve au proprietaire et au directeur commercial. On ne peut jamais
@@ -24,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const { data: demandeur } = await supabaseAdmin
       .from('client_users')
-      .select('id, client_id, role')
+      .select('id, client_id, role, nom_complet')
       .eq('auth_user_id', userData.user.id)
       .single()
 
@@ -47,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     const { data: cible } = await supabaseAdmin
       .from('client_users')
-      .select('id, client_id, role, auth_user_id')
+      .select('id, client_id, role, auth_user_id, nom_complet')
       .eq('id', client_user_id)
       .single()
 
@@ -76,6 +79,20 @@ export async function POST(req: NextRequest) {
     if (deleteError) {
       return NextResponse.json({ error: 'Erreur lors de la suppression' }, { status: 500 })
     }
+
+    // Lot 2 : journal + alerte au directeur si des leads actifs restent attribues a ce membre (best-effort, ne bloque jamais le retrait)
+    try {
+      const nom = String(cible.nom_complet ?? '').trim()
+      await logActivity({ clientId: demandeur.client_id, id: demandeur.id, name: demandeur.nom_complet ?? '', role: demandeur.role }, { action: 'team_remove', entity: 'team', label: nom, details: { role: cible.role } })
+      if (nom) {
+        const { data: restants } = await supabaseAdmin.from('re_leads').select('name').eq('client_id', demandeur.client_id).eq('agent', nom).in('status', ACTIVE_STATUSES).limit(200)
+        const { data: cab } = await supabaseAdmin.from('clients').select('whatsapp_directeur').eq('id', demandeur.client_id).single()
+        if (restants?.length && cab?.whatsapp_directeur) {
+          const noms = restants.slice(0, 10).map((l) => l.name).join(', ')
+          await envoyerWhatsapp(cab.whatsapp_directeur, `${nom} was removed from the team. ${restants.length} active lead${restants.length > 1 ? 's are' : ' is'} not reassigned: ${noms}${restants.length > 10 ? ` and ${restants.length - 10} more` : ''}. Reassign them from the Team page.`)
+        }
+      }
+    } catch (e) { console.error('team/remove alerte:', e) }
 
     // On coupe aussi l'acces de connexion (sinon le compte auth existe toujours)
     if (cible.auth_user_id) {

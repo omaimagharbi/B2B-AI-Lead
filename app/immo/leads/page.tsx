@@ -2,17 +2,24 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Download, CalendarDays, Target, Plus, Search, Flame, Phone, Pencil, Trash2, UserCheck, Handshake, MessageCircle } from 'lucide-react'
+import { Download, CalendarDays, Target, Plus, Search, Flame, Phone, Pencil, Trash2, UserCheck, Handshake, MessageCircle, Repeat, AlertTriangle } from 'lucide-react'
 import { useImmo } from '@/lib/immo-os/store'
 import { Avatar, Badge, Btn, Card, Field, Modal, PageHead } from '@/lib/immo-os/ui'
 import { LEAD_COLUMNS, SOURCES, type Lead, type LeadStatus } from '@/lib/immo-os/types'
 import { ago, isHot, qar, scoreLead } from '@/lib/immo-os/helpers'
 import { confirmDelete, useQueryParam } from '@/lib/immo-os/hooks'
+import type { Assignment } from '@/lib/immo-os/types'
+import { agoLocal } from '@/lib/immo-os/ago'
+import { isOrphan, orphanLeadsOf } from '@/lib/immo-os/orphans'
+import ReassignModal from '../reassign-modal'
+import OrphanPlan from '../orphan-plan'
 
-const blank = (agent = ''): Partial<Lead> => ({ name: '', phone: '', email: '', interest: '', property_id: null, budget: 0, status: 'new', source: 'whatsapp', agent, notes: '' })
+const blank = (agent = ''): Partial<Lead> => ({ name: '', phone: '', email: '', interest: '', property_id: null, budget: 0, status: 'new', source: 'whatsapp', agent, notes: '', beds_wanted: null })
 
 export default function LeadsPage() {
-  const { data, agents, create, update, remove, notify, me, callApi, reload, mode, canDelete } = useImmo()
+  const { data, agents, activeAgents, create, update, remove, notify, me, callApi, reload, mode, canDelete, t, tf, loadAssignments } = useImmo()
+  const [reassignOpen, setReassignOpen] = useState(false)
+  const [history, setHistory] = useState<Assignment[] | null>(null)
   const manager = !!me && ['proprietaire', 'admin', 'directeur_commercial'].includes(me.role)
   const [imp, setImp] = useState<{ items: any[]; sel: Set<string>; busy: boolean } | null>(null)
   const openImport = async () => {
@@ -31,6 +38,8 @@ export default function LeadsPage() {
     await reload()
   }
   const [q, setQ] = useState('')
+  const qParam = useQueryParam('q') // lien depuis le tableau de bord manager (lead a risque)
+  useEffect(() => { if (qParam) setQ(qParam) }, [qParam])
   const [agent, setAgent] = useState('')
   const [edit, setEdit] = useState<Partial<Lead> | null>(null)
   const [drag, setDrag] = useState<string | null>(null)
@@ -62,16 +71,33 @@ export default function LeadsPage() {
   }
   const toDeal = async (l: Lead) => {
     const p = data.properties.find((x) => x.id === l.property_id)
-    await create('deals', { title: p ? `${p.title} - ${p.area}` : l.interest || 'New deal', property_id: l.property_id, party_name: l.name, kind: p?.listing ?? 'sale', value: p?.price ?? l.budget, commission_pct: p?.listing === 'rent' ? 8 : 2, status: 'negotiation', agent: l.agent })
+    await create('deals', { title: p ? `${p.title} - ${p.area}` : l.interest || 'New deal', property_id: l.property_id, party_name: l.name, kind: p?.listing ?? 'sale', value: p?.price ?? l.budget, commission_pct: p?.commission_pct || (p?.listing === 'rent' ? 8 : 2), status: 'negotiation', agent: l.agent })
     await move(l.id, 'negotiation')
     notify('Deal created in Deals')
   }
   const touch = (l: Lead) => update('leads', l.id, { last_contact: new Date().toISOString(), score: scoreLead({ ...l, last_contact: new Date().toISOString() }, data.properties) })
   const set = (k: keyof Lead, v: unknown) => setEdit((e) => ({ ...e, [k]: v }))
+  const orphans = useMemo(() => orphanLeadsOf(data.leads, activeAgents), [data.leads, activeAgents])
+  // Historique des affectations du lead ouvert (qui l'avait, depuis quand)
+  useEffect(() => {
+    setHistory(null)
+    if (!edit?.id) return
+    let off = false
+    loadAssignments(edit.id).then((r) => { if (!off) setHistory(r) })
+    return () => { off = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edit?.id, data.assignments])
 
   return (
     <div>
-      <PageHead icon={<Target size={28} />} title="Leads" sub="Drag a card to move it through your pipeline" right={<>{manager && <Btn onClick={openImport}><Download size={15} /> Import prospects</Btn>}<Link href="/immo/visits"><Btn><CalendarDays size={15} /> Calendar</Btn></Link><Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> Add lead</Btn></>} />
+      <PageHead icon={<Target size={28} />} title="Leads" sub="Drag a card to move it through your pipeline" right={<>{manager && <Btn onClick={() => setReassignOpen(true)}><Repeat size={15} /> {t('ra.btn')}</Btn>}{manager && <Btn onClick={openImport}><Download size={15} /> Import prospects</Btn>}<Link href="/immo/visits"><Btn><CalendarDays size={15} /> Calendar</Btn></Link><Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> Add lead</Btn></>} />
+      {manager && orphans.length > 0 && (
+        <div className="mb-4 rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-3" style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #F59E0B55' }} role="alert">
+          <AlertTriangle size={17} /><div className="flex-1 min-w-[200px] text-[13px]"><b>{tf('orph.banner', { n: orphans.length })}</b> {t('orph.why')}</div>
+          <Btn kind="gold" onClick={() => setReassignOpen(true)}><Repeat size={14} /> {t('ra.btn')}</Btn>
+          <OrphanPlan />
+        </div>
+      )}
       <Card className="mb-4">
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[200px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 t-muted" /><input className="imo-input" style={{ paddingLeft: 32 }} placeholder="Search lead or interest…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
@@ -104,7 +130,7 @@ export default function LeadsPage() {
                         <Btn style={{ padding: '3px 7px' }} onClick={() => setEdit(l)} aria-label="Edit"><Pencil size={12} /></Btn>
                         {canDelete && <Btn kind="danger" style={{ padding: '3px 7px' }} onClick={() => confirmDelete(`lead "${l.name}"`) && remove('leads', l.id)} aria-label="Delete"><Trash2 size={12} /></Btn>}
                       </div>
-                      {l.agent && <div className="t-muted text-[11px] mt-1.5">Agent: {l.agent}</div>}
+                      {l.agent && <div className="t-muted text-[11px] mt-1.5">Agent: {l.agent}{isOrphan(l, activeAgents) && <span style={{ color: '#B45309' }}> · {t('as.unassigned')}</span>}</div>}
                     </div>
                   )
                 })}
@@ -125,12 +151,31 @@ export default function LeadsPage() {
             <Field label="Linked property"><select className="imo-select" value={edit.property_id ?? ''} onChange={(e) => set('property_id', e.target.value || null)}><option value="">- none -</option>{data.properties.map((p) => <option key={p.id} value={p.id}>{p.title} · {p.area}</option>)}</select></Field>
             <Field label="Status"><select className="imo-select" value={edit.status} onChange={(e) => set('status', e.target.value)}>{LEAD_COLUMNS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}</select></Field>
             <Field label="Source"><select className="imo-select" value={edit.source} onChange={(e) => set('source', e.target.value)}>{SOURCES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select></Field>
-            <Field label="Assigned agent"><select className="imo-select" value={edit.agent ?? ''} onChange={(e) => set('agent', e.target.value)}><option value="">- unassigned -</option>{agents.map((a) => <option key={a}>{a}</option>)}</select></Field>
+            <Field label="Assigned agent"><select className="imo-select" value={edit.agent ?? ''} onChange={(e) => set('agent', e.target.value)}><option value="">- unassigned -</option>{(edit.agent && !activeAgents.includes(edit.agent) ? [edit.agent, ...activeAgents] : activeAgents.length ? activeAgents : agents).map((a) => <option key={a}>{a}</option>)}</select></Field>
+            <Field label={t('beds.wanted')}><input type="number" min={0} max={20} className="imo-input" value={edit.beds_wanted ?? ''} onChange={(e) => set('beds_wanted', e.target.value === '' ? null : Number(e.target.value))} /></Field>
             <div className="sm:col-span-2"><Field label="Notes"><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field></div>
+            {edit.id && (
+              <div className="sm:col-span-2">
+                <div className="imo-label">{t('as.title')}</div>
+                {history === null ? null : history.length === 0 ? <div className="text-[12.5px] t-muted">{t('as.empty')}</div> : (
+                  <ol className="grid gap-1.5 text-[12.5px]">
+                    {history.map((h, i) => (
+                      <li key={h.id} className="flex flex-wrap gap-x-2 items-baseline" style={{ borderInlineStart: `3px solid ${i === 0 ? 'var(--gold)' : 'var(--border)'}`, paddingInlineStart: 8 }}>
+                        <b>{h.from_agent ?? t('as.unassigned')} → {h.to_agent ?? t('as.unassigned')}</b>
+                        <span className="t-muted">{agoLocal(h.created_at, t, tf)}{h.by_name ? ` · ${tf('as.by', { name: h.by_name })}` : ''}{h.reason ? ` · ${t('as.r.' + h.reason)}` : ''}</span>
+                        {i === 0 && <Badge color="#B45309">{t('as.current')}</Badge>}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setEdit(null)}>Cancel</Btn><Btn kind="primary" onClick={save}>Save lead</Btn></div>
         </Modal>
       )}
+
+      {reassignOpen && <ReassignModal onClose={() => setReassignOpen(false)} />}
 
       {imp && (
         <Modal title="Import prospects from B2B prospecting" onClose={() => setImp(null)} wide>

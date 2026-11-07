@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import { Building2, Target, Users, UserSquare2, MessageSquare, Handshake, Home as HomeIcon, MapPin, Plus, UserPlus, MessageCircle, Megaphone, BarChart3, UsersRound, CheckCircle2, Eye, Sparkles } from 'lucide-react'
 import { LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useImmo } from '@/lib/immo-os/store'
+import ManagerPanel from './manager-panel'
 import { Avatar, Badge, Btn, Card, CardTitle, Kpi, PageHead, PropImage, Ring, Empty } from '@/lib/immo-os/ui'
 import { ago, lastMonths, monthKey, qar, qarShort, isHot } from '@/lib/immo-os/helpers'
 import { LEAD_COLUMNS, PROP_TYPES } from '@/lib/immo-os/types'
@@ -88,6 +89,8 @@ export default function Dashboard() {
         sub={t('dash.sub')}
         right={<span className="imo-card px-3.5 py-2 text-[13px] font-medium">{t('today')} {new Date().toLocaleDateString(lang === 'ar' ? 'ar-QA-u-nu-latn' : lang === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
       />
+
+      <ManagerPanel />
 
       {liveEmpty && (
         <Card className="mb-5" style={{ borderColor: 'var(--gold)' }}>

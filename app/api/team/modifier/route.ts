@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { authentifierClientUser } from '@/lib/auth-api'
+import { logActivity } from '@/lib/immo-os/activity'
 
 export async function PATCH(req: NextRequest) {
   const auth = await authentifierClientUser(req)
@@ -77,5 +78,11 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: 'Erreur de mise à jour' }, { status: 500 })
 
+  // Journal : on note QUI a modifie le profil / les droits de QUEL membre, et les champs touches (pas les valeurs)
+  try {
+    const { data: moi } = await supabaseAdmin.from('client_users').select('nom_complet').eq('id', auth.clientUserId).maybeSingle()
+    const { data: cible } = await supabaseAdmin.from('client_users').select('nom_complet').eq('id', id).maybeSingle()
+    await logActivity({ clientId: auth.clientId, id: auth.clientUserId, name: moi?.nom_complet ?? '', role: auth.role }, { action: 'team_update', entity: 'team', label: cible?.nom_complet ?? '', details: { fields: Object.keys(maj) } })
+  } catch {}
   return NextResponse.json({ succes: true })
 }
