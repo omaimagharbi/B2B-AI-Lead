@@ -7,6 +7,8 @@ import { Badge, Btn, Card, CardTitle, PageHead } from '@/lib/immo-os/ui'
 import { supabase } from '@/lib/supabase'
 import { confirmDelete } from '@/lib/immo-os/hooks'
 import ZonesCard from './zones-card'
+import ComplianceCard from './compliance-card'
+import MetaCard from './meta-card'
 
 export default function SettingsPage() {
   const { mode, agency, clientId, aiUsage, aiModel, t, me, dark, toggleDark, resetDemo, seedLive, liveEmpty, notify } = useImmo()
@@ -57,6 +59,8 @@ export default function SettingsPage() {
           </div>
         </Card>
         <ZonesCard />
+        <MetaCard />
+        <ComplianceCard />
         <Card className="lg:col-span-2">
           <CardTitle icon={<Link2 size={17} />} title="Lead capture form" />
           {formUrl ? (

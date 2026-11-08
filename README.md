@@ -43,7 +43,7 @@ Espace immobilier (Qatar) : 13 menus - Dashboard, Properties, Leads (kanban), Ca
 - Anti-spam : champ piege + 5 envois / 10 min / IP (fonction SQL `verifier_rate_limit` deja presente).
 
 ## MISE EN LIGNE - ordre a respecter (PiloBrain Real Estate)
-1. Supabase > SQL Editor : coller et executer **UNE SEULE FOIS** `00_MIGRATIONS_70_a_76_combinees.sql` (equivaut a 70 a 76, dans le bon ordre, idempotent). Si 70 a 74 sont deja faits : lancer seulement `75_immobilier_os_corrections_lot1.sql` puis `76_immobilier_os_journal_equipe.sql`. Ne pas lancer 71 ou 72 seuls avant le 70 (erreur `relation "re_messages" does not exist`).
+1. Supabase > SQL Editor : coller et executer **UNE SEULE FOIS** `00_MIGRATIONS_70_a_79_combinees.sql` (equivaut a 70 a 79, dans le bon ordre, idempotent). Si 70 a 76 sont deja faits : lancer seulement 77, 78 puis 79 (`77_immobilier_os_lot4_suivi_client.sql`, `78_immobilier_os_lot5_conformite.sql`, `79_immobilier_os_lot6a_meta.sql`). Ne pas lancer 71 ou 72 seuls avant le 70 (erreur `relation "re_messages" does not exist`).
 2. GitHub : remplacer les fichiers du depot par le contenu de ce zip (les fichiers sont a la racine, pas dans un sous-dossier), commit + push. Vercel redeploie tout seul.
 3. Vercel > Environment Variables : ajouter `WHATSAPP_IMMO_CLIENT_ID` (id affiche dans /immo/settings) ; optionnels : `IMMO_DEFAULT_COUNTRY_CODE` (974), `IMMO_AI_MONTHLY_LIMIT` (300), `CRON_SECRET` (deja utilise par les autres crons), `IMMO_CLAUDE_MODEL` (nom du modele Claude de l'assistant, defaut `claude-sonnet-5-5`).
 4. Ouvrir `/immo` (ou le bouton dore "PiloBrain Real Estate" en haut du dashboard).
@@ -71,6 +71,24 @@ Si le build Vercel echoue : copier les lignes rouges en bas du log. Si Vercel re
 - `app/immo/market` (menu Market Intelligence) : prix moyen/m2 par zone, demande par zone (manager), tendance, budgets vs prix, analyse IA. Donnees internes seulement.
 - Calendrier : 3 vues (mois, semaine, liste), 6 types colores + Autre, textes EN/FR/AR.
 - Alerte IA leads orphelins : bouton « Plan de redistribution par IA » (Equipe et Leads), repartition equilibree applicable en un clic.
+
+### Lot 4 : fiche client, suivi du deal, alerte lead chaud (migration 77)
+- n°98 fiche client `/immo/client?id=<id client ou lead>` (historique, conversation, qui l'a traite, etapes) ; n°99 resultat du contact par conversation (table `re_outcomes`) ; n°105 bien detecte dans le message (`lib/immo-os/property-detect.ts`, colonnes `re_messages.property_id/property_auto`) ; n°89 vue croisee bien + conversation + proprietaire dans l'ecran WhatsApp (le proprietaire n'est montre qu'aux gestionnaires) ; n°4 biens envoyes (`re_sends`, ecrit par `api/whatsapp.ts`).
+- n°48 / n°86 etapes du deal : `re_stages` (historique), actions automatiques par etape (tache calendrier, bien reserve / vendu / loue, lead gagne) dans `lib/immo-os/api/deal-steps.ts`, appele par `api/entity.ts` ; memes regles en mode demo (`lib/immo-os/demo-flow.ts`).
+- n°41 / n°81 alerte lead chaud (score >= 75) : `lib/immo-os/api/hot-alerts.ts`, une alerte par lead et par periode (`re_hot_alerts`, contrainte unique), declenchee quand le lead devient chaud + balayage dans le cron existant (`cron-rappels`). Variables optionnelles : `IMMO_HOT_ALERT_PERIOD_HOURS` (72), `IMMO_HOT_ALERT_STALE_HOURS` (12), `IMMO_TZ_OFFSET_HOURS` (3, heure des taches automatiques).
+
+### Lot 5 : conformite et garde-fous WhatsApp (migration 78)
+- n°55 / n°83 consentement + STOP + "ne plus contacter" (colonnes sur leads / clients / proprietaires, lien `/desinscription/<jeton>` = meme page que le B2B, liste de mots partagee `lib/optout-words.ts`). Un contact bloque ne recoit plus rien depuis l'application (refus cote serveur).
+- n°101 charte d'utilisation acceptee par chaque membre (`re_charter_acceptances`, ecran bloquant) ; n°102 / n°103 regles documentees dans Reglages, reglage "numero inconnu" par agence (`re_settings`, `lib/immo-os/inbound.ts`), groupes / statuts / chaines ignores.
+- Textes juridiques (notice client `/lead/privacy`, charte, messages STOP) en EN / FR / AR : BROUILLONS a faire valider par un juriste (`lib/immo-os/policy.ts`, `POLICY_DRAFT`).
+- Tests des fonctions pures : `npx tsx scripts/test-lot4-5.ts`.
+
+### Lot 6a : WhatsApp Business officiel (Meta) (migration 79)
+- Webhook `/api/immo?r=meta` (GET = verification Meta, POST = messages et statuts, signature `X-Hub-Signature-256` obligatoire) ; reglages `/api/immo?r=wa` ; aucune nouvelle fonction Vercel. Code : `lib/immo-os/wa-meta.ts` (pur + appels Graph API), `api/meta.ts`, `api/wa.ts`, envoi dans `api/whatsapp.ts`.
+- Un ou plusieurs numeros Meta PAR AGENCE (`re_wa_numbers`, saisis dans Reglages > WhatsApp Business) ; une agence sans numero Meta continue d'utiliser GreenAPI, qui sert aussi de repli si Meta est en panne ou si le jeton a expire (jamais pour contourner la fenetre de 24 h).
+- Fenetre de 24 h : apres 24 h sans message du client, seul un modele approuve (`re_wa_templates`, synchronise depuis Meta) peut partir ; l'ecran WhatsApp l'affiche et propose les modeles, le serveur refuse sinon (409).
+- Statuts de livraison (envoye / delivre / lu / echec) sur chaque message sortant Meta.
+- Variables : `META_WA_ACCESS_TOKEN`, `META_WA_APP_SECRET`, `META_WA_VERIFY_TOKEN` (+ optionnelle `META_WA_API_VERSION`, defaut v21.0).
 
 ## Limite Vercel Hobby (12 fonctions)
 Tout le Real Estate OS cote serveur est servi par UNE SEULE fonction : `app/api/immo/route.ts` (appel `/api/immo?r=<nom>`; le code des endpoints est dans `lib/immo-os/api/`). Le formulaire public `/lead?a=<ID>` est une page statique. Les rappels de leads (48 h) tournent dans le cron existant `/api/cron/relances` : aucun cron ni fonction en plus.

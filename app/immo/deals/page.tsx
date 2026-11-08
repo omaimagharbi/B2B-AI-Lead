@@ -7,15 +7,17 @@ import { Badge, Btn, Card, Empty, Field, Kpi, Modal, PageHead } from '@/lib/immo
 import { DEAL_STATUSES, type Deal } from '@/lib/immo-os/types'
 import { downloadCsv, qar } from '@/lib/immo-os/helpers'
 import { confirmDelete } from '@/lib/immo-os/hooks'
-import { Wallet, TrendingUp, Clock } from 'lucide-react'
+import { Wallet, TrendingUp, Clock, Layers } from 'lucide-react'
+import DealSteps from '../deal-steps'
 
 const blank = (): Partial<Deal> => ({ title: '', property_id: null, party_name: '', kind: 'sale', value: 0, commission_pct: 2, status: 'negotiation', agent: '' })
 const comm = (d: Deal) => (d.value * d.commission_pct) / 100
 
 export default function DealsPage() {
-  const { data, agents, create, update, remove, notify, canDelete } = useImmo()
+  const { data, agents, create, update, remove, notify, canDelete, t } = useImmo()
   const [st, setSt] = useState('')
   const [edit, setEdit] = useState<Partial<Deal> | null>(null)
+  const [stepsId, setStepsId] = useState<string | null>(null)
   const list = useMemo(() => data.deals.filter((d) => !st || d.status === st), [data.deals, st])
   const meta = (s: string) => DEAL_STATUSES.find((x) => x.v === s)!
   const set = (k: keyof Deal, v: unknown) => setEdit((e) => ({ ...e, [k]: v }))
@@ -26,11 +28,9 @@ export default function DealsPage() {
   const save = async () => {
     if (!edit?.title?.trim()) return notify('Title is required', 'err')
     const patch = { ...edit, closed_at: edit.status === 'closed' ? edit.closed_at ?? new Date().toISOString() : null }
-    if (edit.id) {
-      await update('deals', edit.id, patch)
-      // Bien lie : vendu / loue quand le deal est cloture
-      if (edit.status === 'closed' && edit.property_id) await update('properties', edit.property_id, { status: edit.kind === 'rent' ? 'rented' : 'sold' })
-    } else await create('deals', patch)
+    // Le statut du bien lie (reserve / vendu / loue), les taches et l'historique d'etapes sont geres par le serveur (ou le mode demo) a chaque changement d'etape
+    if (edit.id) await update('deals', edit.id, patch)
+    else await create('deals', patch)
     setEdit(null)
   }
   const onProp = (id: string) => {
@@ -56,12 +56,13 @@ export default function DealsPage() {
           <div className="overflow-x-auto imo-scroll"><table className="imo-table">
             <thead><tr><th>Deal</th><th>Client</th><th>Type</th><th>Value</th><th>Commission</th><th>Agent</th><th>Status</th><th /></tr></thead>
             <tbody>{list.map((d) => (
-              <tr key={d.id}><td className="font-medium">{d.title}</td><td>{d.party_name ?? '-'}</td><td>{d.kind}</td><td>{qar(d.value)}</td><td>{qar(comm(d))} <span className="t-muted text-[11px]">({d.commission_pct}%)</span></td><td>{d.agent ?? '-'}</td>
+              <tr key={d.id}><td className="font-medium"><button className="text-start underline decoration-dotted" onClick={() => setStepsId(d.id)} style={{ color: 'inherit' }}>{d.title}</button></td><td>{d.party_name ?? '-'}</td><td>{d.kind}</td><td>{qar(d.value)}</td><td>{qar(comm(d))} <span className="t-muted text-[11px]">({d.commission_pct}%)</span></td><td>{d.agent ?? '-'}</td>
                 <td><select className="imo-select" style={{ width: 140, padding: '4px 8px', color: meta(d.status).color, fontWeight: 600 }} value={d.status} onChange={(e) => update('deals', d.id, { status: e.target.value, closed_at: e.target.value === 'closed' ? new Date().toISOString() : null })}>{DEAL_STATUSES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select></td>
-                <td className="text-right whitespace-nowrap"><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(d)}><Pencil size={13} /></Btn> {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`deal "${d.title}"`) && remove('deals', d.id)}><Trash2 size={13} /></Btn>}</td></tr>
+                <td className="text-right whitespace-nowrap"><Btn style={{ padding: '4px 8px' }} onClick={() => setStepsId(d.id)} title={t('ds.title')} aria-label={t('ds.title')}><Layers size={13} /></Btn> <Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(d)}><Pencil size={13} /></Btn> {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`deal "${d.title}"`) && remove('deals', d.id)}><Trash2 size={13} /></Btn>}</td></tr>
             ))}</tbody></table></div>
         )}
       </Card>
+      {stepsId && <DealSteps dealId={stepsId} onClose={() => setStepsId(null)} />}
       {edit && (
         <Modal title={edit.id ? 'Edit deal' : 'Add deal'} onClose={() => setEdit(null)} wide>
           <div className="grid gap-3 sm:grid-cols-2">

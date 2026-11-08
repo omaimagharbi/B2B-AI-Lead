@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { envoyerWhatsapp } from '@/lib/notifications'
+import { balayerLeadsChauds } from '@/lib/immo-os/api/hot-alerts'
 import { ACTIVE_STATUSES, dueLeads, orphanLeads, planOrphanAlerts, planReminders, type OLead, type RLead } from '@/lib/immo-os/reminders'
 
 const MAX_ENVOIS_PAR_EXECUTION = 60
@@ -57,6 +58,9 @@ export async function executerRappels(maxEnvois = MAX_ENVOIS_PAR_EXECUTION): Pro
       }
     }
   } catch (e) { console.error('immo-orphelins:', e) }
+
+  // Lot 4 (n°41 / n°81) : alertes "lead chaud" non envoyees dans la periode (meme cron, une alerte par lead et par periode)
+  try { envoyes += (await balayerLeadsChauds(maxEnvois - envoyes - echoues)).envoyes } catch (e) { console.error('immo-hot:', e) }
   return { envoyes, echoues }
 }
 

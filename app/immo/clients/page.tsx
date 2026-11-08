@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Users, Plus, Search, Pencil, Trash2, Download } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Users, Plus, Search, Pencil, Trash2, Download, Ban, IdCard } from 'lucide-react'
 import { useImmo } from '@/lib/immo-os/store'
 import { Avatar, Badge, Btn, Card, Empty, Field, Modal, PageHead } from '@/lib/immo-os/ui'
 import { CLIENT_KINDS, type RClient } from '@/lib/immo-os/types'
@@ -9,14 +10,15 @@ import { ago, downloadCsv, qar } from '@/lib/immo-os/helpers'
 import { confirmDelete } from '@/lib/immo-os/hooks'
 
 const KIND_COLOR: Record<string, string> = { buyer: '#2563EB', seller: '#F97316', tenant: '#0891B2', investor: '#7C3AED' }
-const blank = (): Partial<RClient> => ({ name: '', phone: '', email: '', nationality: '', kind: 'buyer', budget: 0, preferred_areas: '', notes: '', agent: '', beds_wanted: null })
+const blank = (): Partial<RClient> => ({ name: '', phone: '', email: '', nationality: '', kind: 'buyer', budget: 0, preferred_areas: '', notes: '', agent: '', beds_wanted: null, do_not_contact: false })
 
 export default function ClientsPage() {
-  const { data, agents, create, update, remove, notify, canDelete, t } = useImmo()
+  const { data, agents, create, update, remove, notify, canDelete, t, me } = useImmo()
+  const router = useRouter()
+  const manager = !!me && ['proprietaire', 'admin', 'directeur_commercial'].includes(me.role)
   const [q, setQ] = useState('')
   const [kind, setKind] = useState('')
   const [edit, setEdit] = useState<Partial<RClient> | null>(null)
-  const [sel, setSel] = useState<RClient | null>(null)
 
   const list = useMemo(() => data.clients.filter((c) => (!q || `${c.name} ${c.email} ${c.phone}`.toLowerCase().includes(q.toLowerCase())) && (!kind || c.kind === kind)), [data.clients, q, kind])
   const set = (k: keyof RClient, v: unknown) => setEdit((e) => ({ ...e, [k]: v }))
@@ -42,33 +44,13 @@ export default function ClientsPage() {
           <div className="overflow-x-auto imo-scroll"><table className="imo-table">
             <thead><tr><th>Client</th><th>Type</th><th>Phone</th><th>Budget</th><th>Preferred areas</th><th>Agent</th><th>Since</th><th /></tr></thead>
             <tbody>{list.map((c) => (
-              <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => setSel(c)}>
-                <td><div className="flex items-center gap-2"><Avatar name={c.name} size={28} /><div><div className="font-medium">{c.name}</div><div className="text-[11.5px] t-muted">{c.email ?? c.nationality ?? ''}</div></div></div></td>
+              <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/immo/client?id=${c.id}`)}>
+                <td><div className="flex items-center gap-2"><Avatar name={c.name} size={28} /><div><div className="font-medium">{c.name} {c.do_not_contact && <Badge color="#7F1D1D"><Ban size={10} className="mr-0.5" />{t('dnc.badge')}</Badge>}</div><div className="text-[11.5px] t-muted">{c.email ?? c.nationality ?? ''}</div></div></div></td>
                 <td><Badge color={KIND_COLOR[c.kind]}>{c.kind}</Badge></td><td>{c.phone ?? '-'}</td><td>{c.budget ? qar(c.budget) : '-'}</td><td className="t-muted">{c.preferred_areas ?? '-'}</td><td>{c.agent ?? '-'}</td><td className="t-muted">{ago(c.created_at)}</td>
-                <td className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(c)}><Pencil size={13} /></Btn> {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`client "${c.name}"`) && remove('clients', c.id)}><Trash2 size={13} /></Btn>}</td>
+                <td className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}><Btn style={{ padding: '4px 8px' }} onClick={() => router.push(`/immo/client?id=${c.id}`)} title={t('pf.title')} aria-label={t('pf.title')}><IdCard size={13} /></Btn> <Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(c)}><Pencil size={13} /></Btn> {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`client "${c.name}"`) && remove('clients', c.id)}><Trash2 size={13} /></Btn>}</td>
               </tr>))}</tbody></table></div>
         )}
       </Card>
-
-      {sel && (() => {
-        const ls = data.leads.filter((l) => l.name === sel.name)
-        const ds = data.deals.filter((d) => d.party_name === sel.name)
-        const ms = data.messages.filter((m) => m.contact_name === sel.name)
-        return (
-          <Modal title={sel.name} onClose={() => setSel(null)}>
-            <div className="flex items-center gap-3 mb-4"><Avatar name={sel.name} size={48} /><div><Badge color={KIND_COLOR[sel.kind]}>{sel.kind}</Badge><div className="text-[13px] t-muted mt-1">{sel.phone} {sel.email ? `· ${sel.email}` : ''}</div></div></div>
-            <div className="grid grid-cols-3 gap-3 text-center mb-4">
-              <div className="imo-card p-3"><div className="text-[20px] font-bold">{ls.length}</div><div className="text-[11.5px] t-muted">Leads</div></div>
-              <div className="imo-card p-3"><div className="text-[20px] font-bold">{ds.length}</div><div className="text-[11.5px] t-muted">Deals</div></div>
-              <div className="imo-card p-3"><div className="text-[20px] font-bold">{ms.length}</div><div className="text-[11.5px] t-muted">Messages</div></div>
-            </div>
-            <div className="text-[13px] flex flex-col gap-1.5">
-              <div><b>Budget:</b> {sel.budget ? qar(sel.budget) : '-'}</div><div><b>Preferred areas:</b> {sel.preferred_areas ?? '-'}</div><div><b>{t('beds.wanted')}:</b> {sel.beds_wanted ?? '-'}</div><div><b>Nationality:</b> {sel.nationality ?? '-'}</div><div><b>Agent:</b> {sel.agent ?? '-'}</div><div><b>Notes:</b> {sel.notes ?? '-'}</div>
-              {ds.map((d) => <div key={d.id} className="t-muted">Deal: {d.title} · {qar(d.value)} · {d.status}</div>)}
-            </div>
-          </Modal>
-        )
-      })()}
 
       {edit && (
         <Modal title={edit.id ? 'Edit client' : 'Add client'} onClose={() => setEdit(null)} wide>
@@ -83,6 +65,7 @@ export default function ClientsPage() {
             <Field label="Preferred areas"><input className="imo-input" value={edit.preferred_areas ?? ''} onChange={(e) => set('preferred_areas', e.target.value)} placeholder="Lusail, The Pearl" /></Field>
             <Field label="Agent"><select className="imo-select" value={edit.agent ?? ''} onChange={(e) => set('agent', e.target.value)}><option value="">- unassigned -</option>{agents.map((a) => <option key={a}>{a}</option>)}</select></Field>
             <div className="sm:col-span-2"><Field label="Notes"><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field></div>
+            <div className="sm:col-span-2"><label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-1" checked={!!edit.do_not_contact} disabled={!!edit.id && !!data.clients.find((x) => x.id === edit.id)?.do_not_contact && !manager} onChange={(e) => set('do_not_contact', e.target.checked)} /><span><b>{t('dnc.label')}</b><span className="block t-muted text-[12px]">{t('dnc.help')}</span></span></label></div>
           </div>
           <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setEdit(null)}>Cancel</Btn><Btn kind="primary" onClick={save}>Save client</Btn></div>
         </Modal>

@@ -7,6 +7,8 @@
 // Anthropic (payant, meilleure qualite) -> repli par mots-cles (toujours
 // disponible, aucune cle requise).
 
+import { MOTS_STOP_BASE } from './optout-words'
+
 export type SentimentReponse = 'positive' | 'negative' | 'neutre'
 
 const SYSTEM_PROMPT = `Tu analyses la reponse d'un prospect B2B a un premier message commercial court.
@@ -25,10 +27,7 @@ function classifierParMotsCles(texte: string): SentimentReponse {
     'pas interesse',
     "pas intéressé",
     'non merci',
-    'stop',
-    'desabonner',
-    'désabonner',
-    'ne plus',
+    ...MOTS_STOP_BASE, // 'stop', 'desabonner', 'désabonner', 'ne plus' (liste partagee avec le Real Estate OS)
     'jamais',
     'pas besoin',
   ]

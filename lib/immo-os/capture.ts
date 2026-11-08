@@ -1,6 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { sameNumber } from './inbound-pure'
 import { validateCapture } from './capture-pure'
+import { ecrireTolerant } from './server'
+import { POLICY_VERSION } from './policy'
 
 export type CaptureDeps = { notifier?: (phone: string, text: string) => Promise<void> }
 export type CaptureResult = { status: number; body: { ok?: true; error?: string } }
@@ -37,10 +39,12 @@ export async function traiterCapture(raw: unknown, ip: string, deps: CaptureDeps
   if (existing) {
     await supabaseAdmin.from('re_leads').update({ last_contact: now }).eq('id', existing.id).eq('client_id', c.agency)
   } else {
-    const { error } = await supabaseAdmin.from('re_leads').insert({
+    // Consentement enregistre avec la date, la source et la version du texte (colonnes de la migration 78, ignorees si elle n'est pas faite)
+    const { error } = await ecrireTolerant({
       client_id: c.agency, name: c.name, phone: c.phone, email: c.email, interest, property_id: property?.id ?? null,
       budget: c.budget, status: 'new', source: 'website', score: 60, notes: c.message, last_contact: now,
-    })
+      consent_at: now, consent_source: 'web_form', consent_version: POLICY_VERSION,
+    }, (r) => supabaseAdmin.from('re_leads').insert(r))
     if (error) return { status: 503, body: { error: 'Service temporarily unavailable' } }
     isNew = true
   }

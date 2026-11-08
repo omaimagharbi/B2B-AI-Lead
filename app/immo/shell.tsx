@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase'
 import { Avatar, LogoMark, Skyline } from '@/lib/immo-os/ui'
 import { ago } from '@/lib/immo-os/helpers'
 import { LANGS, isRtl, type Lang } from '@/lib/immo-os/i18n'
+import CharterGate from './charter-gate'
 
 const NAV = [
   { href: '/immo', k: 'dashboard', icon: LayoutDashboard },
@@ -50,8 +51,8 @@ function Frame({ children }: { children: ReactNode }) {
 
   const results = q.trim().length < 2 ? [] : [
     ...data.properties.filter((p) => `${p.title} ${p.area}`.toLowerCase().includes(q.toLowerCase())).slice(0, 4).map((p) => ({ k: `p${p.id}`, label: `${p.title} · ${p.area}`, tag: 'Property', href: '/immo/properties' })),
-    ...data.leads.filter((l) => l.name.toLowerCase().includes(q.toLowerCase())).slice(0, 4).map((l) => ({ k: `l${l.id}`, label: l.name, tag: 'Lead', href: '/immo/leads' })),
-    ...data.clients.filter((c) => c.name.toLowerCase().includes(q.toLowerCase())).slice(0, 3).map((c) => ({ k: `c${c.id}`, label: c.name, tag: 'Client', href: '/immo/clients' })),
+    ...data.leads.filter((l) => l.name.toLowerCase().includes(q.toLowerCase())).slice(0, 4).map((l) => ({ k: `l${l.id}`, label: l.name, tag: 'Lead', href: `/immo/client?id=${l.id}` })),
+    ...data.clients.filter((c) => c.name.toLowerCase().includes(q.toLowerCase())).slice(0, 3).map((c) => ({ k: `c${c.id}`, label: c.name, tag: 'Client', href: `/immo/client?id=${c.id}` })),
     ...data.owners.filter((o) => o.name.toLowerCase().includes(q.toLowerCase())).slice(0, 3).map((o) => ({ k: `o${o.id}`, label: o.name, tag: 'Owner', href: '/immo/owners' })),
   ]
 
@@ -161,6 +162,7 @@ function Frame({ children }: { children: ReactNode }) {
           </main>
         </div>
       </div>
+      <CharterGate />
       <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2">
         {toasts.map((t) => (
           <div key={t.id} className="rounded-xl px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ background: t.kind === 'ok' ? '#0B2447' : '#B91C1C', color: '#fff', maxWidth: 340 }}>{t.msg}</div>

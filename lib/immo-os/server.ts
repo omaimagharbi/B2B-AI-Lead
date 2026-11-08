@@ -5,9 +5,9 @@ export const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID
 
 const NUMERIC = new Set(['price', 'beds', 'baths', 'size_m2', 'budget', 'score', 'value', 'commission_pct', 'duration_min'])
 const NULLABLE_INT = new Set(['usufruct_years', 'beds_wanted'])
-const UUID_FIELDS = new Set(['owner_id', 'property_id', 'lead_id', 'zone_id', 'parent_id', 'member_id', 'reports_to'])
+const UUID_FIELDS = new Set(['owner_id', 'property_id', 'lead_id', 'zone_id', 'parent_id', 'member_id', 'reports_to', 'record_id'])
 const DATES = new Set(['starts_at', 'closed_at', 'last_contact'])
-const ENUMS: Record<string, string[]> = { tenure: ['freehold', 'usufruct'], level: ['municipality', 'zone', 'project'] }
+const ENUMS: Record<string, string[]> = { tenure: ['freehold', 'usufruct'], level: ['municipality', 'zone', 'project'], outcome: ['callback', 'viewing_booked', 'offer_made', 'info_sent', 'no_answer', 'not_interested', 'wrong_number', 'other'] }
 export const MAX_PHOTOS = 12
 
 // Liste de photos : uniquement des URLs http(s), sans doublon, 12 maximum.
@@ -34,7 +34,7 @@ export function sanitize(entity: Entity, input: Record<string, unknown>): Record
       continue
     }
     if (ENUMS[f]) {
-      out[f] = typeof v === 'string' && ENUMS[f].includes(v) ? v : f === 'level' ? 'zone' : null
+      out[f] = typeof v === 'string' && ENUMS[f].includes(v) ? v : f === 'level' ? 'zone' : f === 'outcome' ? 'other' : null
       continue
     }
     if (NULLABLE_INT.has(f)) {
@@ -50,7 +50,7 @@ export function sanitize(entity: Entity, input: Record<string, unknown>): Record
     } else if (DATES.has(f) && v !== null && v !== '') {
       const t = new Date(String(v))
       v = Number.isNaN(t.getTime()) ? null : t.toISOString()
-    } else if (f === 'featured' || f === 'unread' || f === 'is_lead') {
+    } else if (f === 'featured' || f === 'unread' || f === 'is_lead' || f === 'do_not_contact' || f === 'property_auto') {
       v = Boolean(v)
     } else if (typeof v === 'string') {
       v = v.trim().slice(0, 4000)

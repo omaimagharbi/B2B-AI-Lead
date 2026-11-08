@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { LEAD_TEXT, type LeadLang } from './texts'
+import { translate } from '@/lib/immo-os/i18n'
 
 export default function LeadForm({ agency, propertyId, lang, agencyName }: { agency: string; propertyId: string | null; lang: LeadLang; agencyName: string }) {
   const t = LEAD_TEXT[lang]
@@ -18,7 +19,7 @@ export default function LeadForm({ agency, propertyId, lang, agencyName }: { age
       const res = await fetch('/api/immo?r=capture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agency, propertyId, name: f.get('name'), phone: f.get('phone'), email: f.get('email'), budget: f.get('budget'), message: f.get('message'), website: f.get('website') }),
+        body: JSON.stringify({ agency, propertyId, name: f.get('name'), phone: f.get('phone'), email: f.get('email'), budget: f.get('budget'), message: f.get('message'), website: f.get('website'), consent: f.get('consent') === 'on' }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(res.status === 400 || res.status === 429 ? json.error : t.err)
@@ -50,7 +51,13 @@ export default function LeadForm({ agency, propertyId, lang, agencyName }: { age
         <div className="lead-hp" aria-hidden="true"><label>Website<input name="website" tabIndex={-1} autoComplete="off" /></label></div>
         {error && <div className="lead-full lead-err" role="alert">{error}</div>}
         <div className="lead-full"><button className="lead-btn" type="submit" disabled={state === 'sending'}>{state === 'sending' ? t.sending : t.submit}</button></div>
-        <div className="lead-full" style={{ fontSize: 12, color: '#5B6B82' }}>{t.privacy(agencyName)}</div>
+        <div className="lead-full" style={{ fontSize: 12.5, color: '#44546A' }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontWeight: 400 }}>
+            <input type="checkbox" name="consent" required style={{ width: 'auto', marginTop: 3 }} />
+            <span>{translate(lang, 'cons.label').replace('{agency}', agencyName)} <a href={`/lead/privacy?a=${agency}&lang=${lang}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>{translate(lang, 'cons.link')}</a></span>
+          </label>
+          <div style={{ marginTop: 6, color: '#5B6B82' }}>{t.privacy(agencyName)} {translate(lang, 'cons.stop')}</div>
+        </div>
       </div>
     </form>
   )

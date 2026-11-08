@@ -1,7 +1,7 @@
 import { digits } from './inbound-pure'
 
 // Validation pure du formulaire public de capture de leads (aucune dependance base).
-export type CaptureInput = { agency: string; name: string; phone: string; email: string | null; message: string | null; budget: number; propertyId: string | null; honeypot: boolean }
+export type CaptureInput = { agency: string; name: string; phone: string; email: string | null; message: string | null; budget: number; propertyId: string | null; honeypot: boolean; consent: boolean }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -28,6 +28,9 @@ export function validateCapture(b: any, defaultDial = '974'): { ok: true; value:
   if (!phone) return { ok: false, error: 'Please enter a valid phone number' }
   const emailRaw = str(b.email, 160)
   if (emailRaw && !EMAIL.test(emailRaw)) return { ok: false, error: 'Please enter a valid email address' }
+  // Lot 5 (n°55 / n°83) : la case de consentement est obligatoire (le formulaire public la rend requise, le serveur la verifie aussi)
+  const consent = b.consent === true || b.consent === 'true' || b.consent === 'on'
+  if (!consent && !str(b.website, 200)) return { ok: false, error: 'Please accept the privacy notice to send your request' }
   const budget = Number(b.budget)
   const propertyId = UUID.test(str(b.propertyId, 64)) ? str(b.propertyId, 64) : null
   return {
@@ -35,7 +38,7 @@ export function validateCapture(b: any, defaultDial = '974'): { ok: true; value:
     value: {
       agency, name, phone, email: emailRaw || null, message: str(b.message, 1000) || null,
       budget: Number.isFinite(budget) && budget > 0 && budget < 1e11 ? Math.round(budget) : 0,
-      propertyId, honeypot: str(b.website, 200).length > 0,
+      propertyId, honeypot: str(b.website, 200).length > 0, consent,
     },
   }
 }

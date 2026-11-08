@@ -1,4 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { desinscrireParJeton } from '@/lib/immo-os/optout-server'
+import { translate } from '@/lib/immo-os/i18n'
 
 async function desinscrire(token: string) {
   const { data, error } = await supabaseAdmin
@@ -8,7 +10,9 @@ async function desinscrire(token: string) {
     .select('nom')
     .single()
 
-  return !error && !!data
+  if (!error && !!data) return true
+  // Real Estate OS (migration 78) : meme page, jeton d'un lead / client / proprietaire d'une agence immobiliere
+  return desinscrireParJeton(token)
 }
 
 export default async function DesinscriptionPage({ params }: { params: { token: string } }) {
@@ -25,6 +29,8 @@ export default async function DesinscriptionPage({ params }: { params: { token: 
               Vous ne recevrez plus aucun message de notre part. Si c'était une erreur, vous pouvez
               nous contacter directement.
             </p>
+            <p className="text-slate-500 text-sm">{translate('en', 'pol.unsub.ok')}</p>
+            <p className="text-slate-500 text-sm" dir="rtl">{translate('ar', 'pol.unsub.ok')}</p>
           </>
         ) : (
           <>

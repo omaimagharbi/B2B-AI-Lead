@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { EMPTY_DATA, ENTITY_KEYS, AGENTS_DEFAULT, type Data, type Entity, type Activity, type Assignment } from './types'
 import { demoLog, demoAssign, changedFields, SCOPED_ENTITIES, type DemoActor } from './demo-journal'
+import { demoDealTransition, demoStage } from './demo-flow'
+import { sameNumber } from './inbound-pure'
+import { CHARTER_VERSION } from './policy'
 import { makeDemo } from './demo'
 import { uid } from './helpers'
 import { resizeImage } from './resize'
@@ -48,7 +51,9 @@ type Ctx = {
   remove: (e: Entity, id: string) => Promise<void>
   seedLive: () => Promise<void>
   resetDemo: () => void
-  sendWhatsapp: (name: string, phone: string | null | undefined, body: string) => Promise<void>
+  sendWhatsapp: (name: string, phone: string | null | undefined, body: string, opts?: { propertyId?: string; lang?: Lang; template?: { name: string; language: string; params: string[] } }) => Promise<boolean>
+  charter: { version: string; accepted: boolean | null }
+  acceptCharter: () => Promise<boolean>
   ai: (mode: AiMode, prompt: string, opts?: { extra?: string; language?: string; context: string }) => Promise<string | null>
   uploadPhoto: (file: File) => Promise<string | null>
   callApi: (path: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: any }>
@@ -81,6 +86,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(false)
   const [lang, setLangState] = useState<Lang>('en')
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [charter, setCharter] = useState<{ version: string; accepted: boolean | null }>({ version: CHARTER_VERSION, accepted: null })
   const tokenRef = useRef<string>('')
 
   const notify = useCallback((msg: string, kind: 'ok' | 'err' = 'ok') => {
@@ -133,6 +139,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       setLogo(meRes.json.logo)
       setMe(meRes.json.me)
       setTeam(meRes.json.team)
+      if (meRes.json.charter) setCharter(meRes.json.charter)
 
       const all = await api('/api/immo?r=all')
       if (all.ok && all.json.demo === false) {
@@ -156,6 +163,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       setMe({ id: roster[0].id, name: roster[0].name, role: 'directeur_commercial', photo: null, hidden: [] })
       setData(d)
       setMode('demo')
+      try { setCharter({ version: CHARTER_VERSION, accepted: localStorage.getItem('imo_charter') === CHARTER_VERSION }) } catch { setCharter({ version: CHARTER_VERSION, accepted: true }) }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -166,7 +174,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
     const id = setInterval(async () => {
       if (document.visibilityState !== 'visible') return
       const all = await api('/api/immo?r=all')
-      if (all.ok && all.json.data) setData((d) => ({ ...d, messages: all.json.data.messages ?? d.messages, leads: all.json.data.leads ?? d.leads }))
+      if (all.ok && all.json.data) setData((d) => ({ ...d, messages: all.json.data.messages ?? d.messages, leads: all.json.data.leads ?? d.leads, outcomes: all.json.data.outcomes ?? d.outcomes, sends: all.json.data.sends ?? d.sends }))
     }, 30000)
     return () => clearInterval(id)
   }, [mode, api])
@@ -192,7 +200,9 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       setData((d) => {
         let n = { ...d, [e]: [r, ...(d[e] as any[])] } as Data
         n = demoLog(n, demoWho(), { action: 'create', entity: e, record: r })
-        if (e === 'leads') n = demoAssign(n, demoWho(), { lead: r, from: null, to: r.agent, reason: 'creation' })
+        if (e === 'leads') { n = demoAssign(n, demoWho(), { lead: r, from: null, to: r.agent, reason: 'creation' }); n = demoStage(n, 'lead', r, null, r.status ?? 'new', demoWho().name) }
+        if (e === 'deals') n = demoDealTransition(n, r, null, demoWho().name, t)
+        if (e === 'outcomes') r.agent = demoWho().name
         return persist(n)
       })
       return r
@@ -219,6 +229,13 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
           n = demoLog(n, demoWho(), { action: reassigned && changed.length === 1 ? 'assign' : 'update', entity: e, record: { ...old, ...patch }, details: { fields: changed, ...(reassigned ? { from: old?.agent ?? null, to: (patch as any).agent ?? null } : {}) } })
           if (e === 'leads' && changed.includes('agent')) n = demoAssign(n, demoWho(), { lead: { ...old, ...patch }, from: old?.agent, to: (patch as any).agent, reason: 'manual' })
         }
+        // Lot 4 : etapes (memes regles que le serveur) ; Lot 5 : "ne plus contacter" manuel
+        if (e === 'leads' && 'status' in patch && old && old.status !== (patch as any).status) n = demoStage(n, 'lead', { ...old, ...patch }, old.status, (patch as any).status, demoWho().name)
+        if (e === 'deals' && 'status' in patch && old && old.status !== (patch as any).status) n = demoDealTransition(n, { ...old, ...patch }, old.status, demoWho().name, t)
+        if (old && 'do_not_contact' in patch && !!old.do_not_contact !== !!(patch as any).do_not_contact) {
+          const on = !!(patch as any).do_not_contact
+          n = { ...n, [e]: (n[e] as any[]).map((x) => (x.id === id ? { ...x, do_not_contact_at: on ? new Date().toISOString() : null, do_not_contact_reason: on ? 'manual' : null, ...(on ? {} : { consent_at: new Date().toISOString(), consent_source: 'manual' }) } : x)) } as Data
+        }
         persistDemo(n)
       }
       return n
@@ -229,6 +246,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       setData(before)
       notify(res.json?.error ?? 'Update failed', 'err')
     } else if (res.json.dropped?.length) notify(t('warn.mig74'), 'err')
+    else if ((e === 'deals' || e === 'leads') && 'status' in patch) await reload() // etapes, taches et statut du bien sont mis a jour cote serveur
   }
 
   const remove: Ctx['remove'] = async (e, id) => {
@@ -341,17 +359,29 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
     notify('Demo data reset')
   }
 
-  const sendWhatsapp: Ctx['sendWhatsapp'] = async (name, phone, body) => {
+  const sendWhatsapp: Ctx['sendWhatsapp'] = async (name, phone, body, opts) => {
     if (mode === 'demo') {
-      await create('messages', { contact_name: name, contact_phone: phone ?? null, direction: 'out', body, unread: false })
+      // Lot 5 : meme garde-fou que le serveur (contact "ne plus contacter")
+      if (phone && [...data.leads, ...data.clients, ...data.owners].some((c: any) => c.do_not_contact && sameNumber(c.phone, phone))) { notify(t('dnc.blocked'), 'err'); return false }
+      const m = await create('messages', { contact_name: name, contact_phone: phone ?? null, direction: 'out', body, unread: false, ...(opts?.propertyId ? { property_id: opts.propertyId, property_auto: false } : {}) })
+      if (opts?.propertyId) { const p = data.properties.find((x) => x.id === opts.propertyId); setData((d) => persist({ ...d, sends: [{ id: uid(), property_id: opts.propertyId!, property_title: p?.title ?? '', contact_name: name, contact_phone: phone ?? null, agent: me?.name ?? '', channel: 'whatsapp', created_at: new Date().toISOString() }, ...(d.sends ?? [])] })) }
       notify('Saved (demo mode - nothing was actually sent)')
-      return
+      return !!m
     }
-    const res = await api('/api/immo?r=whatsapp', { method: 'POST', body: JSON.stringify({ name, phone, body }) })
-    if (!res.ok) return notify(res.json?.error ?? 'Could not send', 'err')
-    setData((d) => ({ ...d, messages: [res.json.row, ...d.messages] }))
-    if (res.json.sent) notify('Message sent on WhatsApp')
+    const res = await api('/api/immo?r=whatsapp', { method: 'POST', body: JSON.stringify({ name, phone, body, property_id: opts?.propertyId, lang: opts?.lang ?? lang, template: opts?.template }) })
+    if (!res.ok) { notify(res.json?.code === 'opted_out' ? t('dnc.blocked') : res.json?.code === 'window_closed' ? t('wa.window.closed') : res.json?.error ?? 'Could not send', 'err'); return false }
+    setData((d) => ({ ...d, messages: [res.json.row, ...d.messages], sends: res.json.send ? [res.json.send, ...(d.sends ?? [])] : d.sends }))
+    if (res.json.sent) notify(res.json.warning ? t('wa.fallback') : 'Message sent on WhatsApp')
     else notify(`Saved but not sent: ${res.json.warning ?? 'WhatsApp not configured'}`, 'err')
+    return !!res.json.sent
+  }
+
+  const acceptCharter: Ctx['acceptCharter'] = async () => {
+    if (mode === 'demo') { try { localStorage.setItem('imo_charter', CHARTER_VERSION) } catch {}; setCharter((c) => ({ ...c, accepted: true })); return true }
+    const res = await api('/api/immo?r=charter', { method: 'POST', body: JSON.stringify({ lang }) })
+    if (!res.ok) { notify(res.json?.error ?? 'Could not save', 'err'); return false }
+    setCharter((c) => ({ ...c, accepted: true }))
+    return true
   }
 
   const uploadPhoto: Ctx['uploadPhoto'] = async (file) => {
@@ -407,7 +437,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
 
   return (
     <C.Provider
-      value={{ mode, data, agency, clientId, canDelete: isManager(me?.role), aiUsage, aiModel, logo, me, team, agents, liveEmpty, dark, toggleDark, lang, setLang, t, tf, activeAgents, reassignLeads, inviteMember, removeMember, setMemberMenus, loadActivity, lastActivity, loadAssignments, create, update, remove, seedLive, resetDemo, sendWhatsapp, ai, uploadPhoto, callApi: api, reload, notify, toasts }}
+      value={{ mode, data, agency, clientId, canDelete: isManager(me?.role), aiUsage, aiModel, logo, me, team, agents, liveEmpty, dark, toggleDark, lang, setLang, t, tf, activeAgents, charter, acceptCharter, reassignLeads, inviteMember, removeMember, setMemberMenus, loadActivity, lastActivity, loadAssignments, create, update, remove, seedLive, resetDemo, sendWhatsapp, ai, uploadPhoto, callApi: api, reload, notify, toasts }}
     >
       {children}
     </C.Provider>

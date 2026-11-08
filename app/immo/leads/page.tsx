@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Download, CalendarDays, Target, Plus, Search, Flame, Phone, Pencil, Trash2, UserCheck, Handshake, MessageCircle, Repeat, AlertTriangle } from 'lucide-react'
+import { Download, CalendarDays, Target, Plus, Search, Flame, Phone, Pencil, Trash2, UserCheck, Handshake, MessageCircle, Repeat, AlertTriangle, Ban, IdCard } from 'lucide-react'
 import { useImmo } from '@/lib/immo-os/store'
 import { Avatar, Badge, Btn, Card, Field, Modal, PageHead } from '@/lib/immo-os/ui'
 import { LEAD_COLUMNS, SOURCES, type Lead, type LeadStatus } from '@/lib/immo-os/types'
@@ -14,7 +14,7 @@ import { isOrphan, orphanLeadsOf } from '@/lib/immo-os/orphans'
 import ReassignModal from '../reassign-modal'
 import OrphanPlan from '../orphan-plan'
 
-const blank = (agent = ''): Partial<Lead> => ({ name: '', phone: '', email: '', interest: '', property_id: null, budget: 0, status: 'new', source: 'whatsapp', agent, notes: '', beds_wanted: null })
+const blank = (agent = ''): Partial<Lead> => ({ name: '', phone: '', email: '', interest: '', property_id: null, budget: 0, status: 'new', source: 'whatsapp', agent, notes: '', beds_wanted: null, do_not_contact: false })
 
 export default function LeadsPage() {
   const { data, agents, activeAgents, create, update, remove, notify, me, callApi, reload, mode, canDelete, t, tf, loadAssignments } = useImmo()
@@ -77,6 +77,9 @@ export default function LeadsPage() {
   }
   const touch = (l: Lead) => update('leads', l.id, { last_contact: new Date().toISOString(), score: scoreLead({ ...l, last_contact: new Date().toISOString() }, data.properties) })
   const set = (k: keyof Lead, v: unknown) => setEdit((e) => ({ ...e, [k]: v }))
+  const leadBefore = edit?.id ? data.leads.find((x) => x.id === edit.id) : undefined
+  // n°41 / n°81 : leads chauds sans contact depuis 12 h (meme regle que l'alerte WhatsApp envoyee a l'agent)
+  const hotWaiting = useMemo(() => data.leads.filter((l) => isHot(l) && !l.do_not_contact && Date.now() - new Date(l.last_contact).getTime() > 12 * 3600000), [data.leads])
   const orphans = useMemo(() => orphanLeadsOf(data.leads, activeAgents), [data.leads, activeAgents])
   // Historique des affectations du lead ouvert (qui l'avait, depuis quand)
   useEffect(() => {
@@ -91,6 +94,12 @@ export default function LeadsPage() {
   return (
     <div>
       <PageHead icon={<Target size={28} />} title="Leads" sub="Drag a card to move it through your pipeline" right={<>{manager && <Btn onClick={() => setReassignOpen(true)}><Repeat size={15} /> {t('ra.btn')}</Btn>}{manager && <Btn onClick={openImport}><Download size={15} /> Import prospects</Btn>}<Link href="/immo/visits"><Btn><CalendarDays size={15} /> Calendar</Btn></Link><Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> Add lead</Btn></>} />
+      {hotWaiting.length > 0 && (
+        <div className="mb-4 rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-3" style={{ background: '#FEE2E2', color: '#991B1B', border: '1px solid #EF444455' }} role="status">
+          <Flame size={17} /><div className="flex-1 min-w-[200px] text-[13px]"><b>{tf('hot.banner', { n: hotWaiting.length })}</b>: {hotWaiting.slice(0, 4).map((l) => l.name).join(', ')}</div>
+          <Btn onClick={() => setQ(hotWaiting[0].name)}>{hotWaiting[0].name}</Btn>
+        </div>
+      )}
       {manager && orphans.length > 0 && (
         <div className="mb-4 rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-3" style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #F59E0B55' }} role="alert">
           <AlertTriangle size={17} /><div className="flex-1 min-w-[200px] text-[13px]"><b>{tf('orph.banner', { n: orphans.length })}</b> {t('orph.why')}</div>
@@ -119,12 +128,13 @@ export default function LeadsPage() {
                   return (
                     <div key={l.id} draggable onDragStart={() => setDrag(l.id)} onDragEnd={() => { setDrag(null); setOver(null) }} className="imo-card p-3 cursor-grab text-[12.5px]">
                       <div className="flex items-center gap-2"><Avatar name={l.name} size={28} /><div className="min-w-0 flex-1"><div className="font-semibold text-[13px] truncate">{l.name}</div><div className="t-muted truncate">{p ? `${p.title} · ${p.area}` : l.interest || '-'}</div></div>
-                        {isHot(l) && <Badge color="#EF4444"><Flame size={11} className="mr-0.5" />Hot</Badge>}</div>
+                        {isHot(l) && <Badge color="#EF4444"><Flame size={11} className="mr-0.5" />{t('hot.badge')}</Badge>}{l.do_not_contact && <Badge color="#7F1D1D"><Ban size={11} className="mr-0.5" />{t('dnc.badge')}</Badge>}</div>
                       <div className="flex items-center justify-between mt-2"><b>{qar(l.budget)}</b><span className="t-muted">{ago(l.last_contact)}</span></div>
                       <div className="flex items-center gap-2 mt-1.5"><div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--border)' }}><div className="h-1.5 rounded-full" style={{ width: `${l.score}%`, background: l.score >= 75 ? '#16A34A' : l.score >= 50 ? '#2563EB' : '#94A3B8' }} /></div><span className="t-muted text-[11px]">AI score {l.score}</span></div>
                       <div className="flex items-center gap-1 mt-2 flex-wrap">
                         {l.phone && <a href={`tel:${l.phone}`} onClick={() => touch(l)} className="imo-btn" style={{ padding: '3px 7px' }} aria-label="Call"><Phone size={12} /></a>}
-                        <Link href="/immo/whatsapp" className="imo-btn" style={{ padding: '3px 7px' }} aria-label="WhatsApp"><MessageCircle size={12} /></Link>
+                        <Link href={`/immo/whatsapp?c=${encodeURIComponent(l.name)}`} className="imo-btn" style={{ padding: '3px 7px' }} aria-label="WhatsApp"><MessageCircle size={12} /></Link>
+                        <Link href={`/immo/client?id=${l.id}`} className="imo-btn" style={{ padding: '3px 7px' }} aria-label={t('pf.title')} title={t('pf.title')}><IdCard size={12} /></Link>
                         <Btn style={{ padding: '3px 7px' }} onClick={() => toClient(l)} title="Convert to client" aria-label="Convert to client"><UserCheck size={12} /></Btn>
                         <Btn style={{ padding: '3px 7px' }} onClick={() => toDeal(l)} title="Create deal" aria-label="Create deal"><Handshake size={12} /></Btn>
                         <Btn style={{ padding: '3px 7px' }} onClick={() => setEdit(l)} aria-label="Edit"><Pencil size={12} /></Btn>
@@ -154,6 +164,9 @@ export default function LeadsPage() {
             <Field label="Assigned agent"><select className="imo-select" value={edit.agent ?? ''} onChange={(e) => set('agent', e.target.value)}><option value="">- unassigned -</option>{(edit.agent && !activeAgents.includes(edit.agent) ? [edit.agent, ...activeAgents] : activeAgents.length ? activeAgents : agents).map((a) => <option key={a}>{a}</option>)}</select></Field>
             <Field label={t('beds.wanted')}><input type="number" min={0} max={20} className="imo-input" value={edit.beds_wanted ?? ''} onChange={(e) => set('beds_wanted', e.target.value === '' ? null : Number(e.target.value))} /></Field>
             <div className="sm:col-span-2"><Field label="Notes"><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field></div>
+            <div className="sm:col-span-2">
+              <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-1" checked={!!edit.do_not_contact} disabled={!!edit.id && !!leadBefore?.do_not_contact && !manager} onChange={(e) => set('do_not_contact', e.target.checked)} /><span><b>{t('dnc.label')}</b><span className="block t-muted text-[12px]">{t('dnc.help')}{leadBefore?.do_not_contact && !manager ? ` ${t('dnc.manager')}` : ''}</span></span></label>
+            </div>
             {edit.id && (
               <div className="sm:col-span-2">
                 <div className="imo-label">{t('as.title')}</div>

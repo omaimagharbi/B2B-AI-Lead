@@ -4,6 +4,8 @@ import { authentifierClientUser } from '@/lib/auth-api'
 import { quotaIAImmo } from '@/lib/immo-os/ai-quota'
 import { activeAi } from '@/lib/immo-os/ai-model'
 import { isManager } from '@/lib/immo-os/permissions'
+import { CHARTER_VERSION } from '@/lib/immo-os/policy'
+import { tableAbsente } from '@/lib/immo-os/server'
 
 // Menus /immo masques pour un membre : entrees "immo:<menu>" de client_users.onglets_masques (les autres valeurs concernent le tableau de bord classique)
 const immoHidden = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.startsWith('immo:')).map((x) => x.slice(5)) : [])
@@ -18,10 +20,16 @@ export async function GET(req: NextRequest) {
   ])
   const moi = (team ?? []).find((m) => m.id === auth.clientUserId)
   const ia = await quotaIAImmo(auth.clientId)
+  // Lot 5 : le membre a-t-il accepte la charte d'utilisation (version courante) ? null = migration 78 pas faite (on ne bloque pas)
+  let charterAccepted: boolean | null = null
+  const { data: acc, error: accErr } = await supabaseAdmin.from('re_charter_acceptances').select('id').eq('client_id', auth.clientId).eq('user_id', auth.clientUserId).eq('version', CHARTER_VERSION).limit(1)
+  if (!accErr) charterAccepted = !!acc?.length
+  else if (!tableAbsente(accErr)) charterAccepted = null
   return NextResponse.json({
     clientId: auth.clientId,
     ai: { used: ia.used, limit: ia.limit },
     aiModel: activeAi(),
+    charter: { version: CHARTER_VERSION, accepted: charterAccepted },
     agency: cabinet?.nom_entreprise ?? 'My Agency',
     logo: cabinet?.logo_url ?? null,
     me: { id: auth.clientUserId, name: moi?.nom_complet ?? 'Me', role: auth.role, photo: moi?.photo_url ?? null, hidden: immoHidden(moi?.onglets_masques) },

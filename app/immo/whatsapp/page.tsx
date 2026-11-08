@@ -1,14 +1,24 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MessageCircle, Send, Sparkles, Plus, Search } from 'lucide-react'
+import Link from 'next/link'
+import { MessageCircle, Send, Sparkles, Plus, Search, Ban, Building2, ClipboardCheck, ExternalLink } from 'lucide-react'
 import { useImmo } from '@/lib/immo-os/store'
-import { Avatar, Btn, Card, Empty, Field, Modal, PageHead } from '@/lib/immo-os/ui'
-import { ago, contextSummary } from '@/lib/immo-os/helpers'
+import { Avatar, Badge, Btn, Card, Empty, Field, Modal, PageHead, PropImage } from '@/lib/immo-os/ui'
+import { ago, contextSummary, qar } from '@/lib/immo-os/helpers'
 import { fallbackReply } from '@/lib/immo-os/fallbacks'
+import { OUTCOMES, type OutcomeCode } from '@/lib/immo-os/types'
+import { conversationProperty } from '@/lib/immo-os/property-detect'
+import { composePropertyMessage } from '@/lib/immo-os/property-msg'
+import { sameContact } from '@/lib/immo-os/profile'
+import { sameNumber } from '@/lib/immo-os/inbound-pure'
+import { agoLocal } from '@/lib/immo-os/ago'
+import { isManager } from '@/lib/immo-os/permissions'
+import { LANGS, type Lang } from '@/lib/immo-os/i18n'
+import { renderTemplate, templateVars, windowState } from '@/lib/immo-os/wa-window'
 
 export default function WhatsAppPage() {
-  const { data, sendWhatsapp, update, ai, notify, mode } = useImmo()
+  const { data, sendWhatsapp, update, create, ai, notify, mode, t, tf, lang, me, clientId, callApi } = useImmo()
   const [active, setActive] = useState<string | null>(null)
   const [text, setText] = useState('')
   const [q, setQ] = useState('')
@@ -16,7 +26,19 @@ export default function WhatsAppPage() {
   const [sending, setSending] = useState(false)
   const [newOpen, setNewOpen] = useState(false)
   const [target, setTarget] = useState('')
+  const [oc, setOc] = useState<OutcomeCode | ''>('')
+  const [ocNote, setOcNote] = useState('')
+  const [spOpen, setSpOpen] = useState(false)
+  const [tplOpen, setTplOpen] = useState(false)
+  const [wa, setWa] = useState<{ channel: 'meta' | 'greenapi'; templates: WaTemplate[] } | null>(null)
+  useEffect(() => { if (mode === 'live') callApi('/api/immo?r=wa').then((r) => { if (r.ok) setWa({ channel: r.json.channel, templates: r.json.templates ?? [] }) }) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [mode])
+  const [, tick] = useState(0)
+  useEffect(() => { const i = setInterval(() => tick((x) => x + 1), 60000); return () => clearInterval(i) }, [])
   const end = useRef<HTMLDivElement>(null)
+  const manager = isManager(me?.role)
+
+  // /immo/whatsapp?c=<nom> : ouvre directement la conversation d'un contact (lien depuis la fiche client)
+  useEffect(() => { const c = new URLSearchParams(window.location.search).get('c'); if (c) setActive(c) }, [])
 
   const threads = useMemo(() => {
     const by: Record<string, typeof data.messages> = {}
@@ -24,14 +46,16 @@ export default function WhatsAppPage() {
     return Object.entries(by)
       .map(([name, ms]) => {
         const s = [...ms].sort((a, b) => a.created_at.localeCompare(b.created_at))
-        return { name, ms: s, last: s[s.length - 1], unread: s.filter((x) => x.unread).length, phone: s.find((x) => x.contact_phone)?.contact_phone ?? null }
+        const phone = s.find((x) => x.contact_phone)?.contact_phone ?? null
+        const outcome = (data.outcomes ?? []).filter((o) => sameContact({ name, phone }, o.contact_name, o.contact_phone)).sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+        return { name, ms: s, last: s[s.length - 1], unread: s.filter((x) => x.unread).length, phone, outcome }
       })
-      .filter((t) => !q || t.name.toLowerCase().includes(q.toLowerCase()))
+      .filter((x) => !q || x.name.toLowerCase().includes(q.toLowerCase()))
       .sort((a, b) => b.last.created_at.localeCompare(a.last.created_at))
-  }, [data.messages, q])
+  }, [data.messages, data.outcomes, q])
 
   useEffect(() => { if (!active && threads[0]) setActive(threads[0].name) }, [threads, active])
-  const cur = threads.find((t) => t.name === active) ?? null
+  const cur = threads.find((x) => x.name === active) ?? null
 
   // Marque la conversation comme lue a l'ouverture
   useEffect(() => {
@@ -41,11 +65,29 @@ export default function WhatsAppPage() {
   }, [active])
   useEffect(() => { end.current?.scrollIntoView({ block: 'nearest' }) }, [cur?.ms.length, active])
 
+  // Fiches liees a la conversation (lead / client / proprietaire), bien en discussion, "ne plus contacter"
+  const rel = useMemo(() => {
+    if (!cur) return null
+    const c = { name: cur.name, phone: cur.phone }
+    const lead = data.leads.find((l) => sameContact(c, l.name, l.phone)) ?? null
+    const client = data.clients.find((x) => sameContact(c, x.name, x.phone)) ?? null
+    const owner = data.owners.find((o) => sameContact(c, o.name, o.phone)) ?? null
+    const dnc = [lead, client, owner].some((r) => r?.do_not_contact) || (!!cur.phone && [...data.leads, ...data.clients, ...data.owners].some((r) => r.do_not_contact && sameNumber(r.phone, cur.phone)))
+    const cp = conversationProperty(cur.ms, data.properties, lead?.property_id)
+    const prop = cp ? data.properties.find((p) => p.id === cp.propertyId) ?? null : null
+    const propOwner = prop?.owner_id ? data.owners.find((o) => o.id === prop.owner_id) ?? null : null
+    const sent = (data.sends ?? []).filter((s) => sameContact(c, s.contact_name, s.contact_phone))
+    return { lead, client, owner, dnc, cp, prop, propOwner, sent }
+  }, [cur, data])
+
+  // Lot 6a : fenetre de 24 h (numero Meta uniquement) = dernier message recu du client
+  const win = useMemo(() => (wa?.channel === 'meta' && cur ? windowState([...cur.ms].reverse().find((m) => m.direction === 'in')?.created_at) : null), [wa, cur, data.messages])
+  const closed = !!win && !win.open
   const send = async () => {
-    if (!cur || !text.trim() || sending) return
+    if (!cur || !text.trim() || sending || rel?.dnc || closed) return
     setSending(true)
-    await sendWhatsapp(cur.name, cur.phone, text.trim())
-    setText('')
+    const ok = await sendWhatsapp(cur.name, cur.phone, text.trim())
+    if (ok || mode === 'demo') setText('')
     setSending(false)
   }
 
@@ -68,25 +110,43 @@ export default function WhatsAppPage() {
     const c = contacts.find((x) => x.name === target)
     if (!c) return
     setNewOpen(false)
-    if (!threads.some((t) => t.name === c.name)) {
+    if (!threads.some((x) => x.name === c.name)) {
       await sendWhatsapp(c.name, c.phone, `Hello ${c.name.split(' ')[0]}, this is a message from your real estate agent. How can I help you today?`)
     }
     setActive(c.name)
   }
 
+  // n°99 : resultat du contact de cette conversation
+  const saveOutcome = async () => {
+    if (!cur || !oc) return
+    await create('outcomes', { contact_name: cur.name, contact_phone: cur.phone, outcome: oc, note: ocNote.trim() || null })
+    setOc(''); setOcNote('')
+    notify(t('oc.saved'))
+  }
+  // n°89 : choisir a la main le bien d'une conversation (le dernier message est rattache a ce bien)
+  const setProperty = async (pid: string) => {
+    const last = cur?.ms[cur.ms.length - 1]
+    if (!last || !pid) return
+    await update('messages', last.id, { property_id: pid, property_auto: false })
+    notify(t('xv.linked'))
+  }
+  const propTitle = (id?: string | null) => data.properties.find((p) => p.id === id)?.title ?? ''
+  const srcLabel = rel?.cp ? t(rel.cp.source === 'message' ? 'xv.src.message' : rel.cp.source === 'detected' ? 'xv.src.detected' : 'xv.src.lead') : ''
+
   return (
     <div>
       <PageHead icon={<MessageCircle size={28} style={{ color: '#22C55E' }} />} title="WhatsApp" sub={mode === 'demo' ? 'Demo mode - messages are not actually sent' : 'Messages are sent through your connected WhatsApp number'} right={<Btn kind="primary" onClick={() => setNewOpen(true)}><Plus size={15} /> New chat</Btn>} />
       <Card pad={false}>
-        <div className="grid" style={{ gridTemplateColumns: 'minmax(220px,300px) 1fr', minHeight: 520, height: 'calc(100vh - 220px)' }}>
-          <div className="flex flex-col min-h-0" style={{ borderRight: '1px solid var(--border)' }}>
+        <div className="grid grid-cols-[minmax(220px,300px)_1fr] xl:grid-cols-[minmax(220px,300px)_1fr_minmax(250px,310px)]" style={{ minHeight: 520, height: 'calc(100vh - 220px)' }}>
+          <div className="flex flex-col min-h-0" style={{ borderInlineEnd: '1px solid var(--border)' }}>
             <div className="p-3"><div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 t-muted" /><input className="imo-input" style={{ paddingLeft: 30 }} placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} /></div></div>
             <div className="flex-1 overflow-y-auto imo-scroll">
-              {threads.map((t) => (
-                <button key={t.name} onClick={() => setActive(t.name)} className="w-full text-left flex items-center gap-2.5 px-3 py-2.5" style={{ borderBottom: '1px solid var(--border)', background: t.name === active ? 'var(--soft)' : 'transparent', color: 'var(--text)' }}>
-                  <Avatar name={t.name} size={36} />
-                  <div className="min-w-0 flex-1"><div className="text-[13px] font-semibold truncate">{t.name}</div><div className="text-[12px] t-muted truncate">{t.last.direction === 'out' ? 'You: ' : ''}{t.last.body}</div></div>
-                  <div className="text-right shrink-0"><div className="text-[10.5px] t-muted">{ago(t.last.created_at)}</div>{t.unread > 0 && <span className="inline-flex items-center justify-center text-[10px] font-bold rounded-full w-4 h-4" style={{ background: '#22C55E', color: '#fff' }}>{t.unread}</span>}</div>
+              {threads.map((x) => (
+                <button key={x.name} onClick={() => setActive(x.name)} className="w-full text-start flex items-center gap-2.5 px-3 py-2.5" style={{ borderBottom: '1px solid var(--border)', background: x.name === active ? 'var(--soft)' : 'transparent', color: 'var(--text)' }}>
+                  <Avatar name={x.name} size={36} />
+                  <div className="min-w-0 flex-1"><div className="text-[13px] font-semibold truncate">{x.name}</div><div className="text-[12px] t-muted truncate">{x.last.direction === 'out' ? 'You: ' : ''}{x.last.body}</div>
+                    {x.outcome && <div className="mt-0.5"><Badge color={OUTCOMES.find((o) => o.v === x.outcome!.outcome)?.color}>{t('oc.' + x.outcome.outcome)}</Badge></div>}</div>
+                  <div className="text-end shrink-0"><div className="text-[10.5px] t-muted">{ago(x.last.created_at)}</div>{x.unread > 0 && <span className="inline-flex items-center justify-center text-[10px] font-bold rounded-full w-4 h-4" style={{ background: '#22C55E', color: '#fff' }}>{x.unread}</span>}</div>
                 </button>
               ))}
               {threads.length === 0 && <Empty title="No conversations" sub="Start a new chat with a lead or client." />}
@@ -96,37 +156,165 @@ export default function WhatsAppPage() {
           <div className="flex flex-col min-h-0 min-w-0">
             {cur ? (
               <>
-                <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}><Avatar name={cur.name} size={36} /><div><div className="font-semibold text-[14px]">{cur.name}</div><div className="text-[12px] t-muted">{cur.phone ?? 'No phone number'}</div></div></div>
+                <div className="flex items-center gap-3 px-4 py-3 flex-wrap" style={{ borderBottom: '1px solid var(--border)' }}>
+                  <Avatar name={cur.name} size={36} />
+                  <div className="min-w-0 flex-1"><div className="font-semibold text-[14px] flex items-center gap-2 flex-wrap">{cur.name}{rel?.dnc && <Badge color="#EF4444"><Ban size={11} className="me-0.5" />{t('dnc.badge')}</Badge>}{win && <Badge color={win.open ? '#16A34A' : '#B45309'}>{win.open ? tf('wa.window.open', { h: Math.max(1, Math.round(win.msLeft / 3600000)) }) : t('wa.window.closed')}</Badge>}</div><div className="text-[12px] t-muted" dir="ltr">{cur.phone ?? 'No phone number'}</div>
+                    {rel?.prop && <div className="text-[11.5px] mt-0.5"><Building2 size={11} className="inline me-1" />{tf('xv.re', { title: rel.prop.title })}</div>}</div>
+                  {(rel?.client || rel?.lead) && <Link href={`/immo/client?id=${(rel.client ?? rel.lead)!.id}`} className="imo-btn" style={{ padding: '4px 9px', fontSize: 12 }}><ExternalLink size={12} /> {t('xv.profile')}</Link>}
+                </div>
+                {/* n°99 resultat du contact + n°4 envoi d'un bien */}
+                <div className="flex items-center gap-2 flex-wrap px-4 py-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--card)' }}>
+                  <ClipboardCheck size={15} className="t-muted" />
+                  {cur.outcome ? <Badge color={OUTCOMES.find((o) => o.v === cur.outcome!.outcome)?.color}>{t('oc.' + cur.outcome.outcome)}</Badge> : <span className="text-[12px] t-muted">{t('oc.none')}</span>}
+                  <select className="imo-select" style={{ width: 170, padding: '4px 8px', fontSize: 12.5 }} value={oc} onChange={(e) => setOc(e.target.value as OutcomeCode | '')} aria-label={t('oc.title')}><option value="">{t('oc.title')}…</option>{OUTCOMES.map((o) => <option key={o.v} value={o.v}>{t('oc.' + o.v)}</option>)}</select>
+                  {oc && <><input className="imo-input" style={{ width: 170, padding: '4px 8px', fontSize: 12.5 }} placeholder={t('oc.note')} value={ocNote} onChange={(e) => setOcNote(e.target.value)} /><Btn kind="primary" style={{ padding: '4px 10px', fontSize: 12.5 }} onClick={saveOutcome}>{t('oc.save')}</Btn></>}
+                  <div className="ms-auto"><Btn style={{ padding: '4px 10px', fontSize: 12.5 }} onClick={() => setSpOpen(true)} disabled={!!rel?.dnc || closed} title={closed ? t('wa.window.closed') : undefined}><Building2 size={13} /> {t('sp.btn')}</Btn></div>
+                </div>
                 <div className="flex-1 overflow-y-auto imo-scroll p-4 flex flex-col gap-2" style={{ background: 'var(--soft)' }}>
-                  {cur.ms.map((m) => (
-                    <div key={m.id} className={`flex ${m.direction === 'out' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`${m.direction === 'out' ? 'imo-bubble-out' : 'imo-bubble-in'} px-3.5 py-2 text-[13px] max-w-[75%] whitespace-pre-wrap`}>{m.body}<div className="text-[10px] opacity-60 text-right mt-0.5">{ago(m.created_at)}</div></div>
+                  {cur.ms.map((m, i) => (
+                    <div key={m.id} className={`flex flex-col ${m.direction === 'out' ? 'items-end' : 'items-start'}`}>
+                      {m.property_id && m.property_id !== cur.ms[i - 1]?.property_id && <span className="text-[10.5px] t-muted mb-0.5"><Building2 size={10} className="inline me-1" />{tf('xv.re', { title: propTitle(m.property_id) })}{m.property_auto ? ` · ${t('xv.auto')}` : ''}</span>}
+                      <div className={`${m.direction === 'out' ? 'imo-bubble-out' : 'imo-bubble-in'} px-3.5 py-2 text-[13px] max-w-[75%] whitespace-pre-wrap`}>{m.body}<div className="text-[10px] opacity-60 text-end mt-0.5">{ago(m.created_at)}{m.direction === 'out' && m.wa_status ? ` · ${t('wa.status.' + m.wa_status)}` : ''}</div></div>
                     </div>
                   ))}
                   <div ref={end} />
                 </div>
                 <div className="p-3 flex flex-col gap-2" style={{ borderTop: '1px solid var(--border)' }}>
-                  <div className="flex"><Btn onClick={suggest} disabled={busy} style={{ padding: '5px 10px', fontSize: 12 }}><Sparkles size={13} style={{ color: 'var(--gold)' }} /> {busy ? 'Thinking…' : 'Suggest reply with AI'}</Btn></div>
+                  {closed && !rel?.dnc && <div className="rounded-md px-3 py-2 text-[12.5px] flex items-center gap-2 flex-wrap" style={{ background: '#FEF3C7', color: '#92400E' }} role="status"><span className="flex-1">{t('wa.rule24')}</span><Btn kind="gold" onClick={() => setTplOpen(true)} disabled={!wa?.templates.some((x) => x.status === 'APPROVED')}>{t('wa.tpl.send')}</Btn></div>}
+                  {rel?.dnc && <div className="rounded-md px-3 py-2 text-[12.5px] flex items-center gap-2" style={{ background: '#FEE2E2', color: '#991B1B' }} role="alert"><Ban size={14} /> {t('dnc.blocked')}</div>}
+                  <div className="flex"><Btn onClick={suggest} disabled={busy || !!rel?.dnc || closed} style={{ padding: '5px 10px', fontSize: 12 }}><Sparkles size={13} style={{ color: 'var(--gold)' }} /> {busy ? 'Thinking…' : 'Suggest reply with AI'}</Btn></div>
                   <div className="flex gap-2 items-end">
-                    <textarea className="imo-textarea" style={{ minHeight: 44, height: 44 }} placeholder="Type a message…" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
-                    <Btn kind="primary" onClick={send} disabled={sending || !text.trim()} aria-label="Send"><Send size={15} /></Btn>
+                    <textarea className="imo-textarea" style={{ minHeight: 44, height: 44 }} placeholder="Type a message…" value={text} disabled={!!rel?.dnc || closed} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
+                    <Btn kind="primary" onClick={send} disabled={sending || !text.trim() || !!rel?.dnc || closed} aria-label="Send"><Send size={15} /></Btn>
                   </div>
                 </div>
               </>
             ) : <Empty title="Select a conversation" />}
           </div>
+
+          {/* n°89 : vue croisee bien + conversation + proprietaire */}
+          <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto imo-scroll p-3 gap-3" style={{ borderInlineStart: '1px solid var(--border)' }} aria-label={t('xv.title')}>
+            {cur && rel && (
+              <>
+                <div className="text-[12px] font-semibold uppercase tracking-wide t-muted">{t('xv.title')}</div>
+                <div className="imo-card p-3">
+                  <div className="imo-label">{t('xv.prop')}</div>
+                  {rel.prop ? (
+                    <>
+                      <PropImage p={rel.prop} h={90} />
+                      <div className="mt-2 text-[13px] font-semibold">{rel.prop.title}</div>
+                      <div className="text-[12px] t-muted">{rel.prop.area} · {qar(rel.prop.price)}{rel.prop.listing === 'rent' ? ` ${t('sp.permonth')}` : ''}</div>
+                      <div className="mt-1 flex gap-1.5 flex-wrap"><Badge color="#2563EB">{rel.prop.status}</Badge>{rel.cp && <Badge color="#64748B">{srcLabel}{rel.cp.auto ? ` · ${t('xv.auto')}` : ''}</Badge>}</div>
+                    </>
+                  ) : <div className="text-[12.5px] t-muted">{t('xv.none')}</div>}
+                  <select className="imo-select mt-2" style={{ fontSize: 12.5 }} value="" onChange={(e) => setProperty(e.target.value)} aria-label={t('xv.change')}><option value="">{rel.prop ? t('xv.change') : t('xv.choose')}</option>{data.properties.map((p) => <option key={p.id} value={p.id}>{p.title} · {p.area}</option>)}</select>
+                </div>
+                <div className="imo-card p-3">
+                  <div className="imo-label">{t('xv.owner')}</div>
+                  {!rel.prop ? <div className="text-[12.5px] t-muted">{t('xv.none')}</div>
+                    : !manager ? <div className="text-[12.5px] t-muted">{t('xv.owner.hidden')}</div>
+                    : rel.propOwner ? (
+                      <div className="text-[13px] grid gap-1"><b>{rel.propOwner.name}</b><span dir="ltr" className="t-muted text-[12px]">{rel.propOwner.phone ?? '-'}</span>
+                        <span className="t-muted text-[12px]">{tf('xv.owner.last', { when: agoLocal(rel.propOwner.last_contact, t, tf) })}</span>
+                        {threads.some((x) => x.name === rel.propOwner!.name) ? <Btn style={{ padding: '4px 9px', fontSize: 12 }} onClick={() => setActive(rel.propOwner!.name)}>{t('xv.owner.chat')}</Btn> : <span className="t-muted text-[11.5px]">{t('xv.owner.nochat')}</span>}</div>
+                    ) : <div className="text-[12.5px] t-muted">{t('xv.owner.none')}</div>}
+                </div>
+                <div className="imo-card p-3">
+                  <div className="imo-label">{t('xv.contact')}</div>
+                  <div className="text-[13px] grid gap-1">
+                    {rel.lead && <div><Badge color="#8B5CF6">{t('st.' + rel.lead.status)}</Badge> <span className="t-muted text-[12px]">{rel.lead.agent ?? t('pf.unassigned')}</span></div>}
+                    {rel.client && <div><Badge color="#2563EB">{rel.client.kind}</Badge></div>}
+                    {rel.owner && manager && <div><Badge color="#B45309">{t('xv.owner')}</Badge></div>}
+                  </div>
+                </div>
+                <div className="imo-card p-3">
+                  <div className="imo-label">{t('sd.title')}</div>
+                  {rel.sent.length === 0 ? <div className="text-[12.5px] t-muted">{t('sd.empty')}</div> : <div className="grid gap-1 text-[12.5px]">{rel.sent.slice(0, 6).map((s) => <div key={s.id} className="flex justify-between gap-2"><span className="truncate">{s.property_title || propTitle(s.property_id)}</span><span className="t-muted shrink-0">{agoLocal(s.created_at, t, tf)}</span></div>)}</div>}
+                </div>
+              </>
+            )}
+          </aside>
         </div>
       </Card>
+
+      {tplOpen && cur && wa && <TemplateSend name={cur.name} phone={cur.phone} templates={wa.templates.filter((x) => x.status === 'APPROVED')} onClose={() => setTplOpen(false)} />}
+      {spOpen && cur && <SendProperty name={cur.name} phone={cur.phone} onClose={() => setSpOpen(false)} initial={rel?.prop?.id ?? ''} clientId={clientId} />}
 
       {newOpen && (
         <Modal title="New WhatsApp chat" onClose={() => setNewOpen(false)}>
           <Field label="Contact (leads, clients and owners with a phone number)">
-            <select className="imo-select" value={target} onChange={(e) => setTarget(e.target.value)}><option value="">Choose…</option>{contacts.map((c) => <option key={c.id} value={c.name}>{c.name} · {c.phone}</option>)}</select>
+            <select className="imo-select" value={target} onChange={(e) => setTarget(e.target.value)}><option value="">Choose…</option>{contacts.map((c) => <option key={c.id} value={c.name}>{c.name} · {c.phone}{c.do_not_contact ? ` · ${t('dnc.badge')}` : ''}</option>)}</select>
           </Field>
           <div className="text-[12px] t-muted mt-2">A short greeting is sent to open the conversation.</div>
           <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setNewOpen(false)}>Cancel</Btn><Btn kind="primary" disabled={!target} onClick={startNew}>Start chat</Btn></div>
         </Modal>
       )}
     </div>
+  )
+}
+
+// n°4 : envoyer la fiche d'un bien a un client (texte dans la langue choisie + reference + lien public), enregistre dans "biens envoyes"
+function SendProperty({ name, phone, initial, clientId, onClose }: { name: string; phone: string | null; initial: string; clientId: string | null; onClose: () => void }) {
+  const { data, t, tf, lang, sendWhatsapp } = useImmo()
+  const [pid, setPid] = useState(initial)
+  const [l, setL] = useState<Lang>(lang)
+  const [q, setQ] = useState('')
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const list = data.properties.filter((p) => p.status === 'available' && (!q || `${p.title} ${p.area}`.toLowerCase().includes(q.toLowerCase())))
+  useEffect(() => {
+    const p = data.properties.find((x) => x.id === pid)
+    if (!p) return setBody('')
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    setBody(composePropertyMessage(l, { name, property: p, link: clientId ? `${origin}/lead?a=${clientId}&property=${p.id}&lang=${l}` : null }))
+  }, [pid, l, name, clientId, data.properties])
+  const go = async () => {
+    setBusy(true)
+    const ok = await sendWhatsapp(name, phone, body, { propertyId: pid, lang: l })
+    setBusy(false)
+    if (ok) onClose()
+  }
+  return (
+    <Modal title={tf('sp.title', { name })} onClose={onClose} wide>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t('sp.choose')}><div className="grid gap-2"><input className="imo-input" placeholder={t('sp.search')} value={q} onChange={(e) => setQ(e.target.value)} /><select className="imo-select" size={6} value={pid} onChange={(e) => setPid(e.target.value)}>{list.map((p) => <option key={p.id} value={p.id}>{p.title} · {p.area} · {qar(p.price)}</option>)}</select>{list.length === 0 && <div className="text-[12.5px] t-muted">{t('sp.none')}</div>}</div></Field>
+        <div className="grid gap-3 content-start">
+          <Field label={t('sp.lang')}><select className="imo-select" value={l} onChange={(e) => setL(e.target.value as Lang)}>{LANGS.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select></Field>
+          <Field label={t('sp.preview')}><textarea className="imo-textarea" style={{ minHeight: 170 }} dir={l === 'ar' ? 'rtl' : 'ltr'} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 mt-5"><Btn onClick={onClose}>Cancel</Btn><Btn kind="primary" disabled={!pid || !body.trim() || busy} onClick={go}><Send size={14} /> {t('sp.send')}</Btn></div>
+    </Modal>
+  )
+}
+
+type WaTemplate = { name: string; language: string; category: string | null; status: string; body: string | null }
+// Lot 6a : envoi d'un modele approuve (obligatoire hors fenetre de 24 h)
+function TemplateSend({ name, phone, templates, onClose }: { name: string; phone: string | null; templates: WaTemplate[]; onClose: () => void }) {
+  const { t, tf, sendWhatsapp } = useImmo()
+  const [k, setK] = useState('')
+  const [vals, setVals] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const tpl = templates.find((x) => `${x.name}|${x.language}` === k)
+  const n = templateVars(tpl?.body)
+  const params = Array.from({ length: n }, (_, i) => vals[i] ?? (i === 0 ? name.split(' ')[0] : ''))
+  const preview = tpl ? renderTemplate(tpl.body, params) : ''
+  const go = async () => {
+    if (!tpl) return
+    setBusy(true)
+    const ok = await sendWhatsapp(name, phone, preview, { template: { name: tpl.name, language: tpl.language, params } })
+    setBusy(false)
+    if (ok) onClose()
+  }
+  return (
+    <Modal title={t('wa.tpl.send')} onClose={onClose}>
+      <div className="grid gap-3">
+        <div className="text-[12.5px] t-muted">{t('wa.rule24')}</div>
+        <Field label={t('wa.tpl.choose')}><select className="imo-select" value={k} onChange={(e) => { setK(e.target.value); setVals([]) }}><option value="">-</option>{templates.map((x) => <option key={`${x.name}|${x.language}`} value={`${x.name}|${x.language}`}>{x.name} ({x.language})</option>)}</select></Field>
+        {Array.from({ length: n }, (_, i) => <Field key={i} label={tf('wa.tpl.var', { n: i + 1 })}><input className="imo-input" value={params[i]} onChange={(e) => setVals((v) => { const c = [...params]; c[i] = e.target.value; return c })} /></Field>)}
+        {tpl && <Field label={t('wa.tpl.preview')}><div className="rounded-lg p-3 text-[13px] whitespace-pre-wrap" style={{ background: 'var(--soft)' }} dir="auto">{preview}</div></Field>}
+      </div>
+      <div className="flex justify-end gap-2 mt-5"><Btn onClick={onClose}>Cancel</Btn><Btn kind="primary" disabled={!tpl || busy || params.some((x) => !x.trim())} onClick={go}><Send size={14} /> {t('sp.send')}</Btn></div>
+    </Modal>
   )
 }

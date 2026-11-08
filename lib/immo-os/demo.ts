@@ -1,4 +1,4 @@
-import type { Data, Lead, Deal, Message, Zone } from './types'
+import type { Data, Lead, Deal, Message, Zone, StageEvent } from './types'
 import { DEFAULT_MUNICIPALITIES } from './types'
 import { uid, scoreLead } from './helpers'
 
@@ -125,5 +125,10 @@ export function makeDemo(): Data {
     { id: uid(), actor_id: 'demo-m3', actor_name: 'Laila Hassan', actor_role: 'membre', action: 'create', entity: 'clients', record_id: null, label: 'Fatima Al Kuwari', details: {}, created_at: hoursAgo(26) },
     { id: uid(), actor_id: 'demo-m0', actor_name: 'Ahmed Al Saadi', actor_role: 'directeur_commercial', action: 'update', entity: 'properties', record_id: null, label: 'Luxury Villa', details: { fields: ['price', 'photos'] }, created_at: hoursAgo(50) },
   ]
-  return { hierarchy, activity, assignments: [], zones, owners: o, properties, clients, leads, deals, messages, ads: [], visits }
+  // Lot 4 : exemples de resultat du contact, de biens envoyes et d'historique d'etapes
+  const outcomes = [{ id: uid(), contact_name: leads[0].name, contact_phone: leads[0].phone, outcome: 'viewing_booked' as const, note: 'Thursday 4 pm', agent: leads[0].agent, created_at: daysAgo(0, 3) }]
+  const sends = [{ id: uid(), property_id: properties[0].id, property_title: properties[0].title, contact_name: leads[0].name, contact_phone: leads[0].phone, agent: leads[0].agent, channel: 'whatsapp', created_at: daysAgo(1, 2) }]
+  const stages: StageEvent[] = deals.map((x): StageEvent => ({ id: uid(), kind: 'deal', record_id: x.id, record_name: x.title, from_status: null, to_status: 'negotiation', by_name: x.agent, auto: [], created_at: x.created_at })).concat(
+    deals.filter((x) => x.status !== 'negotiation').map((x): StageEvent => ({ id: uid(), kind: 'deal', record_id: x.id, record_name: x.title, from_status: 'negotiation', to_status: x.status, by_name: x.agent, auto: [], created_at: daysAgo(1) })))
+  return { hierarchy, activity, assignments: [], zones, owners: o, properties, clients, leads, deals, messages, ads: [], visits, outcomes, sends, stages }
 }

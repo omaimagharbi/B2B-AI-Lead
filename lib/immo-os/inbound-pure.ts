@@ -12,13 +12,18 @@ export const sameNumber = (a?: string | null, b?: string | null) => {
   return x.slice(-n) === y.slice(-n)
 }
 
+export const IGNORED_CHAT_SUFFIXES = ['@g.us', '@broadcast', '@newsletter'] // groupes, statuts / diffusions, chaines
+export const isIgnoredChat = (chatId: string) => IGNORED_CHAT_SUFFIXES.some((x) => chatId.endsWith(x))
+
 export type Incoming = { phone: string; text: string; senderName: string | null; messageId: string | null }
 
 // Notification GreenAPI "incomingMessageReceived" -> message exploitable, ou null (groupe, pas de numero...).
 export function parseIncoming(body: any): Incoming | null {
   if (body?.typeWebhook !== 'incomingMessageReceived') return null
   const chatId = String(body.senderData?.chatId ?? body.senderData?.sender ?? '')
-  if (!chatId || chatId.endsWith('@g.us')) return null // on ignore les groupes
+  // n°102 : seuls les echanges PRIVES avec le numero de la societe sont traites. Groupes, statuts, diffusions et chaines sont ignores
+  // (jamais de lecture de groupes WhatsApp, ni du WhatsApp personnel des agents : seul le numero de la societe est relie).
+  if (!chatId || isIgnoredChat(chatId) || isIgnoredChat(String(body.senderData?.sender ?? ''))) return null
   const phone = String(body.senderData?.sender ?? chatId).replace('@c.us', '')
   if (digits(phone).length < 8) return null
   const m = body.messageData ?? {}

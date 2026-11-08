@@ -1,0 +1,5 @@
+PATCH V16 -> V17 (lots 4, 5 et 6a)
+1. Copier le contenu de ce dossier PAR-DESSUS le projet V16 (memes chemins).
+2. Supprimer 00_MIGRATIONS_70_a_76_combinees.sql (remplace par 00_MIGRATIONS_70_a_79_combinees.sql).
+3. Supabase : lancer 77, 78 puis 79 (ou le fichier combine 70 a 79).
+4. Aucun fichier du patch ne cree de route API ni de cron.

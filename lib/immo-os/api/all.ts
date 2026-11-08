@@ -6,7 +6,7 @@ import { tableAbsente } from '@/lib/immo-os/server'
 import { filterForViewer } from '@/lib/immo-os/permissions'
 
 // Tables ajoutees par une migration ulterieure : si elles manquent, on renvoie une liste vide (et non le mode demo)
-const OPTIONNELLES = new Set<Entity>(['visits', 'zones', 'hierarchy'])
+const OPTIONNELLES = new Set<Entity>(['visits', 'zones', 'hierarchy', 'outcomes', 'sends', 'stages'])
 
 export async function GET(req: NextRequest) {
   const auth = await contexteImmo(req)
@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
       console.error('immo/all', key, error.message)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
-    result[key] = data ?? []
+    // Le jeton de desinscription (migration 78) ne part jamais vers le navigateur
+    result[key] = (data ?? []).map((r: any) => { if (r && 'token_desinscription' in r) { const { token_desinscription, ...rest } = r; return rest } return r })
   }
   // Un agent ne recoit que ses propres leads / clients / deals / visites (filtre cote serveur, pas cote ecran)
   return NextResponse.json({ demo: false, data: filterForViewer(result, { role: auth.role, name: auth.name }) })
