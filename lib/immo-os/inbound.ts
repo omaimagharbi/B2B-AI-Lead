@@ -16,7 +16,7 @@ export { parseIncoming } from './inbound-pure'
 // Lot 4 (n°105) : le bien dont parle le client est detecte dans le message et rattache a la conversation.
 // Lot 5 (n°55, 83, 102) : STOP / START, groupes ignores (cf. inbound-pure.ts), regle de l'agence pour les numeros inconnus.
 // clientId / channel : renseignes par le webhook Meta (le numero Meta appartient a UNE agence) ; GreenAPI utilise WHATSAPP_IMMO_CLIENT_ID
-export type InboundDeps = { reply?: (phone: string, text: string) => Promise<void>; clientId?: string; channel?: 'meta' | 'greenapi' }
+export type InboundDeps = { reply?: (phone: string, text: string) => Promise<void>; clientId?: string; channel?: 'meta' | 'greenapi'; media?: { url: string; type: 'image' | 'document' | 'audio' | 'video'; name: string | null } }
 
 async function readRule(clientId: string): Promise<UnknownRule> {
   const { data, error } = await supabaseAdmin.from('re_settings').select('unknown_number_rule').eq('client_id', clientId).maybeSingle()
@@ -85,7 +85,7 @@ export async function traiterMessageImmo(inc: Incoming, deps: InboundDeps = {}):
   }
 
   // 4) Enregistrer le message ; un doublon GreenAPI (meme idMessage) est ignore silencieusement.
-  const row = { client_id: found.client_id, contact_name: found.name, contact_phone: inc.phone, direction: 'in', body: inc.text, unread: true, external_id: inc.messageId, ...(deps.channel === 'meta' ? { channel: 'meta' } : {}), ...(propId ? { property_id: propId, property_auto: true } : {}) }
+  const row = { client_id: found.client_id, contact_name: found.name, contact_phone: inc.phone, direction: 'in', body: inc.text, unread: true, external_id: inc.messageId, ...(deps.channel === 'meta' ? { channel: 'meta' } : {}), ...(deps.media ? { media_url: deps.media.url, media_type: deps.media.type, media_name: deps.media.name } : {}), ...(propId ? { property_id: propId, property_auto: true } : {}) }
   const { error } = await ecrireTolerant(row, (r) => supabaseAdmin.from('re_messages').insert(r))
   if (error?.code === '23505') return true // doublon : rien d'autre a faire (STOP / START deja appliques la premiere fois)
   if (error) return false

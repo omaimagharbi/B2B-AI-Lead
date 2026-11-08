@@ -43,7 +43,7 @@ Espace immobilier (Qatar) : 13 menus - Dashboard, Properties, Leads (kanban), Ca
 - Anti-spam : champ piege + 5 envois / 10 min / IP (fonction SQL `verifier_rate_limit` deja presente).
 
 ## MISE EN LIGNE - ordre a respecter (PiloBrain Real Estate)
-1. Supabase > SQL Editor : coller et executer **UNE SEULE FOIS** `00_MIGRATIONS_70_a_79_combinees.sql` (equivaut a 70 a 79, dans le bon ordre, idempotent). Si 70 a 76 sont deja faits : lancer seulement 77, 78 puis 79 (`77_immobilier_os_lot4_suivi_client.sql`, `78_immobilier_os_lot5_conformite.sql`, `79_immobilier_os_lot6a_meta.sql`). Ne pas lancer 71 ou 72 seuls avant le 70 (erreur `relation "re_messages" does not exist`).
+1. Supabase > SQL Editor : coller et executer **UNE SEULE FOIS** `00_MIGRATIONS_70_a_80_combinees.sql` (equivaut a 70 a 80, dans le bon ordre, idempotent). Si 70 a 76 sont deja faits : lancer seulement 77, 78, 79 puis 80 (`80_immobilier_os_lot6b_medias.sql`, `77_immobilier_os_lot4_suivi_client.sql`, `78_immobilier_os_lot5_conformite.sql`, `79_immobilier_os_lot6a_meta.sql`). Ne pas lancer 71 ou 72 seuls avant le 70 (erreur `relation "re_messages" does not exist`).
 2. GitHub : remplacer les fichiers du depot par le contenu de ce zip (les fichiers sont a la racine, pas dans un sous-dossier), commit + push. Vercel redeploie tout seul.
 3. Vercel > Environment Variables : ajouter `WHATSAPP_IMMO_CLIENT_ID` (id affiche dans /immo/settings) ; optionnels : `IMMO_DEFAULT_COUNTRY_CODE` (974), `IMMO_AI_MONTHLY_LIMIT` (300), `CRON_SECRET` (deja utilise par les autres crons), `IMMO_CLAUDE_MODEL` (nom du modele Claude de l'assistant, defaut `claude-sonnet-5-5`).
 4. Ouvrir `/immo` (ou le bouton dore "PiloBrain Real Estate" en haut du dashboard).
@@ -89,6 +89,11 @@ Si le build Vercel echoue : copier les lignes rouges en bas du log. Si Vercel re
 - Fenetre de 24 h : apres 24 h sans message du client, seul un modele approuve (`re_wa_templates`, synchronise depuis Meta) peut partir ; l'ecran WhatsApp l'affiche et propose les modeles, le serveur refuse sinon (409).
 - Statuts de livraison (envoye / delivre / lu / echec) sur chaque message sortant Meta.
 - Variables : `META_WA_ACCESS_TOKEN`, `META_WA_APP_SECRET`, `META_WA_VERIFY_TOKEN` (+ optionnelle `META_WA_API_VERSION`, defaut v21.0).
+
+### Lot 6b : fichiers, fiche IA avec photos, proprietaires (migration 80)
+- n°35 : photos / PDF envoyes depuis l'ecran WhatsApp (trombone), verifies par leurs premiers octets, 4 Mo max, stockes dans le bucket `immo-chat` (dossier = agence) ; en reception, photos / PDF / vocaux / videos arrivent par le webhook Meta et sont ranges dans le meme bucket. Le serveur n'accepte que des URL du stockage de l'agence. GreenAPI : envoi de fichiers par lien, pas de reception de medias.
+- n°38 / n°91 : dans « Envoyer un bien », bouton « Rediger avec l'IA » + photos cochees (5 max) ; la legende de la 1re image porte le texte (1000 caracteres max, sinon texte puis images).
+- n°100 : bouton conversation sur la fiche proprietaire ; un agent ne peut ni voir ni ecrire aux proprietaires (403 cote serveur).
 
 ## Limite Vercel Hobby (12 fonctions)
 Tout le Real Estate OS cote serveur est servi par UNE SEULE fonction : `app/api/immo/route.ts` (appel `/api/immo?r=<nom>`; le code des endpoints est dans `lib/immo-os/api/`). Le formulaire public `/lead?a=<ID>` est une page statique. Les rappels de leads (48 h) tournent dans le cron existant `/api/cron/relances` : aucun cron ni fonction en plus.

@@ -12,6 +12,7 @@ import { translate, I18N_KEYS } from '../lib/immo-os/i18n'
 import { MOTS_STOP_BASE } from '../lib/optout-words'
 import { parseMetaWebhook, verifySignature, windowState, renderTemplate, templateVars, isTechnicalFailure } from '../lib/immo-os/wa-meta'
 import { createHmac } from 'node:crypto'
+import { sniffChatFile, isOwnMediaUrl, inboundMime } from '../lib/immo-os/media'
 
 let n = 0
 const ok = (name: string, fn: () => void) => { fn(); n++; console.log('ok -', name) }
@@ -145,6 +146,18 @@ ok('Meta : fenetre de 24 h, modeles, repli', () => {
   assert.equal(isTechnicalFailure(500, null), true); assert.equal(isTechnicalFailure(401, 190), true); assert.equal(isTechnicalFailure(0, null), true)
   assert.equal(isTechnicalFailure(400, 131047), false) // regle de fenetre : jamais de repli
   assert.equal(isTechnicalFailure(400, 132001), false)
+})
+ok('Fichiers : types, taille, URL de l\'agence', () => {
+  assert.equal(sniffChatFile(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]))?.type, 'document')
+  assert.equal(sniffChatFile(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))?.type, 'image')
+  assert.equal(sniffChatFile(new Uint8Array([0x4d, 0x5a, 0x90, 0x00])), null) // executable refuse
+  const base = 'https://p.supabase.co', cid = 'cccc'
+  assert.equal(isOwnMediaUrl(`${base}/storage/v1/object/public/immo-chat/${cid}/out/a.jpg`, base, cid), true)
+  assert.equal(isOwnMediaUrl(`${base}/storage/v1/object/public/immo-photos/${cid}/a.jpg`, base, cid), true)
+  assert.equal(isOwnMediaUrl(`${base}/storage/v1/object/public/immo-chat/other/out/a.jpg`, base, cid), false)
+  assert.equal(isOwnMediaUrl('https://evil.com/a.jpg', base, cid), false)
+  assert.equal(isOwnMediaUrl(`${base}/storage/v1/object/public/immo-chat/${cid}/../x.jpg`, base, cid), false)
+  assert.equal(inboundMime('audio/ogg; codecs=opus')?.type, 'audio'); assert.equal(inboundMime('application/x-msdownload'), null)
 })
 function l_(i: number) { return (['en', 'fr', 'ar'] as const)[i] }
 console.log(`\n${n} groupes de tests OK`)

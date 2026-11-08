@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { authentifierClientUser } from '@/lib/auth-api'
 import { sniffImage, MAX_UPLOAD_BYTES } from '@/lib/immo-os/image'
+import { sniffChatFile, CHAT_BUCKET, CHAT_MAX_BYTES } from '@/lib/immo-os/media'
 
 const BUCKET = 'immo-photos'
 
@@ -17,7 +18,18 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file received' }, { status: 400 })
   if (file.size === 0 || file.size > MAX_UPLOAD_BYTES) return NextResponse.json({ error: 'Image must be under 4 MB' }, { status: 413 })
 
+  // Lot 6b : ?kind=chat -> fichier de conversation (image ou PDF) range dans le bucket des conversations
+  const chat = req.nextUrl.searchParams.get('kind') === 'chat'
   const bytes = new Uint8Array(await file.arrayBuffer())
+  if (chat) {
+    if (bytes.length > CHAT_MAX_BYTES) return NextResponse.json({ error: 'File must be under 4 MB' }, { status: 413 })
+    const f = sniffChatFile(bytes)
+    if (!f) return NextResponse.json({ error: 'Only JPG, PNG, WebP images or PDF files are accepted' }, { status: 415 })
+    const cpath = `${auth.clientId}/out/${crypto.randomUUID()}.${f.ext}`
+    const up = await supabaseAdmin.storage.from(CHAT_BUCKET).upload(cpath, bytes, { contentType: f.mime, cacheControl: '31536000', upsert: false })
+    if (up.error) { const missing = /bucket not found/i.test(up.error.message); return NextResponse.json({ error: missing ? 'File storage is not set up yet (run migration 80).' : 'Upload failed' }, { status: missing ? 503 : 500 }) }
+    return NextResponse.json({ url: supabaseAdmin.storage.from(CHAT_BUCKET).getPublicUrl(cpath).data.publicUrl, type: f.type, name: file.name.replace(/[^\w.\- ]+/g, '_').slice(0, 80) })
+  }
   const kind = sniffImage(bytes)
   if (!kind) return NextResponse.json({ error: 'Only JPG, PNG or WebP images are accepted' }, { status: 415 })
 

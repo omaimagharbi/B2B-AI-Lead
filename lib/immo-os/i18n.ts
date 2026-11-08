@@ -682,6 +682,16 @@ const D: Record<string, [string, string, string]> = {
   'wa.status.failed': ['Failed', 'Échec', 'فشلت'],
   'wa.missing': ['Run migration 79 to use the Meta API.', 'Exécutez la migration 79 pour utiliser l’API Meta.', 'نفّذ الترحيل 79 لاستخدام واجهة Meta.'],
   'wa.demo': ['Demo mode: the Meta API is only available with the live database.', 'Mode démo : l’API Meta n’est disponible qu’avec la base réelle.', 'الوضع التجريبي: واجهة Meta متاحة مع قاعدة البيانات الحقيقية فقط.'],
+  // ---- Lot 6b : fichiers, fiche IA, proprietaires
+  'att.add': ['Attach a photo or a PDF', 'Joindre une photo ou un PDF', 'إرفاق صورة أو ملف PDF'],
+  'att.remove': ['Remove the attachment', 'Retirer la pièce jointe', 'إزالة المرفق'],
+  'att.demo': ['Sending files needs the live database (run migration 80).', 'L’envoi de fichiers demande la base réelle (migration 80).', 'إرسال الملفات يتطلب قاعدة البيانات الحقيقية (الترحيل 80).'],
+  'att.big': ['The file must be under 4 MB.', 'Le fichier doit faire moins de 4 Mo.', 'يجب أن يكون الملف أقل من 4 ميغابايت.'],
+  'att.image': ['Photo', 'Photo', 'صورة'],
+  'att.document': ['Document', 'Document', 'مستند'],
+  'sp.ai': ['Write the message with AI', 'Rédiger le message avec l’IA', 'كتابة الرسالة بالذكاء الاصطناعي'],
+  'sp.photos': ['Photos sent with the message ({n} selected, 5 max)', 'Photos envoyées avec le message ({n} sélectionnée(s), 5 max)', 'الصور المرسلة مع الرسالة ({n} محددة، 5 كحد أقصى)'],
+  'own.chat': ['WhatsApp conversation with this owner', 'Conversation WhatsApp avec ce propriétaire', 'محادثة واتساب مع هذا المالك'],
 }
 export const I18N_KEYS = Object.keys(D)
 const IDX: Record<Lang, number> = { en: 0, fr: 1, ar: 2 }

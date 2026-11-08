@@ -51,11 +51,12 @@ type Ctx = {
   remove: (e: Entity, id: string) => Promise<void>
   seedLive: () => Promise<void>
   resetDemo: () => void
-  sendWhatsapp: (name: string, phone: string | null | undefined, body: string, opts?: { propertyId?: string; lang?: Lang; template?: { name: string; language: string; params: string[] } }) => Promise<boolean>
+  sendWhatsapp: (name: string, phone: string | null | undefined, body: string, opts?: { propertyId?: string; lang?: Lang; template?: { name: string; language: string; params: string[] }; media?: { url: string; type: 'image' | 'document'; name: string }[] }) => Promise<boolean>
   charter: { version: string; accepted: boolean | null }
   acceptCharter: () => Promise<boolean>
   ai: (mode: AiMode, prompt: string, opts?: { extra?: string; language?: string; context: string }) => Promise<string | null>
   uploadPhoto: (file: File) => Promise<string | null>
+  uploadChatFile: (file: File) => Promise<{ url: string; type: 'image' | 'document'; name: string } | null>
   callApi: (path: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: any }>
   reload: () => Promise<void>
   notify: (msg: string, kind?: 'ok' | 'err') => void
@@ -363,14 +364,14 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
     if (mode === 'demo') {
       // Lot 5 : meme garde-fou que le serveur (contact "ne plus contacter")
       if (phone && [...data.leads, ...data.clients, ...data.owners].some((c: any) => c.do_not_contact && sameNumber(c.phone, phone))) { notify(t('dnc.blocked'), 'err'); return false }
-      const m = await create('messages', { contact_name: name, contact_phone: phone ?? null, direction: 'out', body, unread: false, ...(opts?.propertyId ? { property_id: opts.propertyId, property_auto: false } : {}) })
+      const m = await create('messages', { contact_name: name, contact_phone: phone ?? null, direction: 'out', body: body || (opts?.media?.length ? `[${opts.media[0].type}]` : ''), unread: false, ...(opts?.propertyId ? { property_id: opts.propertyId, property_auto: false } : {}), ...(opts?.media?.[0] ? { media_url: opts.media[0].url, media_type: opts.media[0].type, media_name: opts.media[0].name } : {}) })
       if (opts?.propertyId) { const p = data.properties.find((x) => x.id === opts.propertyId); setData((d) => persist({ ...d, sends: [{ id: uid(), property_id: opts.propertyId!, property_title: p?.title ?? '', contact_name: name, contact_phone: phone ?? null, agent: me?.name ?? '', channel: 'whatsapp', created_at: new Date().toISOString() }, ...(d.sends ?? [])] })) }
       notify('Saved (demo mode - nothing was actually sent)')
       return !!m
     }
-    const res = await api('/api/immo?r=whatsapp', { method: 'POST', body: JSON.stringify({ name, phone, body, property_id: opts?.propertyId, lang: opts?.lang ?? lang, template: opts?.template }) })
+    const res = await api('/api/immo?r=whatsapp', { method: 'POST', body: JSON.stringify({ name, phone, body, property_id: opts?.propertyId, lang: opts?.lang ?? lang, template: opts?.template, media: opts?.media }) })
     if (!res.ok) { notify(res.json?.code === 'opted_out' ? t('dnc.blocked') : res.json?.code === 'window_closed' ? t('wa.window.closed') : res.json?.error ?? 'Could not send', 'err'); return false }
-    setData((d) => ({ ...d, messages: [res.json.row, ...d.messages], sends: res.json.send ? [res.json.send, ...(d.sends ?? [])] : d.sends }))
+    setData((d) => ({ ...d, messages: [...((res.json.rows as any[]) ?? [res.json.row]).slice().reverse(), ...d.messages], sends: res.json.send ? [res.json.send, ...(d.sends ?? [])] : d.sends }))
     if (res.json.sent) notify(res.json.warning ? t('wa.fallback') : 'Message sent on WhatsApp')
     else notify(`Saved but not sent: ${res.json.warning ?? 'WhatsApp not configured'}`, 'err')
     return !!res.json.sent
@@ -382,6 +383,23 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
     if (!res.ok) { notify(res.json?.error ?? 'Could not save', 'err'); return false }
     setCharter((c) => ({ ...c, accepted: true }))
     return true
+  }
+
+  // Lot 6b : fichier de conversation (image reduite ou PDF) -> stockage de l'agence
+  const uploadChatFile: Ctx['uploadChatFile'] = async (file) => {
+    if (mode === 'demo') { notify(t('att.demo'), 'err'); return null }
+    try {
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+      const blob = isPdf ? file : await resizeImage(file)
+      if (blob.size > 4 * 1024 * 1024) { notify(t('att.big'), 'err'); return null }
+      const fd = new FormData()
+      fd.append('file', blob, isPdf ? file.name : 'photo.jpg')
+      const { data: s } = await supabase.auth.getSession()
+      const res = await fetch('/api/immo?r=upload&kind=chat', { method: 'POST', headers: { Authorization: `Bearer ${s.session?.access_token ?? ''}` }, body: fd })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { notify(json.error ?? 'Upload failed', 'err'); return null }
+      return { url: json.url, type: json.type === 'document' ? 'document' : 'image', name: json.name ?? file.name }
+    } catch (e) { notify(e instanceof Error ? e.message : 'Upload failed', 'err'); return null }
   }
 
   const uploadPhoto: Ctx['uploadPhoto'] = async (file) => {
@@ -437,7 +455,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
 
   return (
     <C.Provider
-      value={{ mode, data, agency, clientId, canDelete: isManager(me?.role), aiUsage, aiModel, logo, me, team, agents, liveEmpty, dark, toggleDark, lang, setLang, t, tf, activeAgents, charter, acceptCharter, reassignLeads, inviteMember, removeMember, setMemberMenus, loadActivity, lastActivity, loadAssignments, create, update, remove, seedLive, resetDemo, sendWhatsapp, ai, uploadPhoto, callApi: api, reload, notify, toasts }}
+      value={{ mode, data, agency, clientId, canDelete: isManager(me?.role), aiUsage, aiModel, logo, me, team, agents, liveEmpty, dark, toggleDark, lang, setLang, t, tf, activeAgents, charter, acceptCharter, reassignLeads, inviteMember, removeMember, setMemberMenus, loadActivity, lastActivity, loadAssignments, create, update, remove, seedLive, resetDemo, sendWhatsapp, ai, uploadPhoto, uploadChatFile, callApi: api, reload, notify, toasts }}
     >
       {children}
     </C.Provider>

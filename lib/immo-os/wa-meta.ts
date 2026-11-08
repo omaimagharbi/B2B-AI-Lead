@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 
 // Lot 6a : WhatsApp Business officiel (Meta Cloud API). Partie PURE (analyse du webhook, signature, fenetre de 24 h, rendu des modeles)
 // + petits appels HTTP vers graph.facebook.com. Aucune cle dans le code : META_WA_ACCESS_TOKEN, META_WA_APP_SECRET, META_WA_VERIFY_TOKEN.
-export type MetaMsg = { phoneNumberId: string; from: string; name: string | null; id: string; type: string; text: string; ts: number }
+export type MetaMsg = { phoneNumberId: string; from: string; name: string | null; id: string; type: string; text: string; ts: number; media?: { id: string; mime: string | null; filename: string | null } }
 export type MetaStatus = { phoneNumberId: string; id: string; status: 'sent' | 'delivered' | 'read' | 'failed'; recipient: string; error: string | null; code: number | null }
 
 const cap = (s: unknown, n = 4000) => String(s ?? '').slice(0, n)
@@ -29,7 +29,8 @@ export function parseMetaWebhook(body: any): { messages: MetaMsg[]; statuses: Me
     const names = new Map<string, string>((v.contacts ?? []).map((x: any) => [String(x.wa_id), String(x.profile?.name ?? '')]))
     for (const m of v.messages ?? []) {
       if (!m?.id || !m?.from) continue
-      out.messages.push({ phoneNumberId: pid, from: String(m.from).replace(/\D/g, ''), name: names.get(String(m.from)) || null, id: String(m.id), type: String(m.type ?? 'text'), text: textOf(m), ts: Number(m.timestamp) * 1000 || Date.now() })
+      const mm = ['image', 'video', 'document', 'audio', 'sticker'].includes(m.type) ? m[m.type] : null
+      out.messages.push({ phoneNumberId: pid, from: String(m.from).replace(/\D/g, ''), name: names.get(String(m.from)) || null, id: String(m.id), type: String(m.type ?? 'text'), text: textOf(m), ts: Number(m.timestamp) * 1000 || Date.now(), ...(mm?.id ? { media: { id: String(mm.id), mime: mm.mime_type ?? null, filename: mm.filename ?? null } } : {}) })
     }
     for (const s of v.statuses ?? []) {
       if (!s?.id || !['sent', 'delivered', 'read', 'failed'].includes(s.status)) continue
@@ -59,12 +60,13 @@ export const metaReady = () => !!process.env.META_WA_ACCESS_TOKEN
 export const metaEnv = () => ({ token: !!process.env.META_WA_ACCESS_TOKEN, appSecret: !!process.env.META_WA_APP_SECRET, verifyToken: !!process.env.META_WA_VERIFY_TOKEN })
 const base = () => `https://graph.facebook.com/${process.env.META_WA_API_VERSION || 'v21.0'}`
 
-export type SendPayload = { kind: 'text'; text: string } | { kind: 'template'; name: string; language: string; params: string[] }
+export type SendPayload = { kind: 'text'; text: string } | { kind: 'template'; name: string; language: string; params: string[] } | { kind: 'image'; link: string; caption?: string } | { kind: 'document'; link: string; caption?: string; filename?: string }
 export type SendResult = { ok: true; id: string } | { ok: false; status: number; code: number | null; message: string }
 
 export async function sendMeta(phoneNumberId: string, to: string, p: SendPayload): Promise<SendResult> {
   const body = p.kind === 'text'
     ? { messaging_product: 'whatsapp', to: normalizeTo(to), type: 'text', text: { body: p.text.slice(0, 4096), preview_url: true } }
+    : p.kind === 'image' || p.kind === 'document' ? { messaging_product: 'whatsapp', to: normalizeTo(to), type: p.kind, [p.kind]: { link: p.link, ...(p.caption ? { caption: p.caption.slice(0, 1000) } : {}), ...('filename' in p && p.filename ? { filename: p.filename.slice(0, 100) } : {}) } }
     : { messaging_product: 'whatsapp', to: normalizeTo(to), type: 'template', template: { name: p.name, language: { code: p.language }, ...(p.params.length ? { components: [{ type: 'body', parameters: p.params.map((x) => ({ type: 'text', text: x })) }] } : {}) } }
   try {
     const res = await fetch(`${base()}/${encodeURIComponent(phoneNumberId)}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.META_WA_ACCESS_TOKEN}` }, body: JSON.stringify(body) })
@@ -82,5 +84,18 @@ export async function fetchTemplates(wabaId: string): Promise<{ name: string; la
     const j = await res.json().catch(() => null)
     if (!res.ok || !Array.isArray(j?.data)) return null
     return j.data.map((t: any) => ({ name: String(t.name), language: String(t.language), category: t.category ?? null, status: String(t.status ?? 'PENDING'), body: (t.components ?? []).find((c: any) => c.type === 'BODY')?.text ?? null }))
+  } catch { return null }
+}
+
+// Telecharge un fichier recu (2 appels : Meta donne une URL temporaire, qu'on lit avec le meme jeton). Limite 4 Mo, sinon null.
+export async function downloadMetaMedia(mediaId: string, maxBytes = 4 * 1024 * 1024): Promise<{ bytes: Uint8Array; mime: string } | null> {
+  try {
+    const h = { Authorization: `Bearer ${process.env.META_WA_ACCESS_TOKEN}` }
+    const meta = await fetch(`${base()}/${encodeURIComponent(mediaId)}`, { headers: h }).then((r) => (r.ok ? r.json() : null))
+    if (!meta?.url || (meta.file_size && Number(meta.file_size) > maxBytes)) return null
+    const res = await fetch(meta.url, { headers: h })
+    if (!res.ok) return null
+    const buf = new Uint8Array(await res.arrayBuffer())
+    return buf.length && buf.length <= maxBytes ? { bytes: buf, mime: String(meta.mime_type ?? res.headers.get('content-type') ?? '') } : null
   } catch { return null }
 }

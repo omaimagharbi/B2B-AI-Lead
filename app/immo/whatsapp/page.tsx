@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { MessageCircle, Send, Sparkles, Plus, Search, Ban, Building2, ClipboardCheck, ExternalLink } from 'lucide-react'
+import { MessageCircle, Send, Sparkles, Plus, Search, Ban, Building2, ClipboardCheck, ExternalLink, Paperclip, FileText, X } from 'lucide-react'
 import { useImmo } from '@/lib/immo-os/store'
 import { Avatar, Badge, Btn, Card, Empty, Field, Modal, PageHead, PropImage } from '@/lib/immo-os/ui'
 import { ago, contextSummary, qar } from '@/lib/immo-os/helpers'
@@ -14,11 +14,11 @@ import { sameContact } from '@/lib/immo-os/profile'
 import { sameNumber } from '@/lib/immo-os/inbound-pure'
 import { agoLocal } from '@/lib/immo-os/ago'
 import { isManager } from '@/lib/immo-os/permissions'
-import { LANGS, type Lang } from '@/lib/immo-os/i18n'
+import { LANGS, translate, type Lang } from '@/lib/immo-os/i18n'
 import { renderTemplate, templateVars, windowState } from '@/lib/immo-os/wa-window'
 
 export default function WhatsAppPage() {
-  const { data, sendWhatsapp, update, create, ai, notify, mode, t, tf, lang, me, clientId, callApi } = useImmo()
+  const { data, sendWhatsapp, update, create, ai, notify, mode, t, tf, lang, me, clientId, callApi, uploadChatFile } = useImmo()
   const [active, setActive] = useState<string | null>(null)
   const [text, setText] = useState('')
   const [q, setQ] = useState('')
@@ -30,6 +30,9 @@ export default function WhatsAppPage() {
   const [ocNote, setOcNote] = useState('')
   const [spOpen, setSpOpen] = useState(false)
   const [tplOpen, setTplOpen] = useState(false)
+  const [att, setAtt] = useState<{ url: string; type: 'image' | 'document'; name: string } | null>(null)
+  const [upBusy, setUpBusy] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
   const [wa, setWa] = useState<{ channel: 'meta' | 'greenapi'; templates: WaTemplate[] } | null>(null)
   useEffect(() => { if (mode === 'live') callApi('/api/immo?r=wa').then((r) => { if (r.ok) setWa({ channel: r.json.channel, templates: r.json.templates ?? [] }) }) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [mode])
   const [, tick] = useState(0)
@@ -84,11 +87,20 @@ export default function WhatsAppPage() {
   const win = useMemo(() => (wa?.channel === 'meta' && cur ? windowState([...cur.ms].reverse().find((m) => m.direction === 'in')?.created_at) : null), [wa, cur, data.messages])
   const closed = !!win && !win.open
   const send = async () => {
-    if (!cur || !text.trim() || sending || rel?.dnc || closed) return
+    if (!cur || (!text.trim() && !att) || sending || rel?.dnc || closed) return
     setSending(true)
-    const ok = await sendWhatsapp(cur.name, cur.phone, text.trim())
-    if (ok || mode === 'demo') setText('')
+    const ok = await sendWhatsapp(cur.name, cur.phone, text.trim(), att ? { media: [att] } : undefined)
+    if (ok || mode === 'demo') { setText(''); setAtt(null) }
     setSending(false)
+  }
+
+  const pickFile = async (f: File | undefined) => {
+    if (!f) return
+    setUpBusy(true)
+    const r = await uploadChatFile(f)
+    setUpBusy(false)
+    if (r) setAtt(r)
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   const suggest = async () => {
@@ -174,7 +186,7 @@ export default function WhatsAppPage() {
                   {cur.ms.map((m, i) => (
                     <div key={m.id} className={`flex flex-col ${m.direction === 'out' ? 'items-end' : 'items-start'}`}>
                       {m.property_id && m.property_id !== cur.ms[i - 1]?.property_id && <span className="text-[10.5px] t-muted mb-0.5"><Building2 size={10} className="inline me-1" />{tf('xv.re', { title: propTitle(m.property_id) })}{m.property_auto ? ` · ${t('xv.auto')}` : ''}</span>}
-                      <div className={`${m.direction === 'out' ? 'imo-bubble-out' : 'imo-bubble-in'} px-3.5 py-2 text-[13px] max-w-[75%] whitespace-pre-wrap`}>{m.body}<div className="text-[10px] opacity-60 text-end mt-0.5">{ago(m.created_at)}{m.direction === 'out' && m.wa_status ? ` · ${t('wa.status.' + m.wa_status)}` : ''}</div></div>
+                      <div className={`${m.direction === 'out' ? 'imo-bubble-out' : 'imo-bubble-in'} px-3.5 py-2 text-[13px] max-w-[75%] whitespace-pre-wrap`}>{m.media_url && <MediaView m={m} t={t} />}{m.media_url && /^\[(image|document|audio|video)\]$/.test(m.body) ? null : m.body}<div className="text-[10px] opacity-60 text-end mt-0.5">{ago(m.created_at)}{m.direction === 'out' && m.wa_status ? ` · ${t('wa.status.' + m.wa_status)}` : ''}</div></div>
                     </div>
                   ))}
                   <div ref={end} />
@@ -183,9 +195,12 @@ export default function WhatsAppPage() {
                   {closed && !rel?.dnc && <div className="rounded-md px-3 py-2 text-[12.5px] flex items-center gap-2 flex-wrap" style={{ background: '#FEF3C7', color: '#92400E' }} role="status"><span className="flex-1">{t('wa.rule24')}</span><Btn kind="gold" onClick={() => setTplOpen(true)} disabled={!wa?.templates.some((x) => x.status === 'APPROVED')}>{t('wa.tpl.send')}</Btn></div>}
                   {rel?.dnc && <div className="rounded-md px-3 py-2 text-[12.5px] flex items-center gap-2" style={{ background: '#FEE2E2', color: '#991B1B' }} role="alert"><Ban size={14} /> {t('dnc.blocked')}</div>}
                   <div className="flex"><Btn onClick={suggest} disabled={busy || !!rel?.dnc || closed} style={{ padding: '5px 10px', fontSize: 12 }}><Sparkles size={13} style={{ color: 'var(--gold)' }} /> {busy ? 'Thinking…' : 'Suggest reply with AI'}</Btn></div>
+                  {att && <div className="flex items-center gap-2 text-[12.5px] rounded-md px-2.5 py-1.5" style={{ background: 'var(--soft)', border: '1px solid var(--border)' }}>{att.type === 'image' ? <img src={att.url} alt="" style={{ height: 36, borderRadius: 4 }} /> : <FileText size={16} />}<span className="truncate flex-1">{att.name}</span><button onClick={() => setAtt(null)} aria-label={t('att.remove')}><X size={14} /></button></div>}
                   <div className="flex gap-2 items-end">
+                    <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
+                    <Btn onClick={() => fileRef.current?.click()} disabled={upBusy || !!rel?.dnc || closed} aria-label={t('att.add')} title={t('att.add')}><Paperclip size={15} /></Btn>
                     <textarea className="imo-textarea" style={{ minHeight: 44, height: 44 }} placeholder="Type a message…" value={text} disabled={!!rel?.dnc || closed} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
-                    <Btn kind="primary" onClick={send} disabled={sending || !text.trim() || !!rel?.dnc || closed} aria-label="Send"><Send size={15} /></Btn>
+                    <Btn kind="primary" onClick={send} disabled={sending || (!text.trim() && !att) || !!rel?.dnc || closed} aria-label="Send"><Send size={15} /></Btn>
                   </div>
                 </div>
               </>
@@ -255,12 +270,14 @@ export default function WhatsAppPage() {
 
 // n°4 : envoyer la fiche d'un bien a un client (texte dans la langue choisie + reference + lien public), enregistre dans "biens envoyes"
 function SendProperty({ name, phone, initial, clientId, onClose }: { name: string; phone: string | null; initial: string; clientId: string | null; onClose: () => void }) {
-  const { data, t, tf, lang, sendWhatsapp } = useImmo()
+  const { data, t, tf, lang, sendWhatsapp, ai } = useImmo()
   const [pid, setPid] = useState(initial)
   const [l, setL] = useState<Lang>(lang)
   const [q, setQ] = useState('')
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [photos, setPhotos] = useState<string[]>([])
   const list = data.properties.filter((p) => p.status === 'available' && (!q || `${p.title} ${p.area}`.toLowerCase().includes(q.toLowerCase())))
   useEffect(() => {
     const p = data.properties.find((x) => x.id === pid)
@@ -268,9 +285,20 @@ function SendProperty({ name, phone, initial, clientId, onClose }: { name: strin
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
     setBody(composePropertyMessage(l, { name, property: p, link: clientId ? `${origin}/lead?a=${clientId}&property=${p.id}&lang=${l}` : null }))
   }, [pid, l, name, clientId, data.properties])
+  const prop = data.properties.find((x) => x.id === pid)
+  const allPhotos = Array.from(new Set([prop?.image_url, ...(prop?.photos ?? [])].filter((x): x is string => !!x && /^https?:\/\//.test(x))))
+  useEffect(() => { setPhotos(allPhotos.slice(0, 3)) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [pid])
+  // n°38 / n°91 : l'IA redige l'annonce du bien (langue choisie), l'agent relit puis envoie avec les photos cochees
+  const writeAi = async () => {
+    if (!prop) return
+    setAiBusy(true)
+    const r = await ai('ad', `${prop.title} - ${prop.area}, ${prop.beds} bed, ${prop.size_m2} m2, ${qar(prop.price)}${prop.listing === 'rent' ? ' / month' : ''}. ${prop.description ?? ''}`, { context: contextSummary(data), language: l, extra: 'Write a short WhatsApp message to a client (max 700 characters, no hashtags), include the reference REF-' + prop.id.replace(/-/g, '').slice(0, 8).toUpperCase() + ' and end with: ' + translate(l, 'pol.stop.footer') })
+    if (r) setBody(r)
+    setAiBusy(false)
+  }
   const go = async () => {
     setBusy(true)
-    const ok = await sendWhatsapp(name, phone, body, { propertyId: pid, lang: l })
+    const ok = await sendWhatsapp(name, phone, body, { propertyId: pid, lang: l, media: photos.map((u, i) => ({ url: u, type: 'image' as const, name: `photo-${i + 1}.jpg` })) })
     setBusy(false)
     if (ok) onClose()
   }
@@ -280,9 +308,11 @@ function SendProperty({ name, phone, initial, clientId, onClose }: { name: strin
         <Field label={t('sp.choose')}><div className="grid gap-2"><input className="imo-input" placeholder={t('sp.search')} value={q} onChange={(e) => setQ(e.target.value)} /><select className="imo-select" size={6} value={pid} onChange={(e) => setPid(e.target.value)}>{list.map((p) => <option key={p.id} value={p.id}>{p.title} · {p.area} · {qar(p.price)}</option>)}</select>{list.length === 0 && <div className="text-[12.5px] t-muted">{t('sp.none')}</div>}</div></Field>
         <div className="grid gap-3 content-start">
           <Field label={t('sp.lang')}><select className="imo-select" value={l} onChange={(e) => setL(e.target.value as Lang)}>{LANGS.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select></Field>
+          <div><Btn onClick={writeAi} disabled={!prop || aiBusy}><Sparkles size={13} style={{ color: 'var(--gold)' }} /> {aiBusy ? '…' : t('sp.ai')}</Btn></div>
           <Field label={t('sp.preview')}><textarea className="imo-textarea" style={{ minHeight: 170 }} dir={l === 'ar' ? 'rtl' : 'ltr'} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
         </div>
       </div>
+      {allPhotos.length > 0 && <div className="mt-3"><div className="imo-label">{tf('sp.photos', { n: photos.length })}</div><div className="flex gap-2 flex-wrap">{allPhotos.slice(0, 8).map((u) => <button key={u} type="button" onClick={() => setPhotos((x) => x.includes(u) ? x.filter((y) => y !== u) : x.length < 5 ? [...x, u] : x)} aria-pressed={photos.includes(u)} style={{ border: photos.includes(u) ? '2px solid var(--gold)' : '2px solid transparent', borderRadius: 8, padding: 0, opacity: photos.includes(u) ? 1 : 0.55 }}><img src={u} alt="" style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 6, display: 'block' }} /></button>)}</div></div>}
       <div className="flex justify-end gap-2 mt-5"><Btn onClick={onClose}>Cancel</Btn><Btn kind="primary" disabled={!pid || !body.trim() || busy} onClick={go}><Send size={14} /> {t('sp.send')}</Btn></div>
     </Modal>
   )
@@ -317,4 +347,12 @@ function TemplateSend({ name, phone, templates, onClose }: { name: string; phone
       <div className="flex justify-end gap-2 mt-5"><Btn onClick={onClose}>Cancel</Btn><Btn kind="primary" disabled={!tpl || busy || params.some((x) => !x.trim())} onClick={go}><Send size={14} /> {t('sp.send')}</Btn></div>
     </Modal>
   )
+}
+
+function MediaView({ m, t }: { m: { media_url?: string | null; media_type?: string | null; media_name?: string | null }; t: (k: string) => string }) {
+  const url = m.media_url as string
+  if (m.media_type === 'image') return <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={m.media_name ?? t('att.image')} style={{ maxWidth: 240, maxHeight: 240, borderRadius: 8, display: 'block', marginBottom: 4 }} /></a>
+  if (m.media_type === 'audio') return <audio controls src={url} style={{ maxWidth: 240, marginBottom: 4 }} />
+  if (m.media_type === 'video') return <video controls src={url} style={{ maxWidth: 240, borderRadius: 8, marginBottom: 4 }} />
+  return <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 underline mb-1"><FileText size={15} />{m.media_name || t('att.document')}</a>
 }

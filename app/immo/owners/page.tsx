@@ -81,7 +81,7 @@ export default function OwnersPage() {
                   <td>{(() => { const l = lastOf(o); const d = staleDays(l); return <span className="flex items-center gap-1.5 whitespace-nowrap"><span>{agoT(l)}</span>{d >= STALE_DAYS && <span title={tf('o.stale', { n: STALE_DAYS })}><Badge color="#DC2626"><Clock size={11} /> {STALE_DAYS}+</Badge></span>}</span> })()}</td>
                   <td><Badge color="#2563EB">{ps.length}</Badge> <span className="text-[11.5px] t-muted whitespace-nowrap" title={t('o.split')}>{t('o.sale')} {ps.filter((x) => x.listing === 'sale').length} · {t('o.rent')} {ps.filter((x) => x.listing === 'rent').length}</span></td>
                   <td>{qar(ps.filter((p) => p.listing === 'sale').reduce((s, p) => s + p.price, 0))}</td>
-                  <td className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  <td className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>{o.phone && <Link href={`/immo/whatsapp?c=${encodeURIComponent(o.name)}`} className="imo-btn" style={{ padding: '4px 8px' }} aria-label={t('own.chat')} title={t('own.chat')}><MessageCircle size={13} /> {data.messages.filter((m) => m.contact_name === o.name).length || ''}</Link>} 
                     <Link href="/immo/whatsapp"><Btn style={{ padding: '4px 8px' }}><MessageCircle size={13} /></Btn></Link>{' '}
                     <Btn style={{ padding: '4px 8px' }} onClick={() => markNow(o)} title={t('o.setnow')} aria-label={t('o.setnow')}><Clock size={13} /></Btn>{' '}
                     <Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(o)}><Pencil size={13} /></Btn>{' '}

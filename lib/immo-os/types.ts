@@ -50,6 +50,7 @@ export type Deal = {
 export type Message = {
   id: string; contact_name: string; contact_phone?: string | null; direction: 'in' | 'out'
   body: string; unread: boolean; created_at: string
+  media_url?: string | null; media_type?: 'image' | 'document' | 'audio' | 'video' | null; media_name?: string | null // lot 6b
   channel?: 'greenapi' | 'meta'; wa_status?: string | null; wa_error?: string | null // lot 6a : canal et statut de livraison (Meta)
   property_id?: string | null; property_auto?: boolean // lot 4 : bien dont parle le message (detecte automatiquement ou choisi a la main)
 }
