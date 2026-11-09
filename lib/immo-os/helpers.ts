@@ -54,43 +54,62 @@ export function scoreLead(l: Pick<Lead, 'budget' | 'status' | 'last_contact' | '
 }
 export const isHot = (l: Lead) => l.score >= 75 && l.status !== 'won' && l.status !== 'lost'
 
-// Recherche en langage naturel : "villa in Lusail under 3m with 4 beds"
+// Recherche en langage naturel (n°36) : EN, FR et AR. "villa in Lusail under 3m with 4 beds" / "villa à Lusail moins de 3 millions 4 chambres" / "فيلا في لوسيل أقل من 3 مليون 4 غرف"
 export type Query = { tenure?: Tenure; type?: PropType; area?: string; maxPrice?: number; minBeds?: number; listing?: 'sale' | 'rent' }
+// Chiffres arabes-indiens, virgules arabes, accents latins, voyelles breves : meme texte normalise pour toutes les langues
+const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩'
+export const normSearch = (x: string) =>
+  String(x ?? '').toLowerCase().replace(/[٠-٩]/g, (d) => String(AR_DIGITS.indexOf(d))).replace(/[٬،]/g, ',').replace(/٫/g, '.')
+    .normalize('NFD').replace(/[\u0300-\u036f\u064b-\u065f\u0670\u0640]/g, '').replace(/[إأآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ')
+const TYPE_RULES: [RegExp, PropType][] = [
+  [/hotel|hospitality|فندق|فنادق/, 'hotel'], [/industrial|factory|industriel|usine|صناعي|مصنع/, 'industrial'], [/mixed.?use|usage mixte|متعدد الاستخدام/, 'mixed_use'],
+  [/penthouse|بنتهاوس/, 'penthouse'], [/duplex|دوبلكس/, 'duplex'], [/compound|complexe residentiel|مجمع سكني/, 'compound'],
+  [/labou?r camp|staff accommodation|camp de travailleurs|سكن عمال/, 'labour_camp'], [/showroom|salle d.exposition|معرض/, 'showroom'],
+  [/warehouse|storage|entrepot|depot|مستودع|مخزن/, 'warehouse'], [/farm|ferme|مزرعه|عزبه/, 'farm'], [/building|tower|immeuble|tour\b|عماره|برج|مبني/, 'building'],
+  [/villa|فيلا|فلل/, 'villa'], [/townhouse|maison de ville|تاون ?هاوس/, 'townhouse'], [/apartment|flat|studio|appartement|appart\b|شقه|شقق|استوديو/, 'apartment'],
+  [/office|bureau|مكتب|مكاتب/, 'office'], [/shop|retail|boutique|magasin|local commercial|محل|دكان|متجر/, 'shop'], [/\bland\b|plot|terrain|parcelle|ارض|قطعه/, 'land'],
+]
+// Noms de zones en arabe et en francais -> nom de zone du systeme
+const AREA_ALIASES: [RegExp, string][] = [
+  [/لاجون الخليج الغربي|west bay lagoon|lagune de west bay/, 'West Bay Lagoon'], [/الخليج الغربي|west bay/, 'West Bay'], [/اللولوه|the pearl|la perle|\bpearl\b/, 'The Pearl'],
+  [/لوسيل|lusail/, 'Lusail'], [/الدفنه|al dafna|dafna/, 'Al Dafna'], [/\bالسد\b|al sadd|\bsadd\b/, 'Al Sadd'], [/الخور|al khor/, 'Al Khor'], [/الريان|al rayyan|rayyan/, 'Al Rayyan'],
+  [/مشيرب|msheireb/, 'Msheireb'], [/المطار القديم|old airport|vieil aeroport|ancien aeroport/, 'Old Airport'],
+]
+const NUM_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, واحد: 1, غرفه: 1, اثنين: 2, غرفتين: 2, ثلاث: 3, ثلاثه: 3, اربع: 4, اربعه: 4, خمس: 5, خمسه: 5, ست: 6 }
+const NUM_RE = '(\\d+(?:[.,]\\d+)?|(?:one|two|three|four|five|six|une?|deux|trois|quatre|cinq)(?![a-z])|واحد|اثنين|ثلاثه?|اربعه?|خمسه?)'
 export function parseSearch(text: string, areas?: string[]): Query {
-  const t = text.toLowerCase()
+  const t = normSearch(text)
   const q: Query = {}
-  if (/hotel|hospitality/.test(t)) q.type = 'hotel'
-  else if (/industrial|factory/.test(t)) q.type = 'industrial'
-  else if (/mixed.?use/.test(t)) q.type = 'mixed_use'
-  else if (/penthouse/.test(t)) q.type = 'penthouse'
-  else if (/duplex/.test(t)) q.type = 'duplex'
-  else if (/compound/.test(t)) q.type = 'compound'
-  else if (/labou?r camp|staff accommodation/.test(t)) q.type = 'labour_camp'
-  else if (/showroom/.test(t)) q.type = 'showroom'
-  else if (/warehouse|storage/.test(t)) q.type = 'warehouse'
-  else if (/farm/.test(t)) q.type = 'farm'
-  else if (/building|tower/.test(t)) q.type = 'building'
-  else if (/villa/.test(t)) q.type = 'villa'
-  else if (/townhouse/.test(t)) q.type = 'townhouse'
-  else if (/apartment|flat|studio/.test(t)) q.type = 'apartment'
-  else if (/office/.test(t)) q.type = 'office'
-  else if (/shop|retail/.test(t)) q.type = 'shop'
-  else if (/land|plot/.test(t)) q.type = 'land'
-  if (/freehold/.test(t)) q.tenure = 'freehold'
-  else if (/usufruct/.test(t)) q.tenure = 'usufruct'
-  q.area = [...(areas ?? []), ...AREAS].find((a) => t.includes(a.toLowerCase()))
-  if (/\b(rent|rental|lease)\b/.test(t)) q.listing = 'rent'
-  else if (/\b(buy|sale|purchase)\b/.test(t)) q.listing = 'sale'
-  const m = t.match(/(?:under|below|max|budget|up to|<)\s*(?:qar\s*)?([\d.,]+)\s*(m|million|k|thousand)?/)
+  for (const [re, ty] of TYPE_RULES) if (re.test(t)) { q.type = ty; break }
+  if (/freehold|pleine propriete|تملك حر/.test(t)) q.tenure = 'freehold'
+  else if (/usufruct|usufruit|حق انتفاع/.test(t)) q.tenure = 'usufruct'
+  // zones : les noms les plus longs d'abord ("West Bay Lagoon" avant "West Bay")
+  const alias = AREA_ALIASES.find(([re]) => re.test(t))?.[1]
+  const known = Array.from(new Set([...(areas ?? []), ...AREAS])).sort((a, b) => b.length - a.length)
+  q.area = alias ?? known.find((a) => t.includes(normSearch(a)))
+  if (/\b(rent|rental|lease)\b|\blouer\b|location|a louer|ايجار|للايجار|استئجار|تاجير/.test(t)) q.listing = 'rent'
+  else if (/\b(buy|sale|purchase)\b|acheter|achat|vente|a vendre|شراء|للبيع|بيع|تملك/.test(t)) q.listing = 'sale'
+  const m = t.match(new RegExp(`(?:under|below|max|budget|up to|<|moins de|sous|jusqu.?a|maximum|اقل من|حتي|بحدود|ميزانيه|لا تتجاوز|بميزانيه)\\s*(?:qar|qr|ر\\.?ق|ريال)?\\s*${NUM_RE}\\s*(m\\b|million|millions|مليون|k\\b|thousand|mille|الف)?`))
   if (m) {
-    let v = parseFloat(m[1].replace(/,/g, ''))
-    if (m[2] === 'm' || m[2] === 'million') v *= 1_000_000
-    else if (m[2] === 'k' || m[2] === 'thousand') v *= 1000
+    let v = NUM_WORDS[m[1]] ?? parseFloat(m[1].replace(/,/g, (c, o, str) => (/^\d{1,3}(,\d{3})+/.test(str.slice(str.indexOf(m[1]))) ? '' : '.')))
+    const u = m[2]
+    if (u === 'm' || u === 'million' || u === 'millions' || u === 'مليون') v *= 1_000_000
+    else if (u === 'k' || u === 'thousand' || u === 'mille' || u === 'الف') v *= 1000
     if (v > 0) q.maxPrice = v
   }
-  const b = t.match(/(\d)\s*(?:\+)?\s*(?:bed|br|bedroom)/)
-  if (b) q.minBeds = parseInt(b[1], 10)
+  const b = t.match(new RegExp(`${NUM_RE}\\s*(?:\\+)?\\s*(?:bed|br\\b|bedroom|bedrooms|chambres?|ch\\b|غرف|غرفه|غرفتين)`)) ?? (/غرفتين/.test(t) ? ['', '2'] : null)
+  if (b) { const n = NUM_WORDS[b[1]] ?? parseInt(b[1], 10); if (n > 0 && n < 20) q.minBeds = n }
   return q
+}
+// Question de suivi : "moins cher", "plus de chambres", "en location"... complete la recherche precedente au lieu de la remplacer
+export function refineQuery(prev: Query | null, text: string, areas?: string[]): Query {
+  const next = parseSearch(text, areas)
+  if (!prev) return next
+  const t = normSearch(text)
+  const merged: Query = { ...prev, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined)) }
+  if (!next.maxPrice && prev.maxPrice && /cheaper|less expensive|moins cher|اقل سعرا|ارخص/.test(t)) merged.maxPrice = Math.round(prev.maxPrice * 0.8)
+  if (!next.minBeds && prev.minBeds && /more (bed|room)|plus de chambres|اكثر غرف/.test(t)) merged.minBeds = prev.minBeds + 1
+  return merged
 }
 export function matchProperties(props: Property[], q: Query): Property[] {
   return props

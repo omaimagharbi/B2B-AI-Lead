@@ -17,7 +17,7 @@ import { translate, fmt, type Lang } from './i18n'
 export type Member = { id: string; name: string; role: string; photo: string | null; phone: string | null; hidden?: string[]; tabs?: string[] }
 type Mode = 'loading' | 'live' | 'demo'
 type Toast = { id: number; msg: string; kind: 'ok' | 'err' }
-type AiMode = 'chat' | 'market' | 'ad' | 'reply' | 'report' | 'orphans'
+type AiMode = 'chat' | 'market' | 'ad' | 'reply' | 'report' | 'orphans' | 'quality' | 'negotiation'
 
 type Ctx = {
   mode: Mode

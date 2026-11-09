@@ -9,6 +9,7 @@ import { appliquerOptIn, appliquerOptOut } from './optout-server'
 import { translate } from './i18n'
 import { logActivity } from './activity'
 import { POLICY_VERSION } from './policy'
+import { repondreAutomatiquement } from './api/ai-agent-run'
 
 export { parseIncoming } from './inbound-pure'
 
@@ -105,5 +106,7 @@ export async function traiterMessageImmo(inc: Incoming, deps: InboundDeps = {}):
       try { await reply(inc.phone, translate(lang, 'pol.start.confirm')) } catch (e) { console.error('immo start confirm:', e) }
     }
   }
+  // Lot 7 : agent IA (desactive par defaut, desactivable par l'agence, journalise) - jamais pour un STOP / START
+  if (!stop && !start) await repondreAutomatiquement({ clientId: found.client_id, contactName: found.name, phone: inc.phone, text: inc.text, leadId: found.leadId, ownerId: found.ownerId, channel: deps.channel === 'meta' ? 'meta' : 'greenapi', reply })
   return true
 }

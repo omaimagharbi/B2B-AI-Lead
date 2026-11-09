@@ -30,8 +30,8 @@ export default function ManagerPanel() {
   const sum = (f: (m: AgentMetrics) => number) => rows.reduce((s, r) => s + f(r), 0)
   const best = manager ? bestOfWeek(metrics) : null
   const mine = !manager && me?.name ? metrics[me.name] : null
-  const risk = useMemo(() => riskLeads(data.leads, Date.now(), manager ? activeAgents : []).slice(0, 8), [data.leads, activeAgents, manager])
-  const riskTotal = useMemo(() => riskLeads(data.leads, Date.now(), manager ? activeAgents : []).length, [data.leads, activeAgents, manager])
+  const risk = useMemo(() => riskLeads(data.leads, Date.now(), manager ? activeAgents : [], { props: data.properties, stages: data.stages }).slice(0, 8), [data.leads, data.properties, data.stages, activeAgents, manager])
+  const riskTotal = useMemo(() => riskLeads(data.leads, Date.now(), manager ? activeAgents : [], { props: data.properties, stages: data.stages }).length, [data.leads, data.properties, data.stages, activeAgents, manager])
 
   if (!agents.length) return null
   const th = t('u.h'), tm = t('u.min')

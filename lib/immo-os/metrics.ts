@@ -1,11 +1,14 @@
-import type { Data, Lead } from './types'
+import type { Data, Lead, Property, StageEvent } from './types'
+import { scoreLead } from './helpers'
 
 // Indicateurs par agent (lot 3). Fonctions pures : meme calcul pour le manager (tous les agents) et pour l'agent
 // (ses donnees sont deja filtrees cote serveur par api/all.ts : il ne voit que ses leads, clients, deals, visites et conversations).
 export const H = 3600000
 export const FOLLOWUP_HOURS = 48          // un lead actif sans contact depuis 48 h = "sans suivi" (meme seuil que le cron de rappels)
-export const RISK = { silentHours: 120, coolingHours: 72, stuckNewHours: 72 } as const
-export type RiskReason = 'orphan' | 'silent' | 'cooling' | 'stuck_new'
+export const RISK = { silentHours: 120, coolingHours: 72, stuckNewHours: 72, stageStuckHours: 168, scoreDrop: 15 } as const
+export type RiskReason = 'orphan' | 'silent' | 'cooling' | 'stuck_new' | 'stage_stuck' | 'score_drop'
+// Donnees facultatives pour 2 regles de plus (n°94) : etape bloquee (historique d'etapes, lot 4) et score en baisse (score enregistre vs score recalcule)
+export type RiskOpts = { props?: Property[]; stages?: StageEvent[] }
 const ACTIVE = ['new', 'qualified', 'viewing', 'negotiation']
 const norm = (x?: string | null) => String(x ?? '').trim().toLowerCase()
 const same = (a?: string | null, b?: string | null) => !!norm(a) && norm(a) === norm(b)
@@ -25,7 +28,7 @@ export type AgentMetrics = {
 }
 export type RiskLead = { lead: Lead; reasons: RiskReason[]; idleDays: number }
 
-export function riskReasons(l: Lead, now: number, activeAgents: string[]): RiskReason[] {
+export function riskReasons(l: Lead, now: number, activeAgents: string[], opts: RiskOpts = {}): RiskReason[] {
   if (!ACTIVE.includes(l.status)) return []
   const out: RiskReason[] = []
   const idleH = (now - new Date(l.last_contact).getTime()) / H
@@ -33,11 +36,18 @@ export function riskReasons(l: Lead, now: number, activeAgents: string[]): RiskR
   if (idleH >= RISK.silentHours) out.push('silent')
   else if (['viewing', 'negotiation'].includes(l.status) && idleH >= RISK.coolingHours) out.push('cooling')
   if (l.status === 'new' && (now - new Date(l.created_at).getTime()) / H >= RISK.stuckNewHours && idleH >= RISK.stuckNewHours) out.push('stuck_new')
+  // Etape bloquee : lead avance (qualifie, visite, negociation) dont la derniere etape date de 7 jours ou plus
+  if (opts.stages && l.status !== 'new') {
+    const last = Math.max(new Date(l.created_at).getTime(), ...opts.stages.filter((s) => s.kind === 'lead' && s.record_id === l.id).map((s) => new Date(s.created_at).getTime()))
+    if ((now - last) / H >= RISK.stageStuckHours) out.push('stage_stuck')
+  }
+  // Score en baisse : le score enregistre est nettement plus haut que le score recalcule aujourd'hui (le temps sans contact le fait baisser)
+  if (opts.props && Number.isFinite(Number(l.score)) && Number(l.score) - scoreLead(l, opts.props) >= RISK.scoreDrop) out.push('score_drop')
   return out
 }
-export function riskLeads(leads: Lead[], now: number, activeAgents: string[]): RiskLead[] {
+export function riskLeads(leads: Lead[], now: number, activeAgents: string[], opts: RiskOpts = {}): RiskLead[] {
   return leads
-    .map((lead) => ({ lead, reasons: riskReasons(lead, now, activeAgents), idleDays: Math.floor((now - new Date(lead.last_contact).getTime()) / (24 * H)) }))
+    .map((lead) => ({ lead, reasons: riskReasons(lead, now, activeAgents, opts), idleDays: Math.floor((now - new Date(lead.last_contact).getTime()) / (24 * H)) }))
     .filter((r) => r.reasons.length)
     .sort((a, b) => b.reasons.length - a.reasons.length || b.idleDays - a.idleDays)
 }
@@ -107,7 +117,7 @@ export function computeMetrics(data: Data, agents: string[], opts: { now?: numbe
       relancesToday: myVisits.filter((v) => v.status === 'scheduled' && ['followup', 'call'].includes(v.category ?? '') && sameDay(new Date(v.starts_at).getTime(), now)).length,
       offers: data.deals.filter((d) => same(d.agent, a) && d.status === 'offer').length,
       closedDeals: closedIn(from).length,
-      atRisk: riskLeads(mine, now, activeAgents).length,
+      atRisk: riskLeads(mine, now, activeAgents, { props: data.properties, stages: data.stages }).length,
       chatThreads: chat.length, chatToVisit: converted.length, chatToVisitPct: chat.length ? Math.round((converted.length / chat.length) * 100) : null,
       // Meilleur employe de la semaine : 5 pts par vente conclue, 2 pts par visite effectuee, 1 pt par conversation active (7 derniers jours)
       weekDeals: wDeals, weekVisits: wVisits, weekConv: wConv, weekPoints: wDeals * 5 + wVisits * 2 + wConv,

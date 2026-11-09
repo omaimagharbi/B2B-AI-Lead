@@ -1,6 +1,9 @@
 'use client'
 
-import { Ban, CheckCircle2, Circle, ChevronRight, RotateCcw, Zap } from 'lucide-react'
+import { useState } from 'react'
+import { Ban, CheckCircle2, Circle, ChevronRight, RotateCcw, Zap, Sparkles } from 'lucide-react'
+import { useAgentConfig } from './use-agent-config'
+import { negotiationBrief } from '@/lib/immo-os/ai-tools'
 import { useImmo } from '@/lib/immo-os/store'
 import { Badge, Btn, Modal } from '@/lib/immo-os/ui'
 import { DEAL_STATUSES, type Deal, type DealStatus } from '@/lib/immo-os/types'
@@ -12,7 +15,10 @@ import { sameNumber } from '@/lib/immo-os/inbound-pure'
 // n°48 / n°86 : parcours guide d'un deal (etapes visibles, passage a l'etape suivante, historique, actions automatiques).
 // Le changement d'etape passe par update('deals') : le serveur (ou le mode demo) ecrit l'historique et declenche les actions.
 export default function DealSteps({ dealId, onClose }: { dealId: string; onClose: () => void }) {
-  const { data, t, tf, update, canDelete, me } = useImmo()
+  const { data, t, tf, update, canDelete, me, ai, lang } = useImmo()
+  const cfg = useAgentConfig()
+  const [advice, setAdvice] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const d = data.deals.find((x) => x.id === dealId) as Deal | undefined
   if (!d) return null
   const events = (data.stages ?? []).filter((s) => s.kind === 'deal' && s.record_id === d.id).sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -24,6 +30,16 @@ export default function DealSteps({ dealId, onClose }: { dealId: string; onClose
   const st = (s: string) => t('st.' + s)
   const go = (status: DealStatus) => update('deals', d.id, { status, closed_at: status === 'closed' ? new Date().toISOString() : null })
   const manager = !!me && ['proprietaire', 'admin', 'directeur_commercial'].includes(me.role)
+  // n°87 : faits de negociation calcules sans IA ; l'IA (sur demande) ne fait que les formuler
+  const prop = data.properties.find((p) => p.id === d.property_id)
+  const nb = negotiationBrief(d, prop, data.properties, events[0]?.created_at)
+  const showNeg = cfg.negotiation_help && !!prop && ['negotiation', 'offer'].includes(d.status)
+  const askAdvice = async () => {
+    setBusy(true)
+    const facts = `Listed price QAR ${nb.listPrice}; current offer QAR ${nb.offer}; gap ${nb.gapPct}%; median price per m2 for the same area and type QAR ${nb.medianPerM2 ?? 'unknown'}; offer per m2 QAR ${nb.offerPerM2 ?? 'unknown'}; suggested counter-offer range QAR ${nb.counterMin ?? '?'} to ${nb.counterMax ?? '?'}; days in this step ${nb.daysInStage}; step ${d.status}; deal type ${d.kind}.`
+    setAdvice(await ai('negotiation', `Negotiation help for deal "${d.title}"`, { context: facts, language: lang }))
+    setBusy(false)
+  }
   const color = DEAL_STATUSES.find((s) => s.v === d.status)?.color
 
   return (
@@ -52,6 +68,19 @@ export default function DealSteps({ dealId, onClose }: { dealId: string; onClose
         {cancelled && <Btn onClick={() => go('negotiation')}><RotateCcw size={14} /> {t('ds.reopen')}</Btn>}
       </div>
 
+      {showNeg && (
+        <div className="mb-5 rounded-lg p-3" style={{ background: 'var(--soft)', border: '1px solid var(--border)' }}>
+          <div className="imo-label">{t('neg.title')} · {t('neg.facts')}</div>
+          <div className="grid gap-1 text-[13px] sm:grid-cols-2">
+            <div>{t('neg.list')}: <b>{qar(nb.listPrice)}</b></div><div>{t('neg.offer')}: <b>{qar(nb.offer)}</b></div>
+            <div>{t('neg.gap')}: <b>{nb.gapPct === null ? '-' : `${nb.gapPct}%`}</b></div><div>{t('neg.days')}: <b>{nb.daysInStage ?? '-'}</b></div>
+            <div className="sm:col-span-2">{t('neg.median')}: <b>{nb.medianPerM2 ? qar(nb.medianPerM2) : '-'}</b></div>
+            <div className="sm:col-span-2">{t('neg.counter')}: <b>{nb.counterMin && nb.counterMax ? `${qar(nb.counterMin)} - ${qar(nb.counterMax)}` : '-'}</b></div>
+          </div>
+          <div className="flex items-center gap-2 mt-2 flex-wrap"><Btn onClick={askAdvice} disabled={busy}><Sparkles size={13} style={{ color: 'var(--gold)' }} /> {busy ? '…' : t('neg.ai')}</Btn><span className="text-[11.5px] t-muted">{t('neg.disclaimer')}</span></div>
+          {advice && <div className="mt-2 text-[13px] whitespace-pre-wrap" dir="auto">{advice}</div>}
+        </div>
+      )}
       <div className="imo-label">{t('ds.history')}</div>
       {events.length === 0 ? <div className="text-[13px] t-muted">{t('ds.history.empty')}</div> : (
         <ol className="grid gap-2">

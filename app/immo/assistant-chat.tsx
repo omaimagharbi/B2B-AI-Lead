@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Home, LineChart, Megaphone, MessageSquareReply, FileText, Send, Bot } from 'lucide-react'
 import { useImmo } from '@/lib/immo-os/store'
-import { contextSummary, matchProperties, parseSearch, qar } from '@/lib/immo-os/helpers'
+import { contextSummary, matchProperties, normSearch, qar, refineQuery, type Query } from '@/lib/immo-os/helpers'
 import { fallbackAd, fallbackMarket, fallbackReply, fallbackReport } from '@/lib/immo-os/fallbacks'
 import type { Property } from '@/lib/immo-os/types'
 import { Dots, PropImage } from '@/lib/immo-os/ui'
@@ -14,7 +14,7 @@ type Msg = { role: 'user' | 'bot'; text: string; props?: Property[] }
 const NO_AI = '\n\n(Tip: add GEMINI_API_KEY or ANTHROPIC_API_KEY on the server to get full AI answers.)'
 
 export default function AssistantChat({ compact = false }: { compact?: boolean }) {
-  const { data, ai, t } = useImmo()
+  const { data, ai, t, tf } = useImmo()
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -34,25 +34,31 @@ export default function AssistantChat({ compact = false }: { compact?: boolean }
     }
   }
 
-  const find = (text: string): Msg => {
-    const q = parseSearch(text, data.zones.filter((z) => z.level === 'zone').map((z) => z.name))
+  // n°36 : recherche en langage naturel en EN / FR / AR ; une question de suivi ("moins cher", "plus de chambres") complete la precedente
+  const lastQ = useRef<Query | null>(null)
+  const zones = () => data.zones.filter((z) => z.level === 'zone').map((z) => z.name)
+  const find = (q: Query): Msg => {
+    lastQ.current = q
     const found = matchProperties(data.properties, q)
-    const crit = [q.type, q.tenure, q.area, q.listing, q.maxPrice ? `under ${qar(q.maxPrice)}` : null, q.minBeds ? `${q.minBeds}+ beds` : null].filter(Boolean).join(', ')
+    const crit = [q.type, q.tenure, q.area, q.listing, q.maxPrice ? `< ${qar(q.maxPrice)}` : null, q.minBeds ? `${q.minBeds}+ ${t('ai.beds')}` : null].filter(Boolean).join(', ')
     return found.length
-      ? { role: 'bot', text: `I found ${found.length} matching ${found.length > 1 ? 'properties' : 'property'}${crit ? ` (${crit})` : ''}:`, props: found.slice(0, 4) }
-      : { role: 'bot', text: `No available property matches${crit ? ` (${crit})` : ''}. Try a higher budget or another area.` }
+      ? { role: 'bot', text: `${tf('ai.found', { n: found.length })}${crit ? ` (${crit})` : ''}:`, props: found.slice(0, 4) }
+      : { role: 'bot', text: `${t('ai.nomatch')}${crit ? ` (${crit})` : ''}` }
   }
 
+  const SEARCH_VERB = /(find|show|search|looking|need|want|any|have|cherche|trouve|montre|veux|besoin|avez|ابحث|اريد|أريد|ابغى|ابي|عندكم|اظهر|أظهر|وريني)/i
+  const FOLLOW_UP = /(cheaper|more bed|moins cher|plus de chambres|اقل سعرا|أقل سعرا|ارخص|أرخص|اكثر غرف|أكثر غرف)/i
   const send = async (text: string) => {
-    const t = text.trim()
-    if (!t || busy) return
+    const msg = text.trim()
+    if (!msg || busy) return
     setInput('')
-    const q = parseSearch(t, data.zones.filter((z) => z.level === 'zone').map((z) => z.name))
-    const isSearch = !!(q.type || q.tenure || q.area || q.maxPrice || q.minBeds || q.listing) && /(find|show|search|looking|need|want|any|have)/i.test(t)
-    await run(t, async () => {
-      if (isSearch) return find(t)
-      const r = await ai('chat', t, { context: ctx() })
-      return { role: 'bot', text: r ?? `I can search your listings (try "villa in Lusail under 3M") or use AI once it is configured.${NO_AI}` }
+    const q = refineQuery(lastQ.current, msg, zones())
+    const has = !!(q.type || q.tenure || q.area || q.maxPrice || q.minBeds || q.listing)
+    const isSearch = has && (SEARCH_VERB.test(normSearch(msg)) || SEARCH_VERB.test(msg) || (!!lastQ.current && FOLLOW_UP.test(msg)))
+    await run(msg, async () => {
+      if (isSearch) return find(q)
+      const r = await ai('chat', msg, { context: ctx() })
+      return { role: 'bot', text: r ?? `${t('ai.hint')}${NO_AI}` }
     })
   }
 

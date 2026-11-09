@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authentifierClientUser } from '@/lib/auth-api'
 import { quotaIAImmo } from '@/lib/immo-os/ai-quota'
 import { enregistrerUsageIA } from '@/lib/usage-ia'
-import { claudeModel, geminiModel, FALLBACK_CLAUDE_MODEL } from '@/lib/immo-os/ai-model'
-
-const TIMEOUT_MS = 20_000
+import { geminiModel } from '@/lib/immo-os/ai-model'
 
 const MODES: Record<string, string> = {
   chat: 'Answer the agent question using ONLY the data provided. If something is not in the data, say so.',
@@ -12,45 +10,13 @@ const MODES: Record<string, string> = {
   ad: 'Write a ready-to-post property advertisement for the requested channel, language and tone. Use only facts from the property data. Include a headline, 3-5 key selling points and a call to action. Never invent amenities.',
   reply: 'Write a short, warm, professional reply to the client message, as the agent. Propose one clear next step (viewing, documents, call). Use only facts from the data.',
   orphans: 'The agency has active leads with no active agent (agent removed or never assigned). Using ONLY the data provided, say in 5-8 lines which leads to contact first and why (stage, budget, days without contact) and how to spread them across the listed agents according to their current workload. Do not invent leads or agents.',
+  quality: "You review the quality of an agent's WhatsApp conversation with a client, using ONLY the conversation provided. Give: a score out of 10, 3 strengths, 3 improvements, and one better reply the agent could send. Never invent facts.",
+  negotiation: "You help the agent negotiate a real estate deal, using ONLY the deal facts provided. Give: a recommended counter-offer range in QAR with the reasoning, 3 arguments, 2 risks, and a short follow-up message to the client. Say clearly that the decision belongs to the agent.",
   report: 'Write an executive summary report (5-8 lines) of the agency performance from the data, followed by 3 recommended actions.',
 }
 const LANGS: Record<string, string> = { en: 'English', fr: 'French', ar: 'Arabic (Modern Standard)' }
 
-type Rep = { text: string; tin: number; tout: number }
-const approx = (s: string) => Math.ceil(s.length / 4) // repli si le fournisseur ne renvoie pas les tokens
-
-async function gemini(prompt: string, key: string): Promise<Rep> {
-  const c = new AbortController()
-  const t = setTimeout(() => c.abort(), TIMEOUT_MS)
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel()}:generateContent`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }), signal: c.signal }
-    )
-    if (!res.ok) throw new Error(`Gemini ${res.status}`)
-    const d = await res.json()
-    const text: string = d.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    return { text, tin: d.usageMetadata?.promptTokenCount ?? approx(prompt), tout: d.usageMetadata?.candidatesTokenCount ?? approx(text) }
-  } finally {
-    clearTimeout(t)
-  }
-}
-async function anthropic(prompt: string, key: string): Promise<Rep & { model: string }> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const a = new Anthropic({ apiKey: key, timeout: TIMEOUT_MS })
-  const ask = (model: string) => a.messages.create({ model, max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
-  let model = claudeModel()
-  let m
-  try {
-    m = await ask(model)
-  } catch (e: any) {
-    // Nom de modele inconnu (404) : on retente une fois avec l'ancien nom avant d'abandonner
-    if (e?.status === 404 && model !== FALLBACK_CLAUDE_MODEL) { model = FALLBACK_CLAUDE_MODEL; m = await ask(model) } else throw e
-  }
-  const b = m.content.find((x) => x.type === 'text')
-  const text = b && 'text' in b ? b.text : ''
-  return { text, model, tin: m.usage?.input_tokens ?? approx(prompt), tout: m.usage?.output_tokens ?? approx(text) }
-}
+import { gemini, anthropic } from '@/lib/immo-os/ai-call'
 
 export async function POST(req: NextRequest) {
   const auth = await authentifierClientUser(req)

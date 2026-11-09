@@ -43,7 +43,7 @@ Espace immobilier (Qatar) : 13 menus - Dashboard, Properties, Leads (kanban), Ca
 - Anti-spam : champ piege + 5 envois / 10 min / IP (fonction SQL `verifier_rate_limit` deja presente).
 
 ## MISE EN LIGNE - ordre a respecter (PiloBrain Real Estate)
-1. Supabase > SQL Editor : coller et executer **UNE SEULE FOIS** `00_MIGRATIONS_70_a_80_combinees.sql` (equivaut a 70 a 80, dans le bon ordre, idempotent). Si 70 a 76 sont deja faits : lancer seulement 77, 78, 79 puis 80 (`80_immobilier_os_lot6b_medias.sql`, `77_immobilier_os_lot4_suivi_client.sql`, `78_immobilier_os_lot5_conformite.sql`, `79_immobilier_os_lot6a_meta.sql`). Ne pas lancer 71 ou 72 seuls avant le 70 (erreur `relation "re_messages" does not exist`).
+1. Supabase > SQL Editor : coller et executer **UNE SEULE FOIS** `00_MIGRATIONS_70_a_81_combinees.sql` (equivaut a 70 a 81, dans le bon ordre, idempotent). Si 70 a 76 sont deja faits : lancer seulement 77, 78, 79, 80 puis 81 (`81_immobilier_os_lot7_agent_ia.sql`, `80_immobilier_os_lot6b_medias.sql`, `77_immobilier_os_lot4_suivi_client.sql`, `78_immobilier_os_lot5_conformite.sql`, `79_immobilier_os_lot6a_meta.sql`). Ne pas lancer 71 ou 72 seuls avant le 70 (erreur `relation "re_messages" does not exist`).
 2. GitHub : remplacer les fichiers du depot par le contenu de ce zip (les fichiers sont a la racine, pas dans un sous-dossier), commit + push. Vercel redeploie tout seul.
 3. Vercel > Environment Variables : ajouter `WHATSAPP_IMMO_CLIENT_ID` (id affiche dans /immo/settings) ; optionnels : `IMMO_DEFAULT_COUNTRY_CODE` (974), `IMMO_AI_MONTHLY_LIMIT` (300), `CRON_SECRET` (deja utilise par les autres crons), `IMMO_CLAUDE_MODEL` (nom du modele Claude de l'assistant, defaut `claude-sonnet-5-5`).
 4. Ouvrir `/immo` (ou le bouton dore "PiloBrain Real Estate" en haut du dashboard).
@@ -94,6 +94,12 @@ Si le build Vercel echoue : copier les lignes rouges en bas du log. Si Vercel re
 - n°35 : photos / PDF envoyes depuis l'ecran WhatsApp (trombone), verifies par leurs premiers octets, 4 Mo max, stockes dans le bucket `immo-chat` (dossier = agence) ; en reception, photos / PDF / vocaux / videos arrivent par le webhook Meta et sont ranges dans le meme bucket. Le serveur n'accepte que des URL du stockage de l'agence. GreenAPI : envoi de fichiers par lien, pas de reception de medias.
 - n°38 / n°91 : dans « Envoyer un bien », bouton « Rediger avec l'IA » + photos cochees (5 max) ; la legende de la 1re image porte le texte (1000 caracteres max, sinon texte puis images).
 - n°100 : bouton conversation sur la fiche proprietaire ; un agent ne peut ni voir ni ecrire aux proprietaires (403 cote serveur).
+
+### Corrections et lot 7 : IA avancee (migration 81)
+- n°36 recherche en langage naturel EN / FR / AR (`parseSearch` + `refineQuery` dans `lib/immo-os/helpers.ts`, utilisee par l'assistant) ; n°94 leads a risque : 2 regles de plus (etape bloquee 7 j, score en baisse) dans `lib/immo-os/metrics.ts`.
+- n°57 menu `AI Real Estate Agent` (`/immo/ai-agent`) ; n°39 / n°85 agent IA qui repond, qualifie, propose des biens de la base puis passe la main : `lib/immo-os/ai-agent.ts` (garde-fous), `api/ai-agent-run.ts`, appele par `inbound.ts`. **Desactive par defaut**, interrupteurs par agence (Reglages IA), chaque reponse / passage de main / blocage est ecrit dans le journal d'activite (`ai_auto_reply`, `ai_handoff`, `ai_blocked`, `ai_qualify`). Sans IA configuree, il pose une question de qualification fixe et sure.
+- n°29 / n°84 note de qualite des conversations (calcul sans IA, analyse IA facultative) ; n°87 dispatch (agent suggere, regles transparentes) et aide a la negociation (faits calcules + texte IA sur demande) : `lib/immo-os/ai-tools.ts`.
+- O38 (traduction complete) : NON terminee, voir l'Excel.
 
 ## Limite Vercel Hobby (12 fonctions)
 Tout le Real Estate OS cote serveur est servi par UNE SEULE fonction : `app/api/immo/route.ts` (appel `/api/immo?r=<nom>`; le code des endpoints est dans `lib/immo-os/api/`). Le formulaire public `/lead?a=<ID>` est une page statique. Les rappels de leads (48 h) tournent dans le cron existant `/api/cron/relances` : aucun cron ni fonction en plus.
