@@ -9,6 +9,7 @@ import { isManager } from '@/lib/immo-os/permissions'
 import { lastMonths, qar } from '@/lib/immo-os/helpers'
 import { budgetGap, marketContext, momChange, priceTrend, typeMix, zoneStats } from '@/lib/immo-os/market'
 import { fallbackMarket } from '@/lib/immo-os/fallbacks'
+import ExternalMarket from './external'
 
 const tip = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12 }
 const ax = { fontSize: 11, fill: 'var(--muted)' }
@@ -86,6 +87,7 @@ export default function MarketPage() {
           </Card>
         </div>
       )}
+      <ExternalMarket />
     </div>
   )
 }

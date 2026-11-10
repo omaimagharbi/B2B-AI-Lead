@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, Building2, Target, Users, UserSquare2, MessageCircle, Bot, Sparkles, Megaphone, Handshake, BarChart3, UsersRound, Settings,
+  LayoutDashboard, Building2, Target, Users, UserSquare2, MessageCircle, Bot, Sparkles, MapPin, Megaphone, Handshake, BarChart3, UsersRound, Settings,
   Search, Bell, Menu, Moon, Sun, LogOut, FlaskConical, CalendarDays, TrendingUp,
 } from 'lucide-react'
 import { ImmoProvider, useImmo } from '@/lib/immo-os/store'
@@ -25,6 +25,7 @@ const NAV = [
   { href: '/immo/whatsapp', k: 'whatsapp', icon: MessageCircle },
   { href: '/immo/assistant', k: 'assistant', icon: Bot },
   { href: '/immo/ai-agent', k: 'ai_agent', icon: Sparkles },
+  { href: '/immo/map', k: 'map', icon: MapPin },
   { href: '/immo/marketing', k: 'marketing', icon: Megaphone },
   { href: '/immo/deals', k: 'deals', icon: Handshake },
   { href: '/immo/reports', k: 'reports', icon: BarChart3 },

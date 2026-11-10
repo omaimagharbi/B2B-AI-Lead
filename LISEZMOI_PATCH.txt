@@ -1,5 +1,6 @@
-PATCH V16 -> V19 (lots 4, 5, 6a, 6b, corrections et lot 7)
+PATCH V16 -> V20 (lots 4 a 8 et corrections)
 1. Copier le contenu de ce dossier PAR-DESSUS le projet V16 (memes chemins).
-2. Supprimer les fichiers listes dans FICHIERS_SUPPRIMES.txt (00_MIGRATIONS_70_a_76_combinees.sql est remplace par 00_MIGRATIONS_70_a_81_combinees.sql).
-3. Supabase : lancer 77, 78, 79, 80 puis 81 (ou le fichier combine 70 a 81).
-4. Aucune nouvelle route API, aucun nouveau cron.
+2. Supprimer les fichiers listes dans FICHIERS_SUPPRIMES.txt (00_MIGRATIONS_70_a_76_combinees.sql est remplace par 00_MIGRATIONS_70_a_82_combinees.sql).
+3. Lancer `npm install` (nouvelle dependance : leaflet, @types/leaflet) : package.json et package-lock.json sont dans le patch.
+4. Supabase : lancer 77 a 82 (ou le fichier combine 70 a 82).
+5. Aucune nouvelle route API, aucun nouveau cron.

@@ -37,6 +37,11 @@ export function sanitize(entity: Entity, input: Record<string, unknown>): Record
       out[f] = typeof v === 'string' && ENUMS[f].includes(v) ? v : f === 'level' ? 'zone' : f === 'outcome' ? 'other' : null
       continue
     }
+    if (f === 'lat' || f === 'lng') { // lot 8 : coordonnees GPS, null si invalides
+      const n = Number(v), lim = f === 'lat' ? 90 : 180
+      out[f] = v === null || v === '' || !Number.isFinite(n) || Math.abs(n) > lim ? null : Math.round(n * 1e6) / 1e6
+      continue
+    }
     if (NULLABLE_INT.has(f)) {
       const n = Math.round(Number(v))
       out[f] = v === null || v === '' || !Number.isFinite(n) || n <= 0 ? null : Math.min(n, 999)

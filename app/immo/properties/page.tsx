@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import PropertyGeoVideo from '../property-geo-video'
 import { Building2, Plus, Search, LayoutGrid, List, Pencil, Trash2, Megaphone, Star, Link2, X, Images } from 'lucide-react'
 import { useImmo } from '@/lib/immo-os/store'
 import { Badge, Btn, Card, Empty, Field, Gallery, Modal, PageHead, PropImage } from '@/lib/immo-os/ui'
@@ -133,7 +134,7 @@ export default function PropertiesPage() {
               </div>
               <div className="p-3.5">
                 <div className="font-semibold truncate">{p.title}</div>
-                <div className="text-[12.5px] t-muted">{where(p)}{p.unit_no ? ` · ${p.unit_no}` : ''} · <span style={{ color: STATUS_COLOR[p.status] }} className="font-semibold">{p.status}</span></div>
+                <div className="text-[12.5px] t-muted">{where(p)}{p.unit_no ? ` · ${p.unit_no}` : ''}{typeof p.lat === 'number' && <Link href={`/immo/map?p=${p.id}`} className="underline ms-1" aria-label={t('map.view')} title={t('map.view')}>📍</Link>}{p.video_url && <a href={p.video_url} target="_blank" rel="noopener noreferrer" className="underline ms-1" title={t('vid.badge')}>▶ {t('vid.badge')}</a>} · <span style={{ color: STATUS_COLOR[p.status] }} className="font-semibold">{p.status}</span></div>
                 {tenureText(p) && <div className="mt-1"><Badge color={p.tenure === 'usufruct' ? '#B45309' : '#0F766E'}>{tenureText(p)}</Badge></div>}
                 <div className="text-[11.5px] t-muted mt-1">{t('prop.listed')} {listedOn(p)}{p.commission_pct ? ` · ${p.commission_pct}%` : ''} · <button className="underline" onClick={() => setSimilarOf(p)}>{t('sim.btn')}</button></div>
                 <div className="text-[17px] font-bold mt-1">{qar(p.price)}{p.listing === 'rent' && <span className="text-[12px] t-muted font-normal"> /month</span>}</div>
@@ -182,6 +183,7 @@ export default function PropertiesPage() {
             <Field label="Bedrooms"><input type="number" min={0} className="imo-input" value={edit.beds ?? 0} onChange={(e) => set('beds', Number(e.target.value))} /></Field>
             <Field label="Bathrooms"><input type="number" min={0} className="imo-input" value={edit.baths ?? 0} onChange={(e) => set('baths', Number(e.target.value))} /></Field>
             <Field label="Owner"><select className="imo-select" value={edit.owner_id ?? ''} onChange={(e) => set('owner_id', e.target.value || null)}><option value="">- none -</option>{data.owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></Field>
+            <div className="sm:col-span-2"><PropertyGeoVideo edit={edit} set={set} /></div>
             <div className="sm:col-span-2"><Field label={`${t('photo.title')} (${photosOf(edit).length}/${MAX_PHOTOS})`}>
               <div className="flex gap-2 items-center flex-wrap">
                 <label className="imo-btn" style={{ cursor: uploading ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{uploading ? t('photo.uploading') : t('photo.add')}<input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={uploading || room() <= 0} style={{ display: 'none' }} onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} /></label>

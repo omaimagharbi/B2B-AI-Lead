@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { authentifierClientUser } from '@/lib/auth-api'
 import { sniffImage, MAX_UPLOAD_BYTES } from '@/lib/immo-os/image'
 import { sniffChatFile, CHAT_BUCKET, CHAT_MAX_BYTES } from '@/lib/immo-os/media'
+import { VIDEO_BUCKET, VIDEO_MAX_BYTES, videoExt } from '@/lib/immo-os/geo'
 
 const BUCKET = 'immo-photos'
 
@@ -12,6 +13,19 @@ export async function POST(req: NextRequest) {
 
   const { data: ok } = await supabaseAdmin.rpc('verifier_rate_limit', { p_identifiant: `immo-up:${auth.clientUserId}`, p_max: 30, p_fenetre_minutes: 10 })
   if (ok === false) return NextResponse.json({ error: 'Too many uploads. Please wait a few minutes.' }, { status: 429 })
+
+  // Lot 8 (n°11 / n°71) : ?kind=video-url -> adresse d'envoi SIGNEE vers le stockage (une video de 50 Mo depasse la limite d'une fonction serveur :
+  // le navigateur envoie directement le fichier au stockage, dont le bucket refuse plus de 50 Mo et tout autre format que MP4 / WebM / MOV).
+  if (req.nextUrl.searchParams.get('kind') === 'video-url') {
+    const b = await req.json().catch(() => ({}))
+    const ext = videoExt(String(b?.type ?? ''), String(b?.name ?? ''))
+    if (!ext) return NextResponse.json({ error: 'Only MP4, WebM or MOV videos are accepted' }, { status: 415 })
+    if (!(Number(b?.size) > 0) || Number(b.size) > VIDEO_MAX_BYTES) return NextResponse.json({ error: 'Video must be under 50 MB' }, { status: 413 })
+    const vpath = `${auth.clientId}/${crypto.randomUUID()}.${ext}`
+    const sig = await supabaseAdmin.storage.from(VIDEO_BUCKET).createSignedUploadUrl(vpath)
+    if (sig.error || !sig.data) { const missing = /bucket not found/i.test(sig.error?.message ?? ''); return NextResponse.json({ error: missing ? 'Video storage is not set up yet (run migration 82).' : 'Could not prepare the upload' }, { status: missing ? 503 : 500 }) }
+    return NextResponse.json({ path: vpath, token: sig.data.token, url: supabaseAdmin.storage.from(VIDEO_BUCKET).getPublicUrl(vpath).data.publicUrl })
+  }
 
   const form = await req.formData().catch(() => null)
   const file = form?.get('file')

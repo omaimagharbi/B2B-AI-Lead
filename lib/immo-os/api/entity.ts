@@ -10,6 +10,7 @@ import { onDealStatusChange, onLeadStatusChange } from '@/lib/immo-os/api/deal-s
 import { alerterLeadChaud } from '@/lib/immo-os/api/hot-alerts'
 import { becameHot } from '@/lib/immo-os/hot-alert'
 import { POLICY_VERSION } from '@/lib/immo-os/policy'
+import { isOwnVideoUrl } from '@/lib/immo-os/geo'
 
 const SCOPED = new Set<Entity>(['leads', 'clients', 'deals', 'visits'])
 
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { entity: str
   if (SERVER_ONLY_ENTITIES.includes(c.e!) || !canWrite(c.e!, 'create', c.viewer!)) return interdit()
   const body = await req.json().catch(() => ({}))
   const row: Record<string, unknown> = { ...sanitize(c.e!, body), client_id: c.auth!.clientId }
+  if (c.e === 'properties' && row.video_url && !isOwnVideoUrl(row.video_url, process.env.NEXT_PUBLIC_SUPABASE_URL, c.auth!.clientId)) row.video_url = null // seules les videos du stockage de l'agence
   if (c.e === 'outcomes') {
     row.agent = c.viewer!.name // l'auteur est toujours celui qui enregistre
     if (!row.contact_name) return NextResponse.json({ error: 'contact_name required' }, { status: 400 })
@@ -96,6 +98,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { entity: st
   if (!isManager(c.viewer!.role)) delete patch.agent // un agent ne peut pas se reassigner / reassigner un lead
   const { data: avant } = await supabaseAdmin.from(c.table!).select('*').eq('id', body.id).eq('client_id', c.auth!.clientId).maybeSingle()
   // Lot 5 : "ne plus contacter". Un agent peut bloquer un contact, mais seul un gestionnaire peut le rouvrir (nouveau consentement manuel).
+  if (c.e === 'properties' && patch.video_url && !isOwnVideoUrl(patch.video_url, process.env.NEXT_PUBLIC_SUPABASE_URL, c.auth!.clientId)) patch.video_url = null
   let dncChange: 'optout' | 'optin' | null = null
   if (COMPLIANT.has(c.e!) && 'do_not_contact' in patch) {
     const was = !!(avant as any)?.do_not_contact

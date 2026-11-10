@@ -14,6 +14,8 @@ import { parseMetaWebhook, verifySignature, windowState, renderTemplate, templat
 import { createHmac } from 'node:crypto'
 import { parseSearch, refineQuery } from '../lib/immo-os/helpers'
 import { riskReasons } from '../lib/immo-os/metrics'
+import { parseCoords, mapEmbed, videoExt, isOwnVideoUrl } from '../lib/immo-os/geo'
+import { parseMarketCsv, summarizeMarket } from '../lib/immo-os/market-import'
 import { guard, wantsHuman, validateReply, readConfig, qualify, leadPatchFromQual, DEFAULT_AGENT_CONFIG } from '../lib/immo-os/ai-agent'
 import { scoreConversation, dispatchSuggestions, negotiationBrief } from '../lib/immo-os/ai-tools'
 import { sniffChatFile, isOwnMediaUrl, inboundMime } from '../lib/immo-os/media'
@@ -221,6 +223,27 @@ ok('n°29/84 qualite, n°87 dispatch et negociation', () => {
   const comps: any[] = [prop, { id: 'q', price: 3_300_000, size_m2: 300, area: 'Lusail', type: 'villa', listing: 'sale' }]
   const nb = negotiationBrief({ value: 2_700_000, status: 'offer', created_at: new Date(t0 - 5 * 86400000).toISOString() } as any, prop, comps, null, t0)
   assert.equal(nb.gapPct, 10); assert.equal(nb.counterMin, 2_820_000); assert.equal(nb.counterMax, 2_910_000); assert.equal(nb.medianPerM2, 11000); assert.equal(nb.daysInStage, 5)
+})
+ok('n°12 carte et n°11/71 video', () => {
+  assert.deepEqual(parseCoords('25.3548, 51.4999'), { lat: 25.3548, lng: 51.4999 })
+  assert.deepEqual(parseCoords('25,3548 51,4999'), { lat: 25.3548, lng: 51.4999 })
+  assert.deepEqual(parseCoords('https://www.google.com/maps/place/Lusail/@25.4203,51.4909,15z/data=x'), { lat: 25.4203, lng: 51.4909 })
+  assert.deepEqual(parseCoords('https://www.google.com/maps?q=25.3,51.5'), { lat: 25.3, lng: 51.5 })
+  assert.deepEqual(parseCoords('https://www.openstreetmap.org/#map=17/25.3/51.5'), { lat: 25.3, lng: 51.5 })
+  assert.equal(parseCoords('hello'), null); assert.equal(parseCoords('999, 51'), null); assert.equal(parseCoords('0, 0'), null)
+  assert.equal(mapEmbed({ lat: 25.3, lng: 51.5 }).provider, 'osm'); assert.equal(mapEmbed({ lat: 25.3, lng: 51.5 }, 'KEY').provider, 'google')
+  assert.equal(videoExt('video/mp4'), 'mp4'); assert.equal(videoExt('', 'a.MOV'), 'mov'); assert.equal(videoExt('video/x-msvideo', 'a.avi'), null)
+  const b = 'https://p.supabase.co'
+  assert.equal(isOwnVideoUrl(`${b}/storage/v1/object/public/immo-video/cc/v.mp4`, b, 'cc'), true); assert.equal(isOwnVideoUrl(`${b}/storage/v1/object/public/immo-video/other/v.mp4`, b, 'cc'), false); assert.equal(isOwnVideoUrl('https://evil.com/v.mp4', b, 'cc'), false)
+})
+ok('n°74 import CSV de marche', () => {
+  const csv = 'Area;Type;Listing;Price (QAR);Size_m2;Bedrooms;Date\nLusail;Apartment;sale;"1,200,000";100;2;2026-05-01\nLusail;apartment;sale;1400000;100;2;2026-05-03\nThe Pearl;villa;rent;abc;300;4;2026-05-03\nThe Pearl;Villa;rent;25000;;4;'
+  const r = parseMarketCsv(csv)
+  assert.equal(r.rows.length, 3); assert.equal(r.errors.length, 1); assert.equal(r.rows[0].price, 1_200_000); assert.equal(r.rows[0].type, 'apartment'); assert.equal(r.rows[2].listing, 'rent'); assert.equal(r.rows[1].txn_date, '2026-05-03')
+  const lus = summarizeMarket(r.rows).find((x) => x.area === 'Lusail')!
+  assert.equal(lus.count, 2); assert.equal(lus.medianPrice, 1_300_000); assert.equal(lus.medianPerM2, 13000)
+  assert.equal(parseMarketCsv('a,b\n1,2').errors[0], 'Missing column "price"'); assert.equal(parseMarketCsv('').rows.length, 0)
+  assert.equal(parseMarketCsv('price,area\n100,"Al ""Sadd"""').rows[0].area, 'Al "Sadd"')
 })
 function l_(i: number) { return (['en', 'fr', 'ar'] as const)[i] }
 console.log(`\n${n} groupes de tests OK`)

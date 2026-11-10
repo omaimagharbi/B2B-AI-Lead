@@ -28,6 +28,7 @@ export type Activity = { id: string; actor_id?: string | null; actor_name: strin
 export type Assignment = { id: string; lead_id: string; lead_name?: string | null; from_agent?: string | null; to_agent?: string | null; by_name?: string | null; reason?: string | null; created_at: string }
 export type Zone = { id: string; level: ZoneLevel; name: string; name_ar?: string | null; parent_id?: string | null; created_at: string }
 export type Property = {
+  lat?: number | null; lng?: number | null; video_url?: string | null // lot 8
   id: string; title: string; type: PropType; listing: Listing; status: PropStatus; area?: string | null
   price: number; beds: number; baths: number; size_m2: number; owner_id?: string | null
   image_url?: string | null; photos?: string[] | null; description?: string | null; featured: boolean
@@ -60,6 +61,8 @@ export type Outcome = { id: string; contact_name: string; contact_phone?: string
 export type Send = { id: string; property_id?: string | null; property_title?: string | null; contact_name: string; contact_phone?: string | null; agent?: string | null; channel?: string | null; created_at: string }
 export type StageEvent = { id: string; kind: 'lead' | 'deal'; record_id: string; record_name?: string | null; from_status?: string | null; to_status: string; by_name?: string | null; auto?: string[] | null; created_at: string }
 export type Ad = {
+  published_at?: string | null; fb_post_id?: string | null; ig_media_id?: string | null; publish_error?: string | null
+  reach?: number | null; likes?: number | null; comments?: number | null; clicks?: number | null; metrics_at?: string | null // lot 8 (ecrits par le serveur)
   id: string; property_id?: string | null; channel: string; language: string; tone?: string | null
   content: string; status: 'draft' | 'published'; created_at: string
 }
@@ -80,7 +83,7 @@ export const ENTITIES: Record<Entity, { table: string; fields: string[] }> = {
   owners: { table: 're_owners', fields: ['name', 'phone', 'email', 'notes', 'responsible', 'last_contact', 'do_not_contact'] },
   properties: {
     table: 're_properties',
-    fields: ['title', 'type', 'listing', 'status', 'area', 'price', 'beds', 'baths', 'size_m2', 'owner_id', 'image_url', 'photos', 'description', 'featured', 'tenure', 'usufruct_years', 'zone_id', 'unit_no', 'commission_pct'],
+    fields: ['title', 'type', 'listing', 'status', 'area', 'price', 'beds', 'baths', 'size_m2', 'owner_id', 'image_url', 'photos', 'description', 'featured', 'tenure', 'usufruct_years', 'zone_id', 'unit_no', 'commission_pct', 'lat', 'lng', 'video_url'],
   },
   clients: { table: 're_clients', fields: ['name', 'phone', 'email', 'nationality', 'kind', 'budget', 'preferred_areas', 'notes', 'agent', 'beds_wanted', 'do_not_contact'] },
   leads: {

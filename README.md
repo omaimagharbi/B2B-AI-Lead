@@ -43,7 +43,7 @@ Espace immobilier (Qatar) : 13 menus - Dashboard, Properties, Leads (kanban), Ca
 - Anti-spam : champ piege + 5 envois / 10 min / IP (fonction SQL `verifier_rate_limit` deja presente).
 
 ## MISE EN LIGNE - ordre a respecter (PiloBrain Real Estate)
-1. Supabase > SQL Editor : coller et executer **UNE SEULE FOIS** `00_MIGRATIONS_70_a_81_combinees.sql` (equivaut a 70 a 81, dans le bon ordre, idempotent). Si 70 a 76 sont deja faits : lancer seulement 77, 78, 79, 80 puis 81 (`81_immobilier_os_lot7_agent_ia.sql`, `80_immobilier_os_lot6b_medias.sql`, `77_immobilier_os_lot4_suivi_client.sql`, `78_immobilier_os_lot5_conformite.sql`, `79_immobilier_os_lot6a_meta.sql`). Ne pas lancer 71 ou 72 seuls avant le 70 (erreur `relation "re_messages" does not exist`).
+1. Supabase > SQL Editor : coller et executer **UNE SEULE FOIS** `00_MIGRATIONS_70_a_82_combinees.sql` (equivaut a 70 a 82, dans le bon ordre, idempotent). Si 70 a 76 sont deja faits : lancer seulement 77 a 82 (`82_immobilier_os_lot8_annonces_carte_marche.sql`, `81_immobilier_os_lot7_agent_ia.sql`, `80_immobilier_os_lot6b_medias.sql`, `77_immobilier_os_lot4_suivi_client.sql`, `78_immobilier_os_lot5_conformite.sql`, `79_immobilier_os_lot6a_meta.sql`). Ne pas lancer 71 ou 72 seuls avant le 70 (erreur `relation "re_messages" does not exist`).
 2. GitHub : remplacer les fichiers du depot par le contenu de ce zip (les fichiers sont a la racine, pas dans un sous-dossier), commit + push. Vercel redeploie tout seul.
 3. Vercel > Environment Variables : ajouter `WHATSAPP_IMMO_CLIENT_ID` (id affiche dans /immo/settings) ; optionnels : `IMMO_DEFAULT_COUNTRY_CODE` (974), `IMMO_AI_MONTHLY_LIMIT` (300), `CRON_SECRET` (deja utilise par les autres crons), `IMMO_CLAUDE_MODEL` (nom du modele Claude de l'assistant, defaut `claude-sonnet-5-5`).
 4. Ouvrir `/immo` (ou le bouton dore "PiloBrain Real Estate" en haut du dashboard).
@@ -100,6 +100,14 @@ Si le build Vercel echoue : copier les lignes rouges en bas du log. Si Vercel re
 - n°57 menu `AI Real Estate Agent` (`/immo/ai-agent`) ; n°39 / n°85 agent IA qui repond, qualifie, propose des biens de la base puis passe la main : `lib/immo-os/ai-agent.ts` (garde-fous), `api/ai-agent-run.ts`, appele par `inbound.ts`. **Desactive par defaut**, interrupteurs par agence (Reglages IA), chaque reponse / passage de main / blocage est ecrit dans le journal d'activite (`ai_auto_reply`, `ai_handoff`, `ai_blocked`, `ai_qualify`). Sans IA configuree, il pose une question de qualification fixe et sure.
 - n°29 / n°84 note de qualite des conversations (calcul sans IA, analyse IA facultative) ; n°87 dispatch (agent suggere, regles transparentes) et aide a la negociation (faits calcules + texte IA sur demande) : `lib/immo-os/ai-tools.ts`.
 - O38 (traduction complete) : NON terminee, voir l'Excel.
+
+### Lot 8 : carte, video, publication sociale, marche externe (migration 82)
+- n°12 carte `/immo/map` (Leaflet + OpenStreetMap, aucune cle) ; coordonnees dans la fiche du bien (collage d'un lien Google Maps / OSM ou de coordonnees) ; apercu Google Maps seulement si `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` est defini. `lib/immo-os/geo.ts`.
+- n°11 / n°71 video du bien : envoi direct au stockage par adresse signee (`?r=upload&kind=video-url`), bucket `immo-video` limite a 50 Mo et MP4 / WebM / MOV (limite aussi controlee dans le navigateur).
+- n°45 / n°75 publication Facebook + Instagram via l'API Meta Graph (`api/publish.ts`), gestionnaires seulement, confirmation avant publication, identifiants de page / compte par agence (`re_social_accounts`), jeton `META_PAGE_ACCESS_TOKEN` (variable d'environnement, jamais en base) ; ids de publication gardes pour eviter les doublons.
+- n°46 performance : portee, j'aime, commentaires, clics par annonce publiee (bouton Actualiser), leads par canal.
+- n°74 import de marche par fichier CSV (`api/market-import.ts`, `lib/immo-os/market-import.ts`) : SOURCE obligatoire, affichee avec les chiffres, comparaison avec vos prix au m2. n°76 (portails) : non developpe, voir l'Excel pour ce qu'il faut obtenir.
+- Nouvelles variables : `META_PAGE_ACCESS_TOKEN`, `META_GRAPH_VERSION` (opt., v21.0), `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (opt.).
 
 ## Limite Vercel Hobby (12 fonctions)
 Tout le Real Estate OS cote serveur est servi par UNE SEULE fonction : `app/api/immo/route.ts` (appel `/api/immo?r=<nom>`; le code des endpoints est dans `lib/immo-os/api/`). Le formulaire public `/lead?a=<ID>` est une page statique. Les rappels de leads (48 h) tournent dans le cron existant `/api/cron/relances` : aucun cron ni fonction en plus.

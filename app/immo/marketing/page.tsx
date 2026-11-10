@@ -8,11 +8,13 @@ import { CHANNELS } from '@/lib/immo-os/types'
 import { ago, contextSummary, qar } from '@/lib/immo-os/helpers'
 import { fallbackAd } from '@/lib/immo-os/fallbacks'
 import { confirmDelete, useQueryParam } from '@/lib/immo-os/hooks'
+import { AdPerformance, AdPublish, SocialAccounts, usePublishInfo } from './social'
 
 const CH_LABEL: Record<string, string> = { instagram: 'Instagram', facebook: 'Facebook', whatsapp: 'WhatsApp', property_portal: 'Property portal', linkedin: 'LinkedIn', email: 'Email' }
 const TONES = ['luxury', 'friendly', 'professional', 'urgent']
 
 export default function MarketingPage() {
+  const pub = usePublishInfo()
   const { data, ai, create, update, remove, notify, canDelete } = useImmo()
   const pre = useQueryParam('property')
   const [pid, setPid] = useState('')
@@ -44,6 +46,8 @@ export default function MarketingPage() {
   return (
     <div>
       <PageHead icon={<Megaphone size={28} />} title="Marketing" sub="Generate ready-to-post ads for any property, channel and language" />
+      <SocialAccounts info={pub.info} reload={pub.reload} />
+      <AdPerformance />
       <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
         <Card>
           <CardTitle icon={<Sparkles size={17} style={{ color: 'var(--gold)' }} />} title="Ad generator" />
@@ -77,6 +81,7 @@ export default function MarketingPage() {
                     <Btn style={{ padding: '4px 9px' }} onClick={() => copy(a.content)}><Copy size={12} /> Copy</Btn>
                     <Btn style={{ padding: '4px 9px' }} onClick={() => update('ads', a.id, { status: a.status === 'draft' ? 'published' : 'draft' })}><Check size={12} /> {a.status === 'draft' ? 'Mark published' : 'Published'}</Btn>
                     <Badge color={a.status === 'published' ? '#16A34A' : '#F59E0B'}>{a.status}</Badge>
+                    <AdPublish ad={a} info={pub.info} reload={pub.reload} />
                     {canDelete && <Btn kind="danger" style={{ padding: '4px 9px', marginLeft: 'auto' }} onClick={() => confirmDelete('this ad') && remove('ads', a.id)}><Trash2 size={12} /></Btn>}
                   </div>
                 </div>
