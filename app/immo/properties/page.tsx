@@ -44,8 +44,8 @@ export default function PropertiesPage() {
     setUrlInput('')
   }
   const copyLink = async (id: string) => {
-    if (!clientId) return notify('Agency not loaded yet', 'err')
-    try { await navigator.clipboard.writeText(`${window.location.origin}/lead?a=${clientId}&property=${id}`); notify('Lead form link copied') } catch { notify('Copy failed', 'err') }
+    if (!clientId) return notify(t('x38.agency_not_loaded_yet'), 'err')
+    try { await navigator.clipboard.writeText(`${window.location.origin}/lead?a=${clientId}&property=${id}`); notify(t('x38.lead_form_link_copied')) } catch { notify(t('x38.copy_failed'), 'err') }
   }
   const [view, setView] = useState<'grid' | 'table'>('grid')
   const [q, setQ] = useState('')
@@ -87,8 +87,8 @@ export default function PropertiesPage() {
   const owner = (id?: string | null) => data.owners.find((o) => o.id === id)?.name
 
   const save = async () => {
-    if (!edit?.title?.trim()) return notify('Title is required', 'err')
-    if (!(Number(edit.price) > 0)) return notify('Price must be greater than 0', 'err')
+    if (!edit?.title?.trim()) return notify(t('x38.title_is_required'), 'err')
+    if (!(Number(edit.price) > 0)) return notify(t('x38.price_must_be_greater_than'), 'err')
     const ph = photosOf(edit)
     const payload: Partial<Property> = {
       ...edit, photos: ph, image_url: ph[0] ?? null,
@@ -106,29 +106,29 @@ export default function PropertiesPage() {
 
   return (
     <div>
-      <PageHead icon={<Building2 size={28} />} title="Properties" sub={`${list.length} of ${data.properties.length} properties`}
-        right={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> Add property</Btn>} />
+      <PageHead icon={<Building2 size={28} />} title={t('nav.properties')} sub={`${list.length} of ${data.properties.length} properties`}
+        right={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> {t('x38.add_property')}</Btn>} />
 
       <Card className="mb-4">
         <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative flex-1 min-w-[200px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 t-muted" /><input className="imo-input" style={{ paddingLeft: 32 }} placeholder="Search title or area…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="relative flex-1 min-w-[200px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 t-muted" /><input className="imo-input" style={{ paddingLeft: 32 }} placeholder={t('x38.search_title_or_area')} value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <select className="imo-select" style={{ width: 140 }} value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}><option value="">{t('f.alltypes')}</option>{PROP_TYPES.map((x) => <option key={x.v} value={x.v}>{t('pt.' + x.v)}</option>)}</select>
-          <select className="imo-select" style={{ width: 130 }} value={f.listing} onChange={(e) => setF({ ...f, listing: e.target.value })}><option value="">Sale &amp; rent</option><option value="sale">For sale</option><option value="rent">For rent</option></select>
+          <select className="imo-select" style={{ width: 130 }} value={f.listing} onChange={(e) => setF({ ...f, listing: e.target.value })}><option value="">{t('x38.sale_and_rent')}</option><option value="sale">{t('o.sale')}</option><option value="rent">{t('o.rent')}</option></select>
           {hasZones
             ? <select className="imo-select" style={{ width: 210 }} value={f.node} onChange={(e) => setF({ ...f, node: e.target.value })}><option value="">{t('loc.allareas')}</option>{nodeOptions.map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}</select>
             : <select className="imo-select" style={{ width: 160 }} value={f.area} onChange={(e) => setF({ ...f, area: e.target.value })}><option value="">{t('loc.allareas')}</option>{AREAS.map((a) => <option key={a}>{a}</option>)}</select>}
           <select className="imo-select" style={{ width: 190 }} value={f.tenure} onChange={(e) => setF({ ...f, tenure: e.target.value })} aria-label={t('tenure.label')}><option value="">{t('tenure.all')}</option>{TENURES.map((x) => <option key={x} value={x}>{t('tenure.' + x)}</option>)}<option value="none">{t('tenure.none')}</option></select>
-          <select className="imo-select" style={{ width: 130 }} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}><option value="">All status</option>{Object.keys(STATUS_COLOR).map((s) => <option key={s} value={s}>{s}</option>)}</select>
-          <div className="flex gap-1"><Btn onClick={() => setView('grid')} style={view === 'grid' ? { borderColor: 'var(--gold)' } : undefined} aria-label="Grid"><LayoutGrid size={15} /></Btn><Btn onClick={() => setView('table')} style={view === 'table' ? { borderColor: 'var(--gold)' } : undefined} aria-label="Table"><List size={15} /></Btn></div>
+          <select className="imo-select" style={{ width: 130 }} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}><option value="">{t('x38.all_status')}</option>{Object.keys(STATUS_COLOR).map((s) => <option key={s} value={s}>{s}</option>)}</select>
+          <div className="flex gap-1"><Btn onClick={() => setView('grid')} style={view === 'grid' ? { borderColor: 'var(--gold)' } : undefined} aria-label={t('x38.grid')}><LayoutGrid size={15} /></Btn><Btn onClick={() => setView('table')} style={view === 'table' ? { borderColor: 'var(--gold)' } : undefined} aria-label={t('x38.table')}><List size={15} /></Btn></div>
         </div>
       </Card>
 
-      {list.length === 0 ? <Card><Empty title="No properties found" sub="Adjust the filters or add a new property." action={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={14} /> Add property</Btn>} /></Card> : view === 'grid' ? (
+      {list.length === 0 ? <Card><Empty title={t('x38.no_properties_found')} sub={t('xm.properties_sub')} action={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={14} /> {t('x38.add_property')}</Btn>} /></Card> : view === 'grid' ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {list.map((p) => (
             <Card key={p.id} pad={false} className="overflow-hidden">
               <div className="relative"><div style={{ cursor: photosOf(p).length ? 'pointer' : undefined }} onClick={() => photosOf(p).length && setGallery({ photos: photosOf(p), start: 0 })}><PropImage p={p} h={140} rounded={0} /></div>
-                <div className="absolute top-2 left-2 flex gap-1.5"><Badge color={p.listing === 'rent' ? '#2563EB' : '#16A34A'}>{p.listing === 'rent' ? 'For Rent' : 'For Sale'}</Badge></div>
+                <div className="absolute top-2 left-2 flex gap-1.5"><Badge color={p.listing === 'rent' ? '#2563EB' : '#16A34A'}>{p.listing === 'rent' ? t('o.rent') : t('o.sale')}</Badge></div>
                 {p.featured && <Star size={16} className="absolute top-2 right-2" style={{ color: '#F5C542', fill: '#F5C542' }} />}
                 {photosOf(p).length > 1 && <button className="absolute bottom-2 right-2 imo-badge" style={{ background: 'rgba(0,0,0,.6)', color: '#fff' }} onClick={() => setGallery({ photos: photosOf(p), start: 0 })} aria-label={t('photo.view')}><Images size={12} /> {photosOf(p).length}</button>}
               </div>
@@ -140,10 +140,10 @@ export default function PropertiesPage() {
                 <div className="text-[17px] font-bold mt-1">{qar(p.price)}{p.listing === 'rent' && <span className="text-[12px] t-muted font-normal"> /month</span>}</div>
                 <div className="text-[12px] t-muted">{p.beds} bd · {p.baths} ba · {p.size_m2} m²{owner(p.owner_id) ? ` · ${owner(p.owner_id)}` : ''}</div>
                 <div className="flex gap-1.5 mt-3">
-                  <Btn style={{ padding: '5px 9px' }} onClick={() => setEdit(p)} aria-label="Edit"><Pencil size={13} /></Btn>
+                  <Btn style={{ padding: '5px 9px' }} onClick={() => setEdit(p)} aria-label={t('x38.edit')}><Pencil size={13} /></Btn>
                   <Link href={`/immo/marketing?property=${p.id}`}><Btn style={{ padding: '5px 9px' }}><Megaphone size={13} /> Ad</Btn></Link>
-                  <Btn style={{ padding: '5px 9px' }} onClick={() => copyLink(p.id)} title="Copy the lead form link for this property"><Link2 size={13} /> Link</Btn>
-                  {canDelete && <Btn kind="danger" style={{ padding: '5px 9px', marginLeft: 'auto' }} aria-label="Delete" onClick={() => confirmDelete(`"${p.title}"`) && remove('properties', p.id)}><Trash2 size={13} /></Btn>}
+                  <Btn style={{ padding: '5px 9px' }} onClick={() => copyLink(p.id)} title={t('x38.copy_the_lead_form_link')}><Link2 size={13} /> {t('x38.link')}</Btn>
+                  {canDelete && <Btn kind="danger" style={{ padding: '5px 9px', marginLeft: 'auto' }} aria-label={t('f.delete')} onClick={() => confirmDelete(tf('cf.property', { name: p.title })) && remove('properties', p.id)}><Trash2 size={13} /></Btn>}
                 </div>
               </div>
             </Card>
@@ -151,38 +151,38 @@ export default function PropertiesPage() {
         </div>
       ) : (
         <Card pad={false}><div className="overflow-x-auto imo-scroll"><table className="imo-table">
-          <thead><tr><th>Property</th><th>Type</th><th>Area</th><th>{t('tenure.label')}</th><th>{t('prop.listed')}</th><th>Price</th><th>Beds</th><th>Size</th><th>Owner</th><th>Status</th><th /></tr></thead>
+          <thead><tr><th>{t('sp.choose')}</th><th>{t('x38.type')}</th><th>{t('x38.area')}</th><th>{t('tenure.label')}</th><th>{t('prop.listed')}</th><th>{t('sp.price')}</th><th>{t('beds')}</th><th>{t('x38.size')}</th><th>{t('o.owner')}</th><th>{t('h.status')}</th><th /></tr></thead>
           <tbody>{list.map((p) => (
             <tr key={p.id}><td className="font-medium">{p.title}{p.featured && <Star size={12} className="inline ml-1" style={{ color: '#F5C542', fill: '#F5C542' }} />}</td><td>{t('pt.' + p.type)}</td><td>{where(p)}{p.unit_no ? ` · ${p.unit_no}` : ''}</td><td>{tenureText(p) || '-'}</td><td className="t-muted">{listedOn(p)}</td><td>{qar(p.price)}{p.listing === 'rent' ? '/mo' : ''}</td><td>{p.beds}</td><td>{p.size_m2} m²</td><td>{owner(p.owner_id) ?? '-'}</td>
               <td><Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge></td>
-              <td className="text-right whitespace-nowrap"><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(p)}><Pencil size={13} /></Btn> {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`"${p.title}"`) && remove('properties', p.id)}><Trash2 size={13} /></Btn>}</td></tr>
+              <td className="text-right whitespace-nowrap"><Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(p)}><Pencil size={13} /></Btn> {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(tf('cf.property', { name: p.title })) && remove('properties', p.id)}><Trash2 size={13} /></Btn>}</td></tr>
           ))}</tbody></table></div></Card>
       )}
 
       {edit && (
-        <Modal title={edit.id ? 'Edit property' : 'Add property'} onClose={() => setEdit(null)} wide>
+        <Modal title={edit.id ? t('xm.edit_property') : t('x38.add_property')} onClose={() => setEdit(null)} wide>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2"><Field label="Title *"><input className="imo-input" value={edit.title ?? ''} onChange={(e) => set('title', e.target.value)} placeholder="Luxury Villa" /></Field></div>
-            <Field label="Type"><select className="imo-select" value={edit.type} onChange={(e) => set('type', e.target.value)}>{PROP_TYPES.map((x) => <option key={x.v} value={x.v}>{t('pt.' + x.v)}</option>)}</select></Field>
-            <Field label="Listing"><select className="imo-select" value={edit.listing} onChange={(e) => set('listing', e.target.value)}><option value="sale">For sale</option><option value="rent">For rent</option></select></Field>
+            <div className="sm:col-span-2"><Field label={t('x38.title')}><input className="imo-input" value={edit.title ?? ''} onChange={(e) => set('title', e.target.value)} placeholder="Luxury Villa" /></Field></div>
+            <Field label={t('x38.type')}><select className="imo-select" value={edit.type} onChange={(e) => set('type', e.target.value)}>{PROP_TYPES.map((x) => <option key={x.v} value={x.v}>{t('pt.' + x.v)}</option>)}</select></Field>
+            <Field label={t('x38.listing')}><select className="imo-select" value={edit.listing} onChange={(e) => set('listing', e.target.value)}><option value="sale">{t('o.sale')}</option><option value="rent">{t('o.rent')}</option></select></Field>
             {hasZones ? (
               <Field label={t('loc.label')}><select className="imo-select" value={edit.zone_id ?? ''} onChange={(e) => { const id = e.target.value || null; setEdit((x) => ({ ...x, zone_id: id, ...(id ? { area: areaOf(data.zones, id) } : {}) })) }}>
                 <option value="">{edit.area && !edit.zone_id ? `${t('loc.legacy')}: ${edit.area}` : t('loc.none')}</option>
                 {locOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select></Field>
             ) : (
-              <Field label="Area"><select className="imo-select" value={edit.area ?? ''} onChange={(e) => set('area', e.target.value)}>{legacyAreas(data.zones).map((a) => <option key={a}>{a}</option>)}</select></Field>
+              <Field label={t('x38.area')}><select className="imo-select" value={edit.area ?? ''} onChange={(e) => set('area', e.target.value)}>{legacyAreas(data.zones).map((a) => <option key={a}>{a}</option>)}</select></Field>
             )}
             <Field label={t('loc.unit')}><input className="imo-input" value={edit.unit_no ?? ''} onChange={(e) => set('unit_no', e.target.value)} maxLength={40} /></Field>
             <Field label={t('prop.commission')}><input type="number" min={0} max={100} step="0.1" className="imo-input" value={edit.commission_pct ?? ''} onChange={(e) => set('commission_pct', e.target.value === '' ? null : Number(e.target.value))} /></Field>
             <Field label={t('tenure.label')}><select className="imo-select" value={edit.tenure ?? ''} onChange={(e) => setEdit((x) => ({ ...x, tenure: (e.target.value || null) as Property['tenure'], ...(e.target.value === 'usufruct' ? {} : { usufruct_years: null }) }))}><option value="">{t('tenure.none')}</option>{TENURES.map((x) => <option key={x} value={x}>{t('tenure.' + x)}</option>)}</select></Field>
             {edit.tenure === 'usufruct' && <Field label={t('tenure.years')}><input type="number" min={1} max={999} className="imo-input" value={edit.usufruct_years ?? ''} onChange={(e) => set('usufruct_years', e.target.value === '' ? null : Number(e.target.value))} placeholder="99" /></Field>}
-            <Field label="Status"><select className="imo-select" value={edit.status} onChange={(e) => set('status', e.target.value)}>{Object.keys(STATUS_COLOR).map((s) => <option key={s}>{s}</option>)}</select></Field>
+            <Field label={t('h.status')}><select className="imo-select" value={edit.status} onChange={(e) => set('status', e.target.value)}>{Object.keys(STATUS_COLOR).map((s) => <option key={s}>{s}</option>)}</select></Field>
             <Field label={`Price (QAR)${edit.listing === 'rent' ? ' per month' : ''} *`}><input type="number" min={0} className="imo-input" value={edit.price ?? 0} onChange={(e) => set('price', Number(e.target.value))} /></Field>
-            <Field label="Size (m²)"><input type="number" min={0} className="imo-input" value={edit.size_m2 ?? 0} onChange={(e) => set('size_m2', Number(e.target.value))} /></Field>
-            <Field label="Bedrooms"><input type="number" min={0} className="imo-input" value={edit.beds ?? 0} onChange={(e) => set('beds', Number(e.target.value))} /></Field>
-            <Field label="Bathrooms"><input type="number" min={0} className="imo-input" value={edit.baths ?? 0} onChange={(e) => set('baths', Number(e.target.value))} /></Field>
-            <Field label="Owner"><select className="imo-select" value={edit.owner_id ?? ''} onChange={(e) => set('owner_id', e.target.value || null)}><option value="">- none -</option>{data.owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></Field>
+            <Field label={t('x38.size_m')}><input type="number" min={0} className="imo-input" value={edit.size_m2 ?? 0} onChange={(e) => set('size_m2', Number(e.target.value))} /></Field>
+            <Field label={t('x38.bedrooms')}><input type="number" min={0} className="imo-input" value={edit.beds ?? 0} onChange={(e) => set('beds', Number(e.target.value))} /></Field>
+            <Field label={t('x38.bathrooms')}><input type="number" min={0} className="imo-input" value={edit.baths ?? 0} onChange={(e) => set('baths', Number(e.target.value))} /></Field>
+            <Field label={t('o.owner')}><select className="imo-select" value={edit.owner_id ?? ''} onChange={(e) => set('owner_id', e.target.value || null)}><option value="">{t('loc.none')}</option>{data.owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></Field>
             <div className="sm:col-span-2"><PropertyGeoVideo edit={edit} set={set} /></div>
             <div className="sm:col-span-2"><Field label={`${t('photo.title')} (${photosOf(edit).length}/${MAX_PHOTOS})`}>
               <div className="flex gap-2 items-center flex-wrap">
@@ -205,10 +205,10 @@ export default function PropertiesPage() {
                 </div>
               )}
             </Field></div>
-            <div className="sm:col-span-2"><Field label="Description"><textarea className="imo-textarea" value={edit.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field></div>
-            <label className="flex items-center gap-2 text-[13px] sm:col-span-2"><input type="checkbox" checked={!!edit.featured} onChange={(e) => set('featured', e.target.checked)} /> Featured property (shown on the dashboard)</label>
+            <div className="sm:col-span-2"><Field label={t('x38.description')}><textarea className="imo-textarea" value={edit.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field></div>
+            <label className="flex items-center gap-2 text-[13px] sm:col-span-2"><input type="checkbox" checked={!!edit.featured} onChange={(e) => set('featured', e.target.checked)} /> {t('x38.featured_property_shown_on_the')}</label>
           </div>
-          <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setEdit(null)}>Cancel</Btn><Btn kind="primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save property'}</Btn></div>
+          <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setEdit(null)}>{t('f.cancel')}</Btn><Btn kind="primary" disabled={saving} onClick={save}>{saving ? t('xm.saving') : t('xm.save_property')}</Btn></div>
         </Modal>
       )}
       {similarOf && (

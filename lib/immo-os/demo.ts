@@ -1,4 +1,4 @@
-import type { Data, Lead, Deal, Message, Zone, StageEvent } from './types'
+import type { Data, Lead, Deal, Message, Zone, StageEvent, Payment } from './types'
 import { DEFAULT_MUNICIPALITIES } from './types'
 import { uid, scoreLead } from './helpers'
 
@@ -130,5 +130,12 @@ export function makeDemo(): Data {
   const sends = [{ id: uid(), property_id: properties[0].id, property_title: properties[0].title, contact_name: leads[0].name, contact_phone: leads[0].phone, agent: leads[0].agent, channel: 'whatsapp', created_at: daysAgo(1, 2) }]
   const stages: StageEvent[] = deals.map((x): StageEvent => ({ id: uid(), kind: 'deal', record_id: x.id, record_name: x.title, from_status: null, to_status: 'negotiation', by_name: x.agent, auto: [], created_at: x.created_at })).concat(
     deals.filter((x) => x.status !== 'negotiation').map((x): StageEvent => ({ id: uid(), kind: 'deal', record_id: x.id, record_name: x.title, from_status: 'negotiation', to_status: x.status, by_name: x.agent, auto: [], created_at: daysAgo(1) })))
-  return { hierarchy, activity, assignments: [], zones, owners: o, properties, clients, leads, deals, messages, ads: [], visits, outcomes, sends, stages }
+  // Lot 9 : exemples de paiements en ligne (un acompte encaisse, une commission en attente)
+  const closedDeal = deals.find((x) => x.status === 'closed') ?? deals[0]
+  const openDeal = deals.find((x) => x.status !== 'closed' && x.status !== 'cancelled') ?? deals[0]
+  const payments: Payment[] = [
+    { id: uid(), deal_id: closedDeal.id, contact_name: closedDeal.party_name ?? closedDeal.title, contact_phone: null, agent: closedDeal.agent ?? null, kind: 'deposit', amount: Math.round((closedDeal.value || 100000) * 0.05), currency: 'QAR', description: 'Reservation deposit', status: 'paid', pay_url: 'https://pay.example.demo/paid', paid_at: daysAgo(3), created_at: daysAgo(4), created_by: closedDeal.agent ?? null },
+    { id: uid(), deal_id: openDeal.id, contact_name: openDeal.party_name ?? openDeal.title, contact_phone: null, agent: openDeal.agent ?? null, kind: 'deposit', amount: Math.round((openDeal.value || 100000) * 0.05), currency: 'QAR', description: 'Reservation deposit', status: 'pending', pay_url: 'https://pay.example.demo/pending', paid_at: null, created_at: daysAgo(0, 2), created_by: openDeal.agent ?? null },
+  ]
+  return { hierarchy, activity, assignments: [], zones, owners: o, properties, clients, leads, deals, messages, ads: [], visits, outcomes, sends, stages, payments }
 }

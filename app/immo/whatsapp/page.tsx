@@ -109,7 +109,7 @@ export default function WhatsAppPage() {
     const lastIn = [...cur.ms].reverse().find((m) => m.direction === 'in')
     const r = await ai('reply', `Reply to ${cur.name}`, { context: contextSummary(data), extra: `Conversation (latest last):\n${cur.ms.slice(-6).map((m) => `${m.direction === 'in' ? 'Client' : 'Agent'}: ${m.body}`).join('\n')}\nLatest client message: ${lastIn?.body ?? ''}` })
     setText(r ?? fallbackReply(cur.name))
-    if (!r) notify('AI is not configured - inserted a standard reply instead', 'err')
+    if (!r) notify(t('x38.ai_is_not_configured_inserted'), 'err')
     setBusy(false)
   }
 
@@ -147,21 +147,21 @@ export default function WhatsAppPage() {
 
   return (
     <div>
-      <PageHead icon={<MessageCircle size={28} style={{ color: '#22C55E' }} />} title="WhatsApp" sub={mode === 'demo' ? 'Demo mode - messages are not actually sent' : 'Messages are sent through your connected WhatsApp number'} right={<Btn kind="primary" onClick={() => setNewOpen(true)}><Plus size={15} /> New chat</Btn>} />
+      <PageHead icon={<MessageCircle size={28} style={{ color: '#22C55E' }} />} title={t('nav.whatsapp')} sub={mode === 'demo' ? t('xm.wa_sub_demo') : t('xm.wa_sub_live')} right={<Btn kind="primary" onClick={() => setNewOpen(true)}><Plus size={15} /> {t('x38.new_chat')}</Btn>} />
       <Card pad={false}>
         <div className="grid grid-cols-[minmax(220px,300px)_1fr] xl:grid-cols-[minmax(220px,300px)_1fr_minmax(250px,310px)]" style={{ minHeight: 520, height: 'calc(100vh - 220px)' }}>
           <div className="flex flex-col min-h-0" style={{ borderInlineEnd: '1px solid var(--border)' }}>
-            <div className="p-3"><div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 t-muted" /><input className="imo-input" style={{ paddingLeft: 30 }} placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} /></div></div>
+            <div className="p-3"><div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 t-muted" /><input className="imo-input" style={{ paddingLeft: 30 }} placeholder={t('x38.search')} value={q} onChange={(e) => setQ(e.target.value)} /></div></div>
             <div className="flex-1 overflow-y-auto imo-scroll">
               {threads.map((x) => (
                 <button key={x.name} onClick={() => setActive(x.name)} className="w-full text-start flex items-center gap-2.5 px-3 py-2.5" style={{ borderBottom: '1px solid var(--border)', background: x.name === active ? 'var(--soft)' : 'transparent', color: 'var(--text)' }}>
                   <Avatar name={x.name} size={36} />
-                  <div className="min-w-0 flex-1"><div className="text-[13px] font-semibold truncate">{x.name}</div><div className="text-[12px] t-muted truncate">{x.last.direction === 'out' ? 'You: ' : ''}{x.last.body}</div>
+                  <div className="min-w-0 flex-1"><div className="text-[13px] font-semibold truncate">{x.name}</div><div className="text-[12px] t-muted truncate">{x.last.direction === 'out' ? t('xm.you') : ''}{x.last.body}</div>
                     {x.outcome && <div className="mt-0.5"><Badge color={OUTCOMES.find((o) => o.v === x.outcome!.outcome)?.color}>{t('oc.' + x.outcome.outcome)}</Badge></div>}</div>
                   <div className="text-end shrink-0"><div className="text-[10.5px] t-muted">{ago(x.last.created_at)}</div>{x.unread > 0 && <span className="inline-flex items-center justify-center text-[10px] font-bold rounded-full w-4 h-4" style={{ background: '#22C55E', color: '#fff' }}>{x.unread}</span>}</div>
                 </button>
               ))}
-              {threads.length === 0 && <Empty title="No conversations" sub="Start a new chat with a lead or client." />}
+              {threads.length === 0 && <Empty title={t('x38.no_conversations')} sub={t('xm.wa_new_sub')} />}
             </div>
           </div>
 
@@ -170,7 +170,7 @@ export default function WhatsAppPage() {
               <>
                 <div className="flex items-center gap-3 px-4 py-3 flex-wrap" style={{ borderBottom: '1px solid var(--border)' }}>
                   <Avatar name={cur.name} size={36} />
-                  <div className="min-w-0 flex-1"><div className="font-semibold text-[14px] flex items-center gap-2 flex-wrap">{cur.name}{rel?.dnc && <Badge color="#EF4444"><Ban size={11} className="me-0.5" />{t('dnc.badge')}</Badge>}{win && <Badge color={win.open ? '#16A34A' : '#B45309'}>{win.open ? tf('wa.window.open', { h: Math.max(1, Math.round(win.msLeft / 3600000)) }) : t('wa.window.closed')}</Badge>}</div><div className="text-[12px] t-muted" dir="ltr">{cur.phone ?? 'No phone number'}</div>
+                  <div className="min-w-0 flex-1"><div className="font-semibold text-[14px] flex items-center gap-2 flex-wrap">{cur.name}{rel?.dnc && <Badge color="#EF4444"><Ban size={11} className="me-0.5" />{t('dnc.badge')}</Badge>}{win && <Badge color={win.open ? '#16A34A' : '#B45309'}>{win.open ? tf('wa.window.open', { h: Math.max(1, Math.round(win.msLeft / 3600000)) }) : t('wa.window.closed')}</Badge>}</div><div className="text-[12px] t-muted" dir="ltr">{cur.phone ?? t('xm.no_phone_number')}</div>
                     {rel?.prop && <div className="text-[11.5px] mt-0.5"><Building2 size={11} className="inline me-1" />{tf('xv.re', { title: rel.prop.title })}</div>}</div>
                   {(rel?.client || rel?.lead) && <Link href={`/immo/client?id=${(rel.client ?? rel.lead)!.id}`} className="imo-btn" style={{ padding: '4px 9px', fontSize: 12 }}><ExternalLink size={12} /> {t('xv.profile')}</Link>}
                 </div>
@@ -194,17 +194,17 @@ export default function WhatsAppPage() {
                 <div className="p-3 flex flex-col gap-2" style={{ borderTop: '1px solid var(--border)' }}>
                   {closed && !rel?.dnc && <div className="rounded-md px-3 py-2 text-[12.5px] flex items-center gap-2 flex-wrap" style={{ background: '#FEF3C7', color: '#92400E' }} role="status"><span className="flex-1">{t('wa.rule24')}</span><Btn kind="gold" onClick={() => setTplOpen(true)} disabled={!wa?.templates.some((x) => x.status === 'APPROVED')}>{t('wa.tpl.send')}</Btn></div>}
                   {rel?.dnc && <div className="rounded-md px-3 py-2 text-[12.5px] flex items-center gap-2" style={{ background: '#FEE2E2', color: '#991B1B' }} role="alert"><Ban size={14} /> {t('dnc.blocked')}</div>}
-                  <div className="flex"><Btn onClick={suggest} disabled={busy || !!rel?.dnc || closed} style={{ padding: '5px 10px', fontSize: 12 }}><Sparkles size={13} style={{ color: 'var(--gold)' }} /> {busy ? 'Thinking…' : 'Suggest reply with AI'}</Btn></div>
+                  <div className="flex"><Btn onClick={suggest} disabled={busy || !!rel?.dnc || closed} style={{ padding: '5px 10px', fontSize: 12 }}><Sparkles size={13} style={{ color: 'var(--gold)' }} /> {busy ? t('xm.thinking') : t('xm.suggest_reply_ai')}</Btn></div>
                   {att && <div className="flex items-center gap-2 text-[12.5px] rounded-md px-2.5 py-1.5" style={{ background: 'var(--soft)', border: '1px solid var(--border)' }}>{att.type === 'image' ? <img src={att.url} alt="" style={{ height: 36, borderRadius: 4 }} /> : <FileText size={16} />}<span className="truncate flex-1">{att.name}</span><button onClick={() => setAtt(null)} aria-label={t('att.remove')}><X size={14} /></button></div>}
                   <div className="flex gap-2 items-end">
                     <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
                     <Btn onClick={() => fileRef.current?.click()} disabled={upBusy || !!rel?.dnc || closed} aria-label={t('att.add')} title={t('att.add')}><Paperclip size={15} /></Btn>
-                    <textarea className="imo-textarea" style={{ minHeight: 44, height: 44 }} placeholder="Type a message…" value={text} disabled={!!rel?.dnc || closed} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
-                    <Btn kind="primary" onClick={send} disabled={sending || (!text.trim() && !att) || !!rel?.dnc || closed} aria-label="Send"><Send size={15} /></Btn>
+                    <textarea className="imo-textarea" style={{ minHeight: 44, height: 44 }} placeholder={t('x38.type_a_message')} value={text} disabled={!!rel?.dnc || closed} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
+                    <Btn kind="primary" onClick={send} disabled={sending || (!text.trim() && !att) || !!rel?.dnc || closed} aria-label={t('x38.send')}><Send size={15} /></Btn>
                   </div>
                 </div>
               </>
-            ) : <Empty title="Select a conversation" />}
+            ) : <Empty title={t('x38.select_a_conversation')} />}
           </div>
 
           {/* n°89 : vue croisee bien + conversation + proprietaire */}
@@ -256,12 +256,12 @@ export default function WhatsAppPage() {
       {spOpen && cur && <SendProperty name={cur.name} phone={cur.phone} onClose={() => setSpOpen(false)} initial={rel?.prop?.id ?? ''} clientId={clientId} />}
 
       {newOpen && (
-        <Modal title="New WhatsApp chat" onClose={() => setNewOpen(false)}>
-          <Field label="Contact (leads, clients and owners with a phone number)">
-            <select className="imo-select" value={target} onChange={(e) => setTarget(e.target.value)}><option value="">Choose…</option>{contacts.map((c) => <option key={c.id} value={c.name}>{c.name} · {c.phone}{c.do_not_contact ? ` · ${t('dnc.badge')}` : ''}</option>)}</select>
+        <Modal title={t('x38.new_whatsapp_chat')} onClose={() => setNewOpen(false)}>
+          <Field label={t('x38.contact_leads_clients_and_owners')}>
+            <select className="imo-select" value={target} onChange={(e) => setTarget(e.target.value)}><option value="">{t('x38.choose')}</option>{contacts.map((c) => <option key={c.id} value={c.name}>{c.name} · {c.phone}{c.do_not_contact ? ` · ${t('dnc.badge')}` : ''}</option>)}</select>
           </Field>
-          <div className="text-[12px] t-muted mt-2">A short greeting is sent to open the conversation.</div>
-          <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setNewOpen(false)}>Cancel</Btn><Btn kind="primary" disabled={!target} onClick={startNew}>Start chat</Btn></div>
+          <div className="text-[12px] t-muted mt-2">{t('x38.a_short_greeting_is_sent')}</div>
+          <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setNewOpen(false)}>{t('f.cancel')}</Btn><Btn kind="primary" disabled={!target} onClick={startNew}>{t('x38.start_chat')}</Btn></div>
         </Modal>
       )}
     </div>
@@ -313,7 +313,7 @@ function SendProperty({ name, phone, initial, clientId, onClose }: { name: strin
         </div>
       </div>
       {allPhotos.length > 0 && <div className="mt-3"><div className="imo-label">{tf('sp.photos', { n: photos.length })}</div><div className="flex gap-2 flex-wrap">{allPhotos.slice(0, 8).map((u) => <button key={u} type="button" onClick={() => setPhotos((x) => x.includes(u) ? x.filter((y) => y !== u) : x.length < 5 ? [...x, u] : x)} aria-pressed={photos.includes(u)} style={{ border: photos.includes(u) ? '2px solid var(--gold)' : '2px solid transparent', borderRadius: 8, padding: 0, opacity: photos.includes(u) ? 1 : 0.55 }}><img src={u} alt="" style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 6, display: 'block' }} /></button>)}</div></div>}
-      <div className="flex justify-end gap-2 mt-5"><Btn onClick={onClose}>Cancel</Btn><Btn kind="primary" disabled={!pid || !body.trim() || busy} onClick={go}><Send size={14} /> {t('sp.send')}</Btn></div>
+      <div className="flex justify-end gap-2 mt-5"><Btn onClick={onClose}>{t('f.cancel')}</Btn><Btn kind="primary" disabled={!pid || !body.trim() || busy} onClick={go}><Send size={14} /> {t('sp.send')}</Btn></div>
     </Modal>
   )
 }
@@ -344,7 +344,7 @@ function TemplateSend({ name, phone, templates, onClose }: { name: string; phone
         {Array.from({ length: n }, (_, i) => <Field key={i} label={tf('wa.tpl.var', { n: i + 1 })}><input className="imo-input" value={params[i]} onChange={(e) => setVals((v) => { const c = [...params]; c[i] = e.target.value; return c })} /></Field>)}
         {tpl && <Field label={t('wa.tpl.preview')}><div className="rounded-lg p-3 text-[13px] whitespace-pre-wrap" style={{ background: 'var(--soft)' }} dir="auto">{preview}</div></Field>}
       </div>
-      <div className="flex justify-end gap-2 mt-5"><Btn onClick={onClose}>Cancel</Btn><Btn kind="primary" disabled={!tpl || busy || params.some((x) => !x.trim())} onClick={go}><Send size={14} /> {t('sp.send')}</Btn></div>
+      <div className="flex justify-end gap-2 mt-5"><Btn onClick={onClose}>{t('f.cancel')}</Btn><Btn kind="primary" disabled={!tpl || busy || params.some((x) => !x.trim())} onClick={go}><Send size={14} /> {t('sp.send')}</Btn></div>
     </Modal>
   )
 }

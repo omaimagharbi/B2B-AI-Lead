@@ -20,6 +20,7 @@ import * as meta from '@/lib/immo-os/api/meta'
 import * as wa from '@/lib/immo-os/api/wa'
 import * as publish from '@/lib/immo-os/api/publish'
 import * as marketImport from '@/lib/immo-os/api/market-import'
+import * as payments from '@/lib/immo-os/api/payments'
 
 // UNE SEULE fonction serverless pour tout le Real Estate OS (plan Vercel Hobby : nombre de fonctions limite).
 // Appel : /api/immo?r=<nom>  (ex. /api/immo?r=all, /api/immo?r=leads, /api/immo?r=visits/calendar).
@@ -41,6 +42,7 @@ const ROUTES: Record<string, Mod> = {
   meta, // lot 6a : webhook WhatsApp Business (Meta), public, verifie par signature
   publish, // lot 8 : publication Instagram / Facebook + performance des annonces
   'market-import': marketImport, // lot 8 : import de donnees de marche par fichier (source obligatoire)
+  payments, // lot 9 : paiement en ligne (lien MyFatoorah QAR), retour client et webhook publics, statut re-verifie via l'API
   wa, // lot 6a : numeros Meta de l'agence et modeles de messages
   'cron-rappels': cronRappels, // appele par le cron Vercel (vercel.json)
 }

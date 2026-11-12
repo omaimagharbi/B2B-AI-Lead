@@ -6,7 +6,7 @@ import { Badge, Card, Empty } from '@/lib/immo-os/ui'
 import { agoLocal } from '@/lib/immo-os/ago'
 import type { Activity } from '@/lib/immo-os/types'
 
-const ENTITIES = ['leads', 'properties', 'owners', 'clients', 'deals', 'visits', 'zones', 'hierarchy', 'contacts', 'settings', 'wa_numbers']
+const ENTITIES = ['leads', 'properties', 'owners', 'clients', 'deals', 'visits', 'zones', 'hierarchy', 'contacts', 'settings', 'wa_numbers', 'payments']
 const COLOR: Record<string, string> = { create: '#16A34A', update: '#2563EB', delete: '#DC2626', assign: '#B45309', reassign_bulk: '#B45309', team_invite: '#0F766E', team_remove: '#DC2626', team_update: '#475569', auto: '#8B5CF6', hot_alert: '#EF4444', optout: '#7F1D1D', optin: '#16A34A', charter_accept: '#0F766E', ai_auto_reply: '#C9A24B', ai_handoff: '#B45309', ai_blocked: '#DC2626', ai_qualify: '#C9A24B', ai_review: '#C9A24B' }
 
 // Journal d'activite (n°30 / n°82) : lecture seule. L'ecriture est faite par le serveur (api/entity.ts, api/reassign.ts, /api/team/*).

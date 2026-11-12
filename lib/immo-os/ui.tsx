@@ -4,6 +4,10 @@ import { useEffect, useId, useState, type ReactNode, type CSSProperties } from '
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Property } from './types'
 import { initials } from './helpers'
+import { translate, type Lang } from './i18n'
+
+// Libelle traduit hors contexte React (la langue choisie est lue dans le navigateur)
+const tl = (key: string) => { let l: Lang = 'en'; try { const v = localStorage.getItem('imo_lang'); if (v === 'ar' || v === 'fr' || v === 'en') l = v } catch {} return translate(l, key) }
 
 export function Card({ children, className = '', style, pad = true }: { children: ReactNode; className?: string; style?: CSSProperties; pad?: boolean }) {
   return <div className={`imo-card ${pad ? 'imo-card-pad' : ''} ${className}`} style={style}>{children}</div>
@@ -101,7 +105,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
       <div className="imo-card w-full" style={{ maxWidth: wide ? 820 : 560, background: 'var(--card)' }}>
         <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="font-bold text-[16px]">{title}</div>
-          <button onClick={onClose} aria-label="Close" className="t-muted"><X size={18} /></button>
+          <button onClick={onClose} aria-label={tl('f.close')} className="t-muted"><X size={18} /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>

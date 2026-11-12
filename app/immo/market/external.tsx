@@ -36,7 +36,7 @@ export default function ExternalMarket() {
     setBusy(true)
     const r = await callApi('/api/immo?r=market-import', { method: 'POST', body: JSON.stringify({ source: src, source_url: url, as_of: asOf, rows: parsed.rows }) })
     setBusy(false)
-    if (!r.ok) return notify(r.json?.error ?? 'Import failed', 'err')
+    if (!r.ok) return notify(r.json?.error ?? t('xm.import_failed'), 'err')
     notify(tf('mkx.done', { n: r.json.rows })); setParsed(null); setSrc(''); setUrl(''); setAsOf(''); load()
   }
   const del = async (id: string) => { if (window.confirm(t('mkx.delete.confirm')) && (await callApi('/api/immo?r=market-import', { method: 'POST', body: JSON.stringify({ action: 'delete_import', import_id: id }) })).ok) load() }
@@ -77,7 +77,7 @@ export default function ExternalMarket() {
           )}
           {stats.length > 0 && (
             <div className="overflow-x-auto"><div className="imo-label">{t('mkx.stats')} <span className="t-muted font-normal">· {Array.from(new Set((imports ?? []).map((i) => i.source))).join(', ')}</span></div>
-              <table className="imo-table"><thead><tr><th>Zone</th><th>Type</th><th>{t('mkx.count')}</th><th>{t('mkx.median')}</th><th>{t('mkx.ppm')}</th><th /></tr></thead>
+              <table className="imo-table"><thead><tr><th>{t('zone.zone')}</th><th>{t('x38.type')}</th><th>{t('mkx.count')}</th><th>{t('mkx.median')}</th><th>{t('mkx.ppm')}</th><th /></tr></thead>
                 <tbody>{stats.slice(0, 15).map((s, i) => { const o = own(s.area); return <tr key={i}><td>{s.area}</td><td>{s.type ?? '-'}</td><td>{s.count}</td><td>{qar(s.medianPrice)}</td><td>{s.medianPerM2 ? qar(s.medianPerM2) : '-'}</td><td className="t-muted text-[12px]">{o ? tf('mkx.yours', { n: qar(o) }) : ''}</td></tr> })}</tbody></table></div>
           )}
         </div>

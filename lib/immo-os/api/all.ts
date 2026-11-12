@@ -6,7 +6,7 @@ import { tableAbsente } from '@/lib/immo-os/server'
 import { filterForViewer } from '@/lib/immo-os/permissions'
 
 // Tables ajoutees par une migration ulterieure : si elles manquent, on renvoie une liste vide (et non le mode demo)
-const OPTIONNELLES = new Set<Entity>(['visits', 'zones', 'hierarchy', 'outcomes', 'sends', 'stages'])
+const OPTIONNELLES = new Set<Entity>(['visits', 'zones', 'hierarchy', 'outcomes', 'sends', 'stages', 'payments'])
 
 export async function GET(req: NextRequest) {
   const auth = await contexteImmo(req)

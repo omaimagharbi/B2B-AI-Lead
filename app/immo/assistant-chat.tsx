@@ -11,7 +11,6 @@ import { Dots, PropImage } from '@/lib/immo-os/ui'
 
 type Msg = { role: 'user' | 'bot'; text: string; props?: Property[] }
 
-const NO_AI = '\n\n(Tip: add GEMINI_API_KEY or ANTHROPIC_API_KEY on the server to get full AI answers.)'
 
 export default function AssistantChat({ compact = false }: { compact?: boolean }) {
   const { data, ai, t, tf } = useImmo()
@@ -58,12 +57,12 @@ export default function AssistantChat({ compact = false }: { compact?: boolean }
     await run(msg, async () => {
       if (isSearch) return find(q)
       const r = await ai('chat', msg, { context: ctx() })
-      return { role: 'bot', text: r ?? `${t('ai.hint')}${NO_AI}` }
+      return { role: 'bot', text: r ?? `${t('ai.hint')}\n\n${t('xm.ai_tip')}` }
     })
   }
 
   const actions = [
-    { icon: Home, label: t('ai.find'), go: () => setInput('Find a villa in The Pearl under 4M') },
+    { icon: Home, label: t('ai.find'), go: () => setInput(t('xm.find_villa_example')) },
     {
       icon: LineChart, label: t('ai.market'),
       go: () => run(t('ai.market'), async () => {
@@ -75,7 +74,7 @@ export default function AssistantChat({ compact = false }: { compact?: boolean }
       icon: Megaphone, label: t('ai.ad'),
       go: () => run(t('ai.ad'), async () => {
         const p = data.properties.find((x) => x.featured && x.status === 'available') ?? data.properties.find((x) => x.status === 'available')
-        if (!p) return { role: 'bot', text: 'Add a property first, then I can write its ad.' }
+        if (!p) return { role: 'bot', text: t('xm.add_prop_first_ad') }
         const r = await ai('ad', `Instagram ad for ${p.title}`, { context: ctx(), extra: JSON.stringify(p), language: 'en' })
         return { role: 'bot', text: r ?? fallbackAd(p, 'instagram', 'en'), props: [p] }
       }),
@@ -84,7 +83,7 @@ export default function AssistantChat({ compact = false }: { compact?: boolean }
       icon: MessageSquareReply, label: t('ai.reply'),
       go: () => run(t('ai.reply'), async () => {
         const last = data.messages.filter((m) => m.direction === 'in').sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
-        if (!last) return { role: 'bot', text: 'No client message to answer yet.' }
+        if (!last) return { role: 'bot', text: t('xm.no_client_msg') }
         const r = await ai('reply', `Reply to ${last.contact_name}`, { context: ctx(), extra: `Client message: "${last.body}"` })
         return { role: 'bot', text: `Draft reply to ${last.contact_name}:\n\n${r ?? fallbackReply(last.contact_name)}` }
       }),
@@ -138,7 +137,7 @@ export default function AssistantChat({ compact = false }: { compact?: boolean }
       </div>
       <form onSubmit={(e) => { e.preventDefault(); send(input) }} className={`flex gap-2 ${compact ? 'mt-3' : 'p-4 pt-2'}`}>
         <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t('ai.ph')} className="imo-input" />
-        <button type="submit" disabled={busy} className="imo-btn imo-btn-primary" aria-label="Send"><Send size={15} /></button>
+        <button type="submit" disabled={busy} className="imo-btn imo-btn-primary" aria-label={t('x38.send')}><Send size={15} /></button>
       </form>
     </div>
   )

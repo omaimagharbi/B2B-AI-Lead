@@ -36,7 +36,7 @@ export default function ComplianceCard() {
     if (!manager) return notify(t('cp.unknown.managers'), 'err')
     if (mode === 'demo') { setRule(v); try { localStorage.setItem('imo_unknown_rule', v) } catch {}; return notify(t('cp.unknown.saved')) }
     const r = await callApi('/api/immo?r=settings', { method: 'PATCH', body: JSON.stringify({ unknown_number_rule: v }) })
-    if (!r.ok) return notify(r.json?.error ?? 'Update failed', 'err')
+    if (!r.ok) return notify(r.json?.error ?? t('xm.update_failed'), 'err')
     setRule(v); notify(t('cp.unknown.saved'))
   }
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
@@ -45,7 +45,7 @@ export default function ComplianceCard() {
 
   return (
     <Card className="lg:col-span-2">
-      <CardTitle icon={<ShieldCheck size={17} />} title={t('cp.title')} right={POLICY_DRAFT ? <Badge color="#B45309">DRAFT</Badge> : undefined} />
+      <CardTitle icon={<ShieldCheck size={17} />} title={t('cp.title')} right={POLICY_DRAFT ? <Badge color="#B45309">{t('x38.draft')}</Badge> : undefined} />
       <div className="grid gap-5 lg:grid-cols-2 text-[13px]">
         <div>
           <div className="imo-label">{t('cp.rules')}</div>

@@ -23,17 +23,17 @@ export default function LeadsPage() {
   const manager = !!me && ['proprietaire', 'admin', 'directeur_commercial'].includes(me.role)
   const [imp, setImp] = useState<{ items: any[]; sel: Set<string>; busy: boolean } | null>(null)
   const openImport = async () => {
-    if (mode === 'demo') return notify('Prospect import needs the live database (run migrations 70 and 72).', 'err')
+    if (mode === 'demo') return notify(t('x38.prospect_import_needs_the_live'), 'err')
     const r = await callApi('/api/immo?r=targets')
-    if (!r.ok) return notify(r.json?.error ?? 'Could not load prospects', 'err')
+    if (!r.ok) return notify(r.json?.error ?? t('xm.load_prospects_failed'), 'err')
     setImp({ items: r.json.items, sel: new Set(), busy: false })
   }
   const doImport = async () => {
     if (!imp || imp.sel.size === 0) return
     setImp({ ...imp, busy: true })
     const r = await callApi('/api/immo?r=targets', { method: 'POST', body: JSON.stringify({ ids: Array.from(imp.sel) }) })
-    if (!r.ok) { setImp({ ...imp, busy: false }); return notify(r.json?.error ?? 'Import failed', 'err') }
-    notify(`${r.json.imported} prospect(s) imported${r.json.skipped ? `, ${r.json.skipped} skipped (already leads)` : ''}`)
+    if (!r.ok) { setImp({ ...imp, busy: false }); return notify(r.json?.error ?? t('xm.import_failed'), 'err') }
+    notify(r.json.skipped ? tf('xl.imp_done_skip', { n: r.json.imported, k: r.json.skipped }) : tf('xl.imp_done', { n: r.json.imported }))
     setImp(null)
     await reload()
   }
@@ -56,7 +56,7 @@ export default function LeadsPage() {
   }
 
   const save = async () => {
-    if (!edit?.name?.trim()) return notify('Name is required', 'err')
+    if (!edit?.name?.trim()) return notify(t('x38.name_is_required'), 'err')
     const base = { ...edit, last_contact: edit.last_contact ?? new Date().toISOString() } as Lead
     const score = scoreLead({ budget: Number(base.budget) || 0, status: (base.status ?? 'new') as LeadStatus, last_contact: base.last_contact, source: base.source ?? 'whatsapp' }, data.properties)
     if (edit.id) await update('leads', edit.id, { ...edit, score })
@@ -65,15 +65,15 @@ export default function LeadsPage() {
   }
 
   const toClient = async (l: Lead) => {
-    if (data.clients.some((c) => c.name === l.name)) return notify('Already a client')
+    if (data.clients.some((c) => c.name === l.name)) return notify(t('x38.already_a_client'))
     await create('clients', { name: l.name, phone: l.phone, email: l.email, kind: 'buyer', budget: l.budget, agent: l.agent, notes: l.interest })
-    notify(`${l.name} added to clients`)
+    notify(tf('xl.added_client', { name: l.name }))
   }
   const toDeal = async (l: Lead) => {
     const p = data.properties.find((x) => x.id === l.property_id)
     await create('deals', { title: p ? `${p.title} - ${p.area}` : l.interest || 'New deal', property_id: l.property_id, party_name: l.name, kind: p?.listing ?? 'sale', value: p?.price ?? l.budget, commission_pct: p?.commission_pct || (p?.listing === 'rent' ? 8 : 2), status: 'negotiation', agent: l.agent })
     await move(l.id, 'negotiation')
-    notify('Deal created in Deals')
+    notify(t('x38.deal_created_in_deals'))
   }
   const touch = (l: Lead) => update('leads', l.id, { last_contact: new Date().toISOString(), score: scoreLead({ ...l, last_contact: new Date().toISOString() }, data.properties) })
   const set = (k: keyof Lead, v: unknown) => setEdit((e) => ({ ...e, [k]: v }))
@@ -93,7 +93,7 @@ export default function LeadsPage() {
 
   return (
     <div>
-      <PageHead icon={<Target size={28} />} title="Leads" sub="Drag a card to move it through your pipeline" right={<>{manager && <Btn onClick={() => setReassignOpen(true)}><Repeat size={15} /> {t('ra.btn')}</Btn>}{manager && <Btn onClick={openImport}><Download size={15} /> Import prospects</Btn>}<Link href="/immo/visits"><Btn><CalendarDays size={15} /> Calendar</Btn></Link><Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> Add lead</Btn></>} />
+      <PageHead icon={<Target size={28} />} title={t('nav.leads')} sub={t('xm.leads_sub')} right={<>{manager && <Btn onClick={() => setReassignOpen(true)}><Repeat size={15} /> {t('ra.btn')}</Btn>}{manager && <Btn onClick={openImport}><Download size={15} /> {t('x38.import_prospects')}</Btn>}<Link href="/immo/visits"><Btn><CalendarDays size={15} /> {t('nav.calendar')}</Btn></Link><Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> {t('x38.add_lead')}</Btn></>} />
       {hotWaiting.length > 0 && (
         <div className="mb-4 rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-3" style={{ background: '#FEE2E2', color: '#991B1B', border: '1px solid #EF444455' }} role="status">
           <Flame size={17} /><div className="flex-1 min-w-[200px] text-[13px]"><b>{tf('hot.banner', { n: hotWaiting.length })}</b>: {hotWaiting.slice(0, 4).map((l) => l.name).join(', ')}</div>
@@ -109,8 +109,8 @@ export default function LeadsPage() {
       )}
       <Card className="mb-4">
         <div className="flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[200px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 t-muted" /><input className="imo-input" style={{ paddingLeft: 32 }} placeholder="Search lead or interest…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <select className="imo-select" style={{ width: 190 }} value={agent} onChange={(e) => setAgent(e.target.value)}><option value="">All agents</option>{agents.map((a) => <option key={a}>{a}</option>)}</select>
+          <div className="relative flex-1 min-w-[200px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 t-muted" /><input className="imo-input" style={{ paddingLeft: 32 }} placeholder={t('x38.search_lead_or_interest')} value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <select className="imo-select" style={{ width: 190 }} value={agent} onChange={(e) => setAgent(e.target.value)}><option value="">{t('cal.allagents')}</option>{agents.map((a) => <option key={a}>{a}</option>)}</select>
         </div>
       </Card>
 
@@ -130,17 +130,17 @@ export default function LeadsPage() {
                       <div className="flex items-center gap-2"><Avatar name={l.name} size={28} /><div className="min-w-0 flex-1"><div className="font-semibold text-[13px] truncate">{l.name}</div><div className="t-muted truncate">{p ? `${p.title} · ${p.area}` : l.interest || '-'}</div></div>
                         {isHot(l) && <Badge color="#EF4444"><Flame size={11} className="mr-0.5" />{t('hot.badge')}</Badge>}{l.do_not_contact && <Badge color="#7F1D1D"><Ban size={11} className="mr-0.5" />{t('dnc.badge')}</Badge>}</div>
                       <div className="flex items-center justify-between mt-2"><b>{qar(l.budget)}</b><span className="t-muted">{ago(l.last_contact)}</span></div>
-                      <div className="flex items-center gap-2 mt-1.5"><div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--border)' }}><div className="h-1.5 rounded-full" style={{ width: `${l.score}%`, background: l.score >= 75 ? '#16A34A' : l.score >= 50 ? '#2563EB' : '#94A3B8' }} /></div><span className="t-muted text-[11px]">AI score {l.score}</span></div>
+                      <div className="flex items-center gap-2 mt-1.5"><div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--border)' }}><div className="h-1.5 rounded-full" style={{ width: `${l.score}%`, background: l.score >= 75 ? '#16A34A' : l.score >= 50 ? '#2563EB' : '#94A3B8' }} /></div><span className="t-muted text-[11px]">{tf('xl.ai_score', { n: l.score })}</span></div>
                       <div className="flex items-center gap-1 mt-2 flex-wrap">
-                        {l.phone && <a href={`tel:${l.phone}`} onClick={() => touch(l)} className="imo-btn" style={{ padding: '3px 7px' }} aria-label="Call"><Phone size={12} /></a>}
-                        <Link href={`/immo/whatsapp?c=${encodeURIComponent(l.name)}`} className="imo-btn" style={{ padding: '3px 7px' }} aria-label="WhatsApp"><MessageCircle size={12} /></Link>
+                        {l.phone && <a href={`tel:${l.phone}`} onClick={() => touch(l)} className="imo-btn" style={{ padding: '3px 7px' }} aria-label={t('cat.call')}><Phone size={12} /></a>}
+                        <Link href={`/immo/whatsapp?c=${encodeURIComponent(l.name)}`} className="imo-btn" style={{ padding: '3px 7px' }} aria-label={t('nav.whatsapp')}><MessageCircle size={12} /></Link>
                         <Link href={`/immo/client?id=${l.id}`} className="imo-btn" style={{ padding: '3px 7px' }} aria-label={t('pf.title')} title={t('pf.title')}><IdCard size={12} /></Link>
-                        <Btn style={{ padding: '3px 7px' }} onClick={() => toClient(l)} title="Convert to client" aria-label="Convert to client"><UserCheck size={12} /></Btn>
-                        <Btn style={{ padding: '3px 7px' }} onClick={() => toDeal(l)} title="Create deal" aria-label="Create deal"><Handshake size={12} /></Btn>
-                        <Btn style={{ padding: '3px 7px' }} onClick={() => setEdit(l)} aria-label="Edit"><Pencil size={12} /></Btn>
-                        {canDelete && <Btn kind="danger" style={{ padding: '3px 7px' }} onClick={() => confirmDelete(`lead "${l.name}"`) && remove('leads', l.id)} aria-label="Delete"><Trash2 size={12} /></Btn>}
+                        <Btn style={{ padding: '3px 7px' }} onClick={() => toClient(l)} title={t('x38.convert_to_client')} aria-label={t('x38.convert_to_client')}><UserCheck size={12} /></Btn>
+                        <Btn style={{ padding: '3px 7px' }} onClick={() => toDeal(l)} title={t('x38.create_deal')} aria-label={t('x38.create_deal')}><Handshake size={12} /></Btn>
+                        <Btn style={{ padding: '3px 7px' }} onClick={() => setEdit(l)} aria-label={t('x38.edit')}><Pencil size={12} /></Btn>
+                        {canDelete && <Btn kind="danger" style={{ padding: '3px 7px' }} onClick={() => confirmDelete(tf('cf.lead', { name: l.name })) && remove('leads', l.id)} aria-label={t('f.delete')}><Trash2 size={12} /></Btn>}
                       </div>
-                      {l.agent && <div className="t-muted text-[11px] mt-1.5">Agent: {l.agent}{isOrphan(l, activeAgents) && <span style={{ color: '#B45309' }}> · {t('as.unassigned')}</span>}</div>}
+                      {l.agent && <div className="t-muted text-[11px] mt-1.5">{t('x38.agent')} {l.agent}{isOrphan(l, activeAgents) && <span style={{ color: '#B45309' }}> · {t('as.unassigned')}</span>}</div>}
                     </div>
                   )
                 })}
@@ -151,19 +151,19 @@ export default function LeadsPage() {
       </div>
 
       {edit && (
-        <Modal title={edit.id ? 'Edit lead' : 'Add lead'} onClose={() => setEdit(null)} wide>
+        <Modal title={edit.id ? t('xm.edit_lead') : t('x38.add_lead')} onClose={() => setEdit(null)} wide>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Name *"><input className="imo-input" value={edit.name ?? ''} onChange={(e) => set('name', e.target.value)} /></Field>
-            <Field label="Phone (with country code)"><input className="imo-input" value={edit.phone ?? ''} onChange={(e) => set('phone', e.target.value)} placeholder="+974…" /></Field>
-            <Field label="Email"><input className="imo-input" value={edit.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
-            <Field label="Budget (QAR)"><input type="number" min={0} className="imo-input" value={edit.budget ?? 0} onChange={(e) => set('budget', Number(e.target.value))} /></Field>
-            <Field label="Interest"><input className="imo-input" value={edit.interest ?? ''} onChange={(e) => set('interest', e.target.value)} placeholder="Villa - Lusail" /></Field>
-            <Field label="Linked property"><select className="imo-select" value={edit.property_id ?? ''} onChange={(e) => set('property_id', e.target.value || null)}><option value="">- none -</option>{data.properties.map((p) => <option key={p.id} value={p.id}>{p.title} · {p.area}</option>)}</select></Field>
-            <Field label="Status"><select className="imo-select" value={edit.status} onChange={(e) => set('status', e.target.value)}>{LEAD_COLUMNS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}</select></Field>
-            <Field label="Source"><select className="imo-select" value={edit.source} onChange={(e) => set('source', e.target.value)}>{SOURCES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select></Field>
-            <Field label="Assigned agent"><select className="imo-select" value={edit.agent ?? ''} onChange={(e) => set('agent', e.target.value)}><option value="">- unassigned -</option>{(edit.agent && !activeAgents.includes(edit.agent) ? [edit.agent, ...activeAgents] : activeAgents.length ? activeAgents : agents).map((a) => <option key={a}>{a}</option>)}</select></Field>
+            <Field label={t('x38.name')}><input className="imo-input" value={edit.name ?? ''} onChange={(e) => set('name', e.target.value)} /></Field>
+            <Field label={t('x38.phone_with_country_code')}><input className="imo-input" value={edit.phone ?? ''} onChange={(e) => set('phone', e.target.value)} placeholder="+974…" /></Field>
+            <Field label={t('team.invite.email')}><input className="imo-input" value={edit.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
+            <Field label={t('x38.budget_qar')}><input type="number" min={0} className="imo-input" value={edit.budget ?? 0} onChange={(e) => set('budget', Number(e.target.value))} /></Field>
+            <Field label={t('h.interest')}><input className="imo-input" value={edit.interest ?? ''} onChange={(e) => set('interest', e.target.value)} placeholder="Villa - Lusail" /></Field>
+            <Field label={t('x38.linked_property')}><select className="imo-select" value={edit.property_id ?? ''} onChange={(e) => set('property_id', e.target.value || null)}><option value="">{t('loc.none')}</option>{data.properties.map((p) => <option key={p.id} value={p.id}>{p.title} · {p.area}</option>)}</select></Field>
+            <Field label={t('h.status')}><select className="imo-select" value={edit.status} onChange={(e) => set('status', e.target.value)}>{LEAD_COLUMNS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}</select></Field>
+            <Field label={t('x38.source')}><select className="imo-select" value={edit.source} onChange={(e) => set('source', e.target.value)}>{SOURCES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select></Field>
+            <Field label={t('x38.assigned_agent')}><select className="imo-select" value={edit.agent ?? ''} onChange={(e) => set('agent', e.target.value)}><option value="">{t('x38.unassigned')}</option>{(edit.agent && !activeAgents.includes(edit.agent) ? [edit.agent, ...activeAgents] : activeAgents.length ? activeAgents : agents).map((a) => <option key={a}>{a}</option>)}</select></Field>
             <Field label={t('beds.wanted')}><input type="number" min={0} max={20} className="imo-input" value={edit.beds_wanted ?? ''} onChange={(e) => set('beds_wanted', e.target.value === '' ? null : Number(e.target.value))} /></Field>
-            <div className="sm:col-span-2"><Field label="Notes"><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field></div>
+            <div className="sm:col-span-2"><Field label={t('pf.notes')}><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field></div>
             <div className="sm:col-span-2">
               <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-1" checked={!!edit.do_not_contact} disabled={!!edit.id && !!leadBefore?.do_not_contact && !manager} onChange={(e) => set('do_not_contact', e.target.checked)} /><span><b>{t('dnc.label')}</b><span className="block t-muted text-[12px]">{t('dnc.help')}{leadBefore?.do_not_contact && !manager ? ` ${t('dnc.manager')}` : ''}</span></span></label>
             </div>
@@ -184,26 +184,26 @@ export default function LeadsPage() {
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setEdit(null)}>Cancel</Btn><Btn kind="primary" onClick={save}>Save lead</Btn></div>
+          <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setEdit(null)}>{t('f.cancel')}</Btn><Btn kind="primary" onClick={save}>{t('x38.save_lead')}</Btn></div>
         </Modal>
       )}
 
       {reassignOpen && <ReassignModal onClose={() => setReassignOpen(false)} />}
 
       {imp && (
-        <Modal title="Import prospects from B2B prospecting" onClose={() => setImp(null)} wide>
-          <div className="text-[13px] t-muted mb-3">Prospects with a phone number from your prospecting engine. Already-imported contacts are greyed out so no duplicate lead is created.</div>
+        <Modal title={t('x38.import_prospects_from_b2b_prospecting')} onClose={() => setImp(null)} wide>
+          <div className="text-[13px] t-muted mb-3">{t('x38.prospects_with_a_phone_number')}</div>
           <div className="imo-scroll" style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
-            {imp.items.length === 0 && <div className="p-4 text-[13px] t-muted">No prospect with a phone number yet.</div>}
+            {imp.items.length === 0 && <div className="p-4 text-[13px] t-muted">{t('x38.no_prospect_with_a_phone')}</div>}
             {imp.items.map((t) => (
               <label key={t.id} className="flex items-center gap-3 px-3 py-2 text-[13px]" style={{ borderBottom: '1px solid var(--border)', opacity: t.imported ? 0.45 : 1 }}>
                 <input type="checkbox" disabled={t.imported} checked={imp.sel.has(t.id)} onChange={(e) => { const n = new Set(imp.sel); e.target.checked ? n.add(t.id) : n.delete(t.id); setImp({ ...imp, sel: n }) }} />
                 <span className="flex-1 min-w-0"><b>{t.nom}</b> <span className="t-muted">· {[t.poste_ou_budget, t.entreprise_ou_objectif].filter(Boolean).join(' - ') || '-'}</span></span>
-                <span className="t-muted">{t.telephone}</span>{t.imported && <Badge color="#64748B">Already a lead</Badge>}
+                <span className="t-muted">{t.telephone}</span>{t.imported && <Badge color="#64748B">{t('x38.already_a_lead')}</Badge>}
               </label>
             ))}
           </div>
-          <div className="flex items-center justify-between mt-4"><span className="text-[13px] t-muted">{imp.sel.size} selected (max 50)</span><div className="flex gap-2"><Btn onClick={() => setImp(null)}>Cancel</Btn><Btn kind="primary" disabled={imp.sel.size === 0 || imp.busy} onClick={doImport}>{imp.busy ? 'Importing…' : 'Import as leads'}</Btn></div></div>
+          <div className="flex items-center justify-between mt-4"><span className="text-[13px] t-muted">{tf('xl.sel_max', { n: imp.sel.size })}</span><div className="flex gap-2"><Btn onClick={() => setImp(null)}>{t('f.cancel')}</Btn><Btn kind="primary" disabled={imp.sel.size === 0 || imp.busy} onClick={doImport}>{imp.busy ? t('xl.importing') : t('xl.import_as_leads')}</Btn></div></div>
         </Modal>
       )}
     </div>

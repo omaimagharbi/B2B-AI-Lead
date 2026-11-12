@@ -30,12 +30,12 @@ export default function PropertyGeoVideo({ edit, set }: { edit: Partial<Property
     setUp(true)
     try {
       const r = await callApi('/api/immo?r=upload&kind=video-url', { method: 'POST', body: JSON.stringify({ type: f.type, name: f.name, size: f.size }) })
-      if (!r.ok) throw new Error(r.json?.error ?? 'Upload failed')
+      if (!r.ok) throw new Error(r.json?.error ?? t('xm.upload_failed'))
       // envoi direct au stockage avec l'adresse signee (le bucket refuse > 50 Mo et les autres formats)
       const { error } = await supabase.storage.from(VIDEO_BUCKET).uploadToSignedUrl(r.json.path, r.json.token, f, { contentType: f.type || undefined })
       if (error) throw new Error(error.message)
       set('video_url', r.json.url)
-    } catch (e) { notify(e instanceof Error ? e.message : 'Upload failed', 'err') }
+    } catch (e) { notify(e instanceof Error ? e.message : t('xm.upload_failed'), 'err') }
     setUp(false)
   }
 

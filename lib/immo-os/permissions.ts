@@ -6,7 +6,7 @@ export const isManager = (role: string | null | undefined) => !!role && MANAGER_
 
 export type Viewer = { role: string; name: string }
 // Entites dont chaque ligne est rattachee a un agent (colonne "agent") : un agent ne voit/modifie que les siennes.
-const AGENT_SCOPED: Entity[] = ['leads', 'clients', 'deals', 'visits']
+const AGENT_SCOPED: Entity[] = ['leads', 'clients', 'deals', 'visits', 'payments']
 const same = (a?: string | null, b?: string | null) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase()
 
 export function filterForViewer<T extends Partial<Record<Entity, any[]>>>(data: T, v: Viewer): T {
@@ -30,7 +30,7 @@ export function canWrite(entity: Entity, op: 'create' | 'update' | 'delete', v: 
   if (isManager(v.role)) return true
   if (op === 'delete') return false
   if (entity === 'owners' || entity === 'zones' || entity === 'hierarchy') return false // proprietaires et zones : gestionnaires seulement
-  if (entity === 'sends' || entity === 'stages') return false // ecrits par le serveur uniquement
+  if (entity === 'sends' || entity === 'stages' || entity === 'payments') return false // ecrits par le serveur uniquement
   if (entity === 'outcomes' && op !== 'create') return false // un resultat de contact se corrige en en ajoutant un nouveau
   if (op === 'update' && AGENT_SCOPED.includes(entity)) return same(existing?.agent, v.name)
   return true

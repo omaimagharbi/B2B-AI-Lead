@@ -95,8 +95,8 @@ export default function Dashboard() {
       {liveEmpty && (
         <Card className="mb-5" style={{ borderColor: 'var(--gold)' }}>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><div className="font-semibold">Your workspace is empty</div><div className="text-[13px] t-muted">Add your first property, or load sample Qatar data to explore every screen.</div></div>
-            <div className="flex gap-2"><Link href="/immo/properties"><Btn kind="primary"><Plus size={14} /> Add property</Btn></Link><Btn kind="gold" onClick={seedLive}><Sparkles size={14} /> Load sample data</Btn></div>
+            <div><div className="font-semibold">{t('x38.your_workspace_is_empty')}</div><div className="text-[13px] t-muted">{t('x38.add_your_first_property_or')}</div></div>
+            <div className="flex gap-2"><Link href="/immo/properties"><Btn kind="primary"><Plus size={14} /> {t('x38.add_property')}</Btn></Link><Btn kind="gold" onClick={seedLive}><Sparkles size={14} /> {t('x38.load_sample_data')}</Btn></div>
           </div>
         </Card>
       )}
@@ -113,8 +113,8 @@ export default function Dashboard() {
       <div className="grid gap-4 xl:grid-cols-[1.25fr_.8fr_.8fr_1.35fr] mb-4">
         <Card className="xl:col-span-1">
           <CardTitle icon={<BarChart3 size={17} />} title={t('market')} />
-          <div className="text-right -mt-1 mb-1"><div className="text-[11px] t-muted">Average asking price (sale)</div><div className="text-[20px] font-bold" style={{ color: '#2563EB' }}>{qar(avgPrice)}</div>
-            {marketDelta !== null && <div className="text-[12px] font-semibold" style={{ color: marketDelta >= 0 ? 'var(--good)' : 'var(--bad)' }}>{marketDelta >= 0 ? '↑' : '↓'} {Math.abs(marketDelta)}% <span className="t-muted font-normal">vs. last month</span></div>}</div>
+          <div className="text-right -mt-1 mb-1"><div className="text-[11px] t-muted">{t('avgprice')}</div><div className="text-[20px] font-bold" style={{ color: '#2563EB' }}>{qar(avgPrice)}</div>
+            {marketDelta !== null && <div className="text-[12px] font-semibold" style={{ color: marketDelta >= 0 ? 'var(--good)' : 'var(--bad)' }}>{marketDelta >= 0 ? '↑' : '↓'} {Math.abs(marketDelta)}% <span className="t-muted font-normal">{t('vs')}</span></div>}</div>
           <div style={{ height: 150 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={priceSeries} margin={{ left: -6, right: 8, top: 6 }}>
@@ -123,7 +123,7 @@ export default function Dashboard() {
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v) => qarShort(Number(v))} tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false} width={44} />
                 <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12 }} formatter={(v) => qar(Number(v))} />
-                <Area type="monotone" dataKey="Average price" stroke="#2563EB" strokeWidth={2.5} fill="url(#mk)" dot={{ r: 3, fill: '#2563EB' }} />
+                <Area type="monotone" dataKey="Average price" name={t('xm.average_price')} stroke="#2563EB" strokeWidth={2.5} fill="url(#mk)" dot={{ r: 3, fill: '#2563EB' }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -144,7 +144,7 @@ export default function Dashboard() {
 
         <Card>
           <CardTitle title={t('areas')} />
-          {areaStats.length === 0 && <Empty title="No areas yet" />}
+          {areaStats.length === 0 && <Empty title={t('x38.no_areas_yet')} />}
           <div className="flex flex-col gap-3">
             {areaStats.map(([a, n]) => (
               <div key={a} className="flex items-center gap-2 text-[13px]"><MapPin size={14} style={{ color: '#2563EB' }} /><span className="flex-1">{a}</span><span className="font-semibold">{Math.round((n / properties.length) * 100)}%</span></div>
@@ -154,7 +154,7 @@ export default function Dashboard() {
 
         <Card pad={false}>
           <div className="p-4 pb-2"><CardTitle title={t('featured')} right={<Link href="/immo/properties" className="text-[12.5px] font-semibold" style={{ color: 'var(--blue)' }}>{t('viewall')}</Link>} /></div>
-          {featured.length === 0 ? <Empty title="No featured properties" sub="Mark a property as featured to show it here." /> : (
+          {featured.length === 0 ? <Empty title={t('x38.no_featured_properties')} sub={t('xm.featured_sub')} /> : (
             <div className="grid grid-cols-2 gap-3 px-4 pb-4">
               {featured.map((p) => (
                 <div key={p.id} className="text-[12px]">
@@ -241,8 +241,8 @@ export default function Dashboard() {
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'var(--muted)' }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="Leads" stroke="#2563EB" strokeWidth={2.5} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="Closed deals" stroke="#C9A24B" strokeWidth={2.5} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="Leads" name={t('h.leads')} stroke="#2563EB" strokeWidth={2.5} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="Closed deals" name={t('x38.closed_deals')} stroke="#C9A24B" strokeWidth={2.5} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -269,7 +269,7 @@ export default function Dashboard() {
               <div className="text-[12px] font-semibold mb-2">{t('demanded')}</div>
               <div className="flex flex-col gap-2.5">
                 {areaStats.map(([a, n], i) => (<div key={a}><div className="flex justify-between text-[11.5px]"><span>{a}</span><span className="font-semibold">{Math.round((n / properties.length) * 100)}%</span></div><div className="h-1.5 rounded-full" style={{ background: 'var(--border)' }}><div className="h-1.5 rounded-full" style={{ width: `${(n / areaStats[0][1]) * 100}%`, background: ['#2563EB', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6'][i % 5] }} /></div></div>))}
-                {areaStats.length === 0 && <div className="text-[12px] t-muted">No data yet</div>}
+                {areaStats.length === 0 && <div className="text-[12px] t-muted">{t('x38.no_data_yet')}</div>}
               </div>
             </div>
             <div>

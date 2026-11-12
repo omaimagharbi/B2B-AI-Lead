@@ -52,10 +52,10 @@ function Frame({ children }: { children: ReactNode }) {
   const unread = data.messages.filter((m) => m.unread)
 
   const results = q.trim().length < 2 ? [] : [
-    ...data.properties.filter((p) => `${p.title} ${p.area}`.toLowerCase().includes(q.toLowerCase())).slice(0, 4).map((p) => ({ k: `p${p.id}`, label: `${p.title} · ${p.area}`, tag: 'Property', href: '/immo/properties' })),
-    ...data.leads.filter((l) => l.name.toLowerCase().includes(q.toLowerCase())).slice(0, 4).map((l) => ({ k: `l${l.id}`, label: l.name, tag: 'Lead', href: `/immo/client?id=${l.id}` })),
-    ...data.clients.filter((c) => c.name.toLowerCase().includes(q.toLowerCase())).slice(0, 3).map((c) => ({ k: `c${c.id}`, label: c.name, tag: 'Client', href: `/immo/client?id=${c.id}` })),
-    ...data.owners.filter((o) => o.name.toLowerCase().includes(q.toLowerCase())).slice(0, 3).map((o) => ({ k: `o${o.id}`, label: o.name, tag: 'Owner', href: '/immo/owners' })),
+    ...data.properties.filter((p) => `${p.title} ${p.area}`.toLowerCase().includes(q.toLowerCase())).slice(0, 4).map((p) => ({ k: `p${p.id}`, label: `${p.title} · ${p.area}`, tag: t('sp.choose'), href: '/immo/properties' })),
+    ...data.leads.filter((l) => l.name.toLowerCase().includes(q.toLowerCase())).slice(0, 4).map((l) => ({ k: `l${l.id}`, label: l.name, tag: t('pf.what.lead'), href: `/immo/client?id=${l.id}` })),
+    ...data.clients.filter((c) => c.name.toLowerCase().includes(q.toLowerCase())).slice(0, 3).map((c) => ({ k: `c${c.id}`, label: c.name, tag: t('x38.client'), href: `/immo/client?id=${c.id}` })),
+    ...data.owners.filter((o) => o.name.toLowerCase().includes(q.toLowerCase())).slice(0, 3).map((o) => ({ k: `o${o.id}`, label: o.name, tag: t('o.owner'), href: '/immo/owners' })),
   ]
 
   return (
@@ -66,7 +66,7 @@ function Frame({ children }: { children: ReactNode }) {
             <LogoMark size={42} />
             <div className="min-w-0">
               <div className="font-bold text-[14px] leading-tight uppercase" style={{ color: '#fff' }}>PiloBrain Real Estate</div>
-              <div className="text-[10.5px] tracking-[0.14em]" style={{ color: '#E3C275' }}>AI OPERATING SYSTEM</div>
+              <div className="text-[10.5px] tracking-[0.14em]" style={{ color: '#E3C275' }}>{t('x38.ai_operating_system')}</div>
             </div>
           </div>
           <nav className="px-3 flex-none flex flex-col gap-0.5">
@@ -90,8 +90,8 @@ function Frame({ children }: { children: ReactNode }) {
           <div className="imo-side-sky relative overflow-hidden shrink-0" style={{ height: 118 }}>
             <Skyline height={92} opacity={0.9} style={{ position: 'absolute', bottom: 0, left: 0 }} />
             <div className="absolute bottom-2 left-0 right-0 text-center leading-tight">
-              <div className="text-[13px] font-bold tracking-[0.18em]" style={{ color: '#E3C275' }}>QATAR</div>
-              <div className="text-[9.5px] tracking-[0.16em]" style={{ color: '#C9D6EA' }}>REAL ESTATE SOLUTIONS</div>
+              <div className="text-[13px] font-bold tracking-[0.18em]" style={{ color: '#E3C275' }}>{t('x38.qatar')}</div>
+              <div className="text-[9.5px] tracking-[0.16em]" style={{ color: '#C9D6EA' }}>{t('x38.real_estate_solutions')}</div>
             </div>
           </div>
         </aside>
@@ -101,7 +101,7 @@ function Frame({ children }: { children: ReactNode }) {
             <div className="imo-hd-sky absolute inset-y-0 right-0 w-[62%] pointer-events-none overflow-hidden hidden md:block" style={{ maskImage: 'linear-gradient(90deg,transparent,#000 40%)', WebkitMaskImage: 'linear-gradient(90deg,transparent,#000 40%)' }}>
               <Skyline height={84} opacity={0.75} style={{ position: 'absolute', right: 0, bottom: 0 }} />
             </div>
-            <button className="lg:hidden relative" style={{ color: '#fff' }} onClick={() => setOpen(!open)} aria-label="Menu"><Menu size={22} /></button>
+            <button className="lg:hidden relative" style={{ color: '#fff' }} onClick={() => setOpen(!open)} aria-label={t('x38.menu')}><Menu size={22} /></button>
             <div className="hidden md:block relative leading-tight">
               <div className="text-[18px] font-bold" style={{ color: '#fff' }}>{t('tag1')}</div>
               <div className="text-[18px] font-bold" style={{ color: '#E3C275' }}>{t('tag2')}</div>
@@ -121,7 +121,7 @@ function Frame({ children }: { children: ReactNode }) {
               )}
             </div>
             <div className="relative">
-              <button style={{ color: '#fff' }} onClick={() => setShowN(!showN)} aria-label="Notifications" className="relative">
+              <button style={{ color: '#fff' }} onClick={() => setShowN(!showN)} aria-label={t('x38.notifications')} className="relative">
                 <Bell size={20} />
                 {unread.length > 0 && <span className="absolute -top-1.5 -right-1.5 text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center" style={{ background: '#EF4444', color: '#fff' }}>{unread.length}</span>}
               </button>
@@ -142,13 +142,13 @@ function Frame({ children }: { children: ReactNode }) {
             <select aria-label={t('lang')} value={lang} onChange={(e) => setLang(e.target.value as Lang)} className="rounded-md text-[12px] font-semibold px-1.5 h-8" style={{ background: 'rgba(255,255,255,.12)', color: '#fff', border: '1px solid rgba(255,255,255,.3)' }}>
               {LANGS.map((l) => <option key={l.v} value={l.v} style={{ color: '#0F2540' }}>{l.label}</option>)}
             </select>
-            <button style={{ color: '#fff' }} onClick={toggleDark} aria-label="Toggle theme">{dark ? <Sun size={19} /> : <Moon size={19} />}</button>
+            <button style={{ color: '#fff' }} onClick={toggleDark} aria-label={t('x38.toggle_theme')}>{dark ? <Sun size={19} /> : <Moon size={19} />}</button>
             {me && (
               <div className="hidden sm:flex items-center gap-2">
                 <Avatar name={me.name} size={34} src={me.photo} />
                 <div className="leading-tight">
                   <div className="text-[13px] font-semibold" style={{ color: '#fff' }}>{me.name}</div>
-                  <div className="text-[11px]" style={{ color: '#A9BAD3' }}>{({ proprietaire: 'Owner', admin: 'Admin', directeur_commercial: 'Sales director', membre: 'Agent' } as Record<string, string>)[me.role] ?? me.role}</div>
+                  <div className="text-[11px]" style={{ color: '#A9BAD3' }}>{(({ proprietaire: 'team.role.proprietaire', admin: 'team.role.admin', directeur_commercial: 'team.role.directeur_commercial', membre: 'team.role.membre' } as Record<string, string>)[me.role] ? t(({ proprietaire: 'team.role.proprietaire', admin: 'team.role.admin', directeur_commercial: 'team.role.directeur_commercial', membre: 'team.role.membre' } as Record<string, string>)[me.role]) : me.role)}</div>
                 </div>
               </div>
             )}

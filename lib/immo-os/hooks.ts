@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { fmt, translate, type Lang } from './i18n'
 
 // Lit un parametre d'URL cote navigateur (evite useSearchParams et son exigence de Suspense au build).
 export function useQueryParam(name: string): string | null {
@@ -10,5 +11,8 @@ export function useQueryParam(name: string): string | null {
   return v
 }
 export function confirmDelete(what: string): boolean {
-  return typeof window !== 'undefined' && window.confirm(`Delete ${what}? This cannot be undone.`)
+  if (typeof window === 'undefined') return false
+  let lang: Lang = 'en'
+  try { const l = localStorage.getItem('imo_lang'); if (l === 'ar' || l === 'fr' || l === 'en') lang = l } catch {}
+  return window.confirm(fmt(translate(lang, 'cf.delete'), { what }))
 }

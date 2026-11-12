@@ -1,6 +1,20 @@
-PATCH V16 -> V20 (lots 4 a 8 et corrections)
-1. Copier le contenu de ce dossier PAR-DESSUS le projet V16 (memes chemins).
-2. Supprimer les fichiers listes dans FICHIERS_SUPPRIMES.txt (00_MIGRATIONS_70_a_76_combinees.sql est remplace par 00_MIGRATIONS_70_a_82_combinees.sql).
-3. Lancer `npm install` (nouvelle dependance : leaflet, @types/leaflet) : package.json et package-lock.json sont dans le patch.
-4. Supabase : lancer 77 a 82 (ou le fichier combine 70 a 82).
-5. Aucune nouvelle route API, aucun nouveau cron.
+PATCH V20 -> V21 (lot 9) : textes FR/AR (O38) + paiement en ligne (MyFatoorah, QAR)
+===========================================================================
+A appliquer sur un projet qui est DEJA en V20.
+
+1. Copier tous les fichiers de ce zip dans le projet en gardant les memes chemins (ecraser les fichiers existants).
+2. SUPPRIMER l'ancien fichier : 00_MIGRATIONS_70_a_82_combinees.sql (remplace par 00_MIGRATIONS_70_a_83_combinees.sql).
+3. Supabase > SQL Editor : executer UNIQUEMENT 83_immobilier_os_lot9_paiement_en_ligne.sql (idempotent).
+   (Les migrations 70 a 82 doivent deja etre faites. Si ce n'est pas le cas : executer 00_MIGRATIONS_70_a_83_combinees.sql une seule fois.)
+4. Aucune nouvelle dependance npm. Aucun nouveau cron. Aucune nouvelle fonction Vercel (la route reste /api/immo?r=...).
+5. Paiement en ligne (facultatif, le reste marche sans) - variables Vercel :
+   MYFATOORAH_API_KEY      cle API (compte Qatar pour le live, compte de test sinon)
+   MYFATOORAH_ENV          test (defaut) ou live
+   NEXT_PUBLIC_SITE_URL    adresse https publique du site (deja utilisee ailleurs ; pas de localhost)
+   MYFATOORAH_WEBHOOK_SECRET (facultatif) et webhook https://TON-SITE/api/immo?r=payments&hook=1&secret=TON_SECRET
+6. Tests : npx tsx scripts/test-lot4-5.ts  puis  npx tsx scripts/test-lot9.ts
+7. Redeployer.
+
+FICHIERS NOUVEAUX (8) : 00_MIGRATIONS_70_a_83_combinees.sql, 83_immobilier_os_lot9_paiement_en_ligne.sql, app/immo/payments.tsx, app/immo/settings/payment-card.tsx, app/pay/page.tsx, lib/immo-os/api/payments.ts, lib/immo-os/payments.ts, scripts/test-lot9.ts
+FICHIERS MODIFIES (32) : .env.local.example, README.md, app/api/immo/route.ts, app/immo/ai-agent/page.tsx, app/immo/assistant-chat.tsx, app/immo/assistant/page.tsx, app/immo/clients/page.tsx, app/immo/deals/page.tsx, app/immo/leads/page.tsx, app/immo/market/external.tsx, app/immo/marketing/page.tsx, app/immo/marketing/social.tsx, app/immo/owners/page.tsx, app/immo/page.tsx, app/immo/properties/page.tsx, app/immo/property-geo-video.tsx, app/immo/reports/page.tsx, app/immo/settings/compliance-card.tsx, app/immo/settings/meta-card.tsx, app/immo/settings/page.tsx, app/immo/shell.tsx, app/immo/team/activity-log.tsx, app/immo/visits/page.tsx, app/immo/whatsapp/page.tsx, lib/immo-os/api/all.ts, lib/immo-os/demo.ts, lib/immo-os/hooks.ts, lib/immo-os/i18n.ts, lib/immo-os/permissions.ts, lib/immo-os/store.tsx, lib/immo-os/types.ts, lib/immo-os/ui.tsx
+FICHIER SUPPRIME : 00_MIGRATIONS_70_a_82_combinees.sql

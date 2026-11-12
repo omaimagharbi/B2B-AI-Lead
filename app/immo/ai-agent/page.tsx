@@ -33,7 +33,7 @@ export default function AiAgentPage() {
     const next = readConfig({ ...cfg, ...patch })
     if (mode === 'demo') { setCfg(next); try { localStorage.setItem('imo_ai_agent', JSON.stringify(next)) } catch {}; return notify(t('aia.saved')) }
     const r = await callApi('/api/immo?r=settings', { method: 'PATCH', body: JSON.stringify({ ai_agent: patch }) })
-    if (!r.ok) return notify(r.json?.error ?? 'Update failed', 'err')
+    if (!r.ok) return notify(r.json?.error ?? t('xm.update_failed'), 'err')
     setCfg(next); notify(t('aia.saved'))
   }
 

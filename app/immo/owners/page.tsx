@@ -49,7 +49,7 @@ export default function OwnersPage() {
   const set = (k: keyof Owner, v: unknown) => setEdit((e) => ({ ...e, [k]: v }))
 
   const save = async () => {
-    if (!edit?.name?.trim()) return notify('Name is required', 'err')
+    if (!edit?.name?.trim()) return notify(t('x38.name_is_required'), 'err')
     const payload = { ...edit, last_contact: edit.last_contact ? new Date(edit.last_contact).toISOString() : null }
     if (edit.id) await update('owners', edit.id, payload)
     else await create('owners', payload)
@@ -60,17 +60,17 @@ export default function OwnersPage() {
 
   return (
     <div>
-      <PageHead icon={<UserSquare2 size={28} />} title="Owners" sub="Property owners, their listings and communication history" right={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> Add owner</Btn>} />
+      <PageHead icon={<UserSquare2 size={28} />} title={t('nav.owners')} sub={t('xm.owners_sub')} right={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> {t('x38.add_owner')}</Btn>} />
       <Card className="mb-4"><div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px] max-w-[420px]"><Search size={15} className="absolute top-1/2 -translate-y-1/2 t-muted" style={{ insetInlineStart: 12 }} /><input className="imo-input" style={{ paddingInlineStart: 32 }} placeholder="Search owners…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <div className="relative flex-1 min-w-[200px] max-w-[420px]"><Search size={15} className="absolute top-1/2 -translate-y-1/2 t-muted" style={{ insetInlineStart: 12 }} /><input className="imo-input" style={{ paddingInlineStart: 32 }} placeholder={t('x38.search_owners')} value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <select className="imo-select" style={{ width: 200 }} value={fResp} onChange={(e) => setFResp(e.target.value)} aria-label={t('o.responsible')}><option value="">{t('o.f.all')}</option><option value="__none">{t('o.f.none')}</option>{respOptions.map((r) => <option key={r} value={r}>{r}</option>)}</select>
         <select className="imo-select" style={{ width: 220 }} value={fStale ? 'stale' : ''} onChange={(e) => setFStale(e.target.value === 'stale')} aria-label={t('o.last')}><option value="">{t('o.f.any')}</option><option value="stale">{t('o.f.stale')}</option></select>
       </div></Card>
 
       <Card pad={false}>
-        {list.length === 0 ? <Empty title="No owners yet" sub="Add owners so you can link them to their properties." action={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={14} /> Add owner</Btn>} /> : (
+        {list.length === 0 ? <Empty title={t('x38.no_owners_yet')} sub={t('xm.owners_sub2')} action={<Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={14} /> {t('x38.add_owner')}</Btn>} /> : (
           <div className="overflow-x-auto imo-scroll"><table className="imo-table">
-            <thead><tr><th>{t('o.owner')}</th><th>Phone</th><th>Email</th><th>{t('o.responsible')}</th><th>{t('o.last')}</th><th>{t('o.props')}</th><th>{t('o.port')}</th><th /></tr></thead>
+            <thead><tr><th>{t('o.owner')}</th><th>{t('x38.phone')}</th><th>{t('team.invite.email')}</th><th>{t('o.responsible')}</th><th>{t('o.last')}</th><th>{t('o.props')}</th><th>{t('o.port')}</th><th /></tr></thead>
             <tbody>{list.map((o) => {
               const ps = propsOf(o.id)
               return (
@@ -85,7 +85,7 @@ export default function OwnersPage() {
                     <Link href="/immo/whatsapp"><Btn style={{ padding: '4px 8px' }}><MessageCircle size={13} /></Btn></Link>{' '}
                     <Btn style={{ padding: '4px 8px' }} onClick={() => markNow(o)} title={t('o.setnow')} aria-label={t('o.setnow')}><Clock size={13} /></Btn>{' '}
                     <Btn style={{ padding: '4px 8px' }} onClick={() => setEdit(o)}><Pencil size={13} /></Btn>{' '}
-                    {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(`owner "${o.name}"`) && remove('owners', o.id)}><Trash2 size={13} /></Btn>}
+                    {canDelete && <Btn kind="danger" style={{ padding: '4px 8px' }} onClick={() => confirmDelete(tf('cf.owner', { name: o.name })) && remove('owners', o.id)}><Trash2 size={13} /></Btn>}
                   </td>
                 </tr>
               )
@@ -98,28 +98,28 @@ export default function OwnersPage() {
         const ms = data.messages.filter((m) => m.contact_name === sel.name).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5)
         return (
           <Modal title={sel.name} onClose={() => setSel(null)}>
-            <div className="text-[13px] t-muted mb-2">{sel.phone ?? 'No phone'} {sel.email ? `· ${sel.email}` : ''}</div>
+            <div className="text-[13px] t-muted mb-2">{sel.phone ?? t('xm.no_phone')} {sel.email ? `· ${sel.email}` : ''}</div>
             <div className="text-[13px] mb-3 flex flex-wrap gap-x-5 gap-y-1"><span><b>{t('o.responsible')}:</b> {sel.responsible ?? '-'}</span><span><b>{t('o.last')}:</b> {agoT(lastOf(sel))}</span><Btn style={{ padding: '3px 8px' }} onClick={() => markNow(sel)}><Clock size={12} /> {t('o.setnow')}</Btn></div>
             {sel.notes && <div className="text-[13px] mb-3">{sel.notes}</div>}
-            <div className="font-semibold text-[13px] mb-1.5">Properties ({ps.length})</div>
-            <div className="flex flex-col gap-1.5 mb-4">{ps.map((p) => <div key={p.id} className="flex justify-between text-[13px] imo-card p-2.5"><span>{p.title} · {p.area}</span><b>{qar(p.price)}</b></div>)}{ps.length === 0 && <div className="text-[13px] t-muted">No property linked yet.</div>}</div>
-            <div className="font-semibold text-[13px] mb-1.5">Communication history</div>
-            <div className="flex flex-col gap-1.5">{ms.map((m) => <div key={m.id} className="text-[12.5px] t-muted">{agoT(m.created_at)} · {m.direction === 'in' ? 'Received' : 'Sent'}: {m.body}</div>)}{ms.length === 0 && <div className="text-[13px] t-muted">No messages recorded.</div>}</div>
+            <div className="font-semibold text-[13px] mb-1.5">{tf('xl.props_n', { n: ps.length })}</div>
+            <div className="flex flex-col gap-1.5 mb-4">{ps.map((p) => <div key={p.id} className="flex justify-between text-[13px] imo-card p-2.5"><span>{p.title} · {p.area}</span><b>{qar(p.price)}</b></div>)}{ps.length === 0 && <div className="text-[13px] t-muted">{t('x38.no_property_linked_yet')}</div>}</div>
+            <div className="font-semibold text-[13px] mb-1.5">{t('x38.communication_history')}</div>
+            <div className="flex flex-col gap-1.5">{ms.map((m) => <div key={m.id} className="text-[12.5px] t-muted">{agoT(m.created_at)} · {m.direction === 'in' ? t('xm.received') : t('xm.sent')}: {m.body}</div>)}{ms.length === 0 && <div className="text-[13px] t-muted">{t('x38.no_messages_recorded')}</div>}</div>
           </Modal>
         )
       })()}
 
       {edit && (
-        <Modal title={edit.id ? 'Edit owner' : 'Add owner'} onClose={() => setEdit(null)}>
+        <Modal title={edit.id ? t('xm.edit_owner') : t('x38.add_owner')} onClose={() => setEdit(null)}>
           <div className="grid gap-3">
-            <Field label="Name *"><input className="imo-input" value={edit.name ?? ''} onChange={(e) => set('name', e.target.value)} /></Field>
-            <Field label="Phone"><input className="imo-input" value={edit.phone ?? ''} onChange={(e) => set('phone', e.target.value)} placeholder="+974…" /></Field>
-            <Field label="Email"><input className="imo-input" value={edit.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
+            <Field label={t('x38.name')}><input className="imo-input" value={edit.name ?? ''} onChange={(e) => set('name', e.target.value)} /></Field>
+            <Field label={t('x38.phone')}><input className="imo-input" value={edit.phone ?? ''} onChange={(e) => set('phone', e.target.value)} placeholder="+974…" /></Field>
+            <Field label={t('team.invite.email')}><input className="imo-input" value={edit.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
             <Field label={t('o.responsible')}><select className="imo-select" value={edit.responsible ?? ''} onChange={(e) => set('responsible', e.target.value || null)}><option value="">{t('o.none')}</option>{respOptions.map((r) => <option key={r} value={r}>{r}</option>)}</select></Field>
             <Field label={t('o.last')}><input type="date" className="imo-input" value={toInput(edit.last_contact)} onChange={(e) => set('last_contact', e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : null)} dir="ltr" /><div className="text-[12px] t-muted mt-1">{t('o.auto')}</div></Field>
-            <Field label="Notes"><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field>
+            <Field label={t('pf.notes')}><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field>
           </div>
-          <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setEdit(null)}>Cancel</Btn><Btn kind="primary" onClick={save}>Save owner</Btn></div>
+          <div className="flex justify-end gap-2 mt-5"><Btn onClick={() => setEdit(null)}>{t('f.cancel')}</Btn><Btn kind="primary" onClick={save}>{t('x38.save_owner')}</Btn></div>
         </Modal>
       )}
     </div>

@@ -21,7 +21,7 @@ export default function MetaCard() {
   useEffect(() => { if (mode === 'live') load() }, [mode, load])
   if (!manager) return null
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const post = async (body: Record<string, unknown>) => { setBusy(true); const r = await callApi('/api/immo?r=wa', { method: 'POST', body: JSON.stringify(body) }); setBusy(false); if (!r.ok) notify(r.json?.error ?? 'Failed', 'err'); return r }
+  const post = async (body: Record<string, unknown>) => { setBusy(true); const r = await callApi('/api/immo?r=wa', { method: 'POST', body: JSON.stringify(body) }); setBusy(false); if (!r.ok) notify(r.json?.error ?? t('xm.failed'), 'err'); return r }
 
   return (
     <Card className="lg:col-span-2">

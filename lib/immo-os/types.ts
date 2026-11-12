@@ -58,6 +58,15 @@ export type Message = {
 // Lot 4
 export type OutcomeCode = 'callback' | 'viewing_booked' | 'offer_made' | 'info_sent' | 'no_answer' | 'not_interested' | 'wrong_number' | 'other'
 export type Outcome = { id: string; contact_name: string; contact_phone?: string | null; outcome: OutcomeCode; note?: string | null; agent?: string | null; created_at: string }
+// Lot 9 : paiement en ligne (lien de paiement hebergé par MyFatoorah). Aucune donnee de carte chez nous.
+export type PaymentKind = 'deposit' | 'commission' | 'rent' | 'service' | 'other'
+export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'expired'
+export type Payment = {
+  id: string; deal_id?: string | null; contact_name: string; contact_phone?: string | null; agent?: string | null
+  kind: PaymentKind; amount: number; currency: 'QAR'; description?: string | null; status: PaymentStatus
+  pay_url?: string | null; paid_at?: string | null; created_at: string; created_by?: string | null
+}
+export const PAYMENT_KINDS: PaymentKind[] = ['deposit', 'commission', 'rent', 'service', 'other']
 export type Send = { id: string; property_id?: string | null; property_title?: string | null; contact_name: string; contact_phone?: string | null; agent?: string | null; channel?: string | null; created_at: string }
 export type StageEvent = { id: string; kind: 'lead' | 'deal'; record_id: string; record_name?: string | null; from_status?: string | null; to_status: string; by_name?: string | null; auto?: string[] | null; created_at: string }
 export type Ad = {
@@ -75,7 +84,7 @@ export type Visit = {
   calendar_event_id?: string | null; created_at: string
 }
 
-export type Entity = 'hierarchy' | 'zones' | 'owners' | 'properties' | 'clients' | 'leads' | 'deals' | 'messages' | 'ads' | 'visits' | 'outcomes' | 'sends' | 'stages'
+export type Entity = 'hierarchy' | 'zones' | 'owners' | 'properties' | 'clients' | 'leads' | 'deals' | 'messages' | 'ads' | 'visits' | 'outcomes' | 'sends' | 'stages' | 'payments'
 
 export const ENTITIES: Record<Entity, { table: string; fields: string[] }> = {
   hierarchy: { table: 're_hierarchy', fields: ['member_id', 'is_lead', 'reports_to'] },
@@ -97,18 +106,20 @@ export const ENTITIES: Record<Entity, { table: string; fields: string[] }> = {
   outcomes: { table: 're_outcomes', fields: ['contact_name', 'contact_phone', 'outcome', 'note', 'agent'] },
   // sends et stages sont ecrits par le serveur uniquement (api/whatsapp.ts, api/deal-steps.ts) : lecture seule depuis le navigateur
   sends: { table: 're_sends', fields: ['property_id', 'property_title', 'contact_name', 'contact_phone', 'agent', 'channel'] },
+  // Lot 9 : paiements en ligne, ecrits par le serveur uniquement (api/payments.ts)
+  payments: { table: 're_payments', fields: ['deal_id', 'contact_name', 'contact_phone', 'agent', 'kind', 'amount', 'currency', 'description', 'status', 'pay_url', 'paid_at'] },
   stages: { table: 're_stages', fields: ['kind', 'record_id', 'record_name', 'from_status', 'to_status', 'by_name', 'auto'] },
 }
-export const SERVER_ONLY_ENTITIES: Entity[] = ['sends', 'stages']
+export const SERVER_ONLY_ENTITIES: Entity[] = ['sends', 'stages', 'payments']
 export const ENTITY_KEYS = Object.keys(ENTITIES) as Entity[]
 
 export type Data = {
   demoTeam?: { id: string; name: string; role: string; photo: string | null; phone: string | null }[]
   activity?: Activity[]; assignments?: Assignment[] // mode demo seulement (en reel : lus via ?r=activity / ?r=assignments)
   hierarchy: Hierarchy[]; zones: Zone[]; owners: Owner[]; properties: Property[]; clients: RClient[]; leads: Lead[]
-  deals: Deal[]; messages: Message[]; ads: Ad[]; visits: Visit[]; outcomes: Outcome[]; sends: Send[]; stages: StageEvent[]
+  deals: Deal[]; messages: Message[]; ads: Ad[]; visits: Visit[]; outcomes: Outcome[]; sends: Send[]; stages: StageEvent[]; payments: Payment[]
 }
-export const EMPTY_DATA: Data = { hierarchy: [], zones: [], owners: [], properties: [], clients: [], leads: [], deals: [], messages: [], ads: [], visits: [], outcomes: [], sends: [], stages: [] }
+export const EMPTY_DATA: Data = { hierarchy: [], zones: [], owners: [], properties: [], clients: [], leads: [], deals: [], messages: [], ads: [], visits: [], outcomes: [], sends: [], stages: [], payments: [] }
 
 // Lot 4 : resultat du contact enregistre sur une conversation
 export const OUTCOMES: { v: OutcomeCode; color: string }[] = [

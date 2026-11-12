@@ -36,7 +36,7 @@ export function SocialAccounts({ info, reload }: { info: Info | null; reload: ()
             <input className="imo-input" dir="ltr" inputMode="numeric" placeholder={t('soc.ig')} aria-label={t('soc.ig')} value={ig} onChange={(e) => setIg(e.target.value)} />
           </div>
           {info && !info.configured && <div style={{ color: '#92400E' }}>{t('soc.token')}</div>}
-          <div><Btn onClick={async () => { const r = await callApi('/api/immo?r=publish', { method: 'POST', body: JSON.stringify({ action: 'save_accounts', fb_page_id: fb, ig_account_id: ig }) }); if (r.ok) { notify(t('soc.saved')); reload() } else notify(r.json?.error ?? 'Failed', 'err') }}>{t('soc.save')}</Btn></div>
+          <div><Btn onClick={async () => { const r = await callApi('/api/immo?r=publish', { method: 'POST', body: JSON.stringify({ action: 'save_accounts', fb_page_id: fb, ig_account_id: ig }) }); if (r.ok) { notify(t('soc.saved')); reload() } else notify(r.json?.error ?? t('xm.failed'), 'err') }}>{t('soc.save')}</Btn></div>
         </div>
       )}
     </Card>

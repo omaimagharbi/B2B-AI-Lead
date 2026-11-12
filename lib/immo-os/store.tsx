@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { EMPTY_DATA, ENTITY_KEYS, AGENTS_DEFAULT, type Data, type Entity, type Activity, type Assignment } from './types'
+import { EMPTY_DATA, ENTITY_KEYS, AGENTS_DEFAULT, type Data, type Entity, type Activity, type Assignment, type Payment, type PaymentKind } from './types'
 import { demoLog, demoAssign, changedFields, SCOPED_ENTITIES, type DemoActor } from './demo-journal'
 import { demoDealTransition, demoStage } from './demo-flow'
 import { sameNumber } from './inbound-pure'
@@ -12,7 +12,7 @@ import { makeDemo } from './demo'
 import { uid } from './helpers'
 import { resizeImage } from './resize'
 import { isManager } from './permissions'
-import { translate, fmt, type Lang } from './i18n'
+import { translate, translateServerError, fmt, type Lang } from './i18n'
 
 export type Member = { id: string; name: string; role: string; photo: string | null; phone: string | null; hidden?: string[]; tabs?: string[] }
 type Mode = 'loading' | 'live' | 'demo'
@@ -47,6 +47,10 @@ type Ctx = {
   t: (key: string) => string
   tf: (key: string, vars: Record<string, string | number>) => string
   create: <T = any>(e: Entity, row: Record<string, unknown>) => Promise<T | null>
+  // Lot 9 : paiement en ligne (lien MyFatoorah en reel ; simulation locale en mode demo)
+  createPayment: (input: { deal_id?: string | null; kind: PaymentKind; amount: number; description?: string; contact_name?: string; contact_phone?: string | null }) => Promise<Payment | null>
+  refreshPayment: (id: string) => Promise<void>
+  simulatePaid: (id: string) => void
   update: (e: Entity, id: string, patch: Record<string, unknown>) => Promise<void>
   remove: (e: Entity, id: string) => Promise<void>
   seedLive: () => Promise<void>
@@ -86,12 +90,15 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
   const [team, setTeam] = useState<Member[]>([])
   const [dark, setDark] = useState(false)
   const [lang, setLangState] = useState<Lang>('en')
+  const langRef = useRef<Lang>('en')
+  langRef.current = lang
   const [toasts, setToasts] = useState<Toast[]>([])
   const [charter, setCharter] = useState<{ version: string; accepted: boolean | null }>({ version: CHARTER_VERSION, accepted: null })
   const tokenRef = useRef<string>('')
 
   const notify = useCallback((msg: string, kind: 'ok' | 'err' = 'ok') => {
     const id = Date.now() + Math.random()
+    msg = translateServerError(langRef.current, msg)
     setToasts((t) => [...t, { id, msg, kind }])
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3800)
   }, [])
@@ -128,7 +135,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       }
       const meRes = await api('/api/immo?r=me')
       if (!meRes.ok) {
-        notify(meRes.json?.error ?? 'Could not load your agency', 'err')
+        notify(meRes.json?.error ?? t('xm.could_not_load_agency'), 'err')
         setMode('demo')
         setData(makeDemo())
         return
@@ -210,12 +217,42 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
     }
     const res = await api(`/api/immo?r=${e}`, { method: 'POST', body: JSON.stringify(row) })
     if (!res.ok) {
-      notify(res.json?.error ?? 'Could not save', 'err')
+      notify(res.json?.error ?? t('xm.could_not_save'), 'err')
       return null
     }
     setData((d) => ({ ...d, [e]: [res.json.row, ...(d[e] as any[])] }) as Data)
     if (res.json.dropped?.length) notify(t('warn.mig74'), 'err')
     return res.json.row
+  }
+
+  // ---- Lot 9 : paiement en ligne ----
+  const createPayment: Ctx['createPayment'] = async (input) => {
+    const deal = input.deal_id ? data.deals.find((d) => d.id === input.deal_id) : null
+    if (mode === 'demo') {
+      const r: Payment = { id: uid(), deal_id: input.deal_id ?? null, contact_name: input.contact_name || deal?.party_name || deal?.title || 'Client', contact_phone: input.contact_phone ?? null, agent: deal?.agent ?? me?.name ?? null, kind: input.kind, amount: input.amount, currency: 'QAR', description: input.description ?? null, status: 'pending', pay_url: `https://pay.example.demo/${uid()}`, paid_at: null, created_at: new Date().toISOString(), created_by: me?.name ?? null }
+      setData((d) => persist(demoLog({ ...d, payments: [r, ...(d.payments ?? [])] }, demoWho(), { action: 'create', entity: 'payments', record: { ...r, name: `${r.contact_name} · QAR ${r.amount}` } })))
+      return r
+    }
+    const res = await api('/api/immo?r=payments', { method: 'POST', body: JSON.stringify({ action: 'create', ...input }) })
+    if (!res.ok) {
+      const c = res.json?.code
+      notify(c === 'not_configured' ? t('pay.err.not_configured') : c === 'site_url' ? t('pay.err.site_url') : c === 'provider' ? `${t('pay.err.provider')}: ${res.json?.error ?? ''}` : (res.json?.error ?? t('xm.could_not_save')), 'err')
+      return null
+    }
+    setData((d) => ({ ...d, payments: [res.json.row, ...(d.payments ?? []).filter((p) => p.id !== res.json.row.id)] }))
+    return res.json.row as Payment
+  }
+  const refreshPayment: Ctx['refreshPayment'] = async (id) => {
+    if (mode === 'demo') return
+    const res = await api('/api/immo?r=payments', { method: 'POST', body: JSON.stringify({ action: 'refresh', id }) })
+    if (!res.ok) return notify(res.json?.code === 'not_configured' ? t('pay.err.not_configured') : (res.json?.error ?? t('xm.update_failed')), 'err')
+    setData((d) => ({ ...d, payments: (d.payments ?? []).map((p) => (p.id === id ? { ...p, ...res.json.row } : p)) }))
+    notify(res.json.changed ? t('pay.refreshed_changed') : t('pay.refreshed'))
+  }
+  // Mode demo uniquement : simule le retour « paye » de la page MyFatoorah
+  const simulatePaid: Ctx['simulatePaid'] = (id) => {
+    if (mode !== 'demo') return
+    setData((d) => persist(demoLog({ ...d, payments: (d.payments ?? []).map((p) => (p.id === id ? { ...p, status: 'paid' as const, paid_at: new Date().toISOString() } : p)) }, { id: 'demo-pay', name: 'MyFatoorah (demo)', role: 'system' } as any, { action: 'payment_paid', entity: 'payments', record: (d.payments ?? []).find((p) => p.id === id) as any })))
   }
 
   const update: Ctx['update'] = async (e, id, patch) => {
@@ -245,13 +282,13 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
     const res = await api(`/api/immo?r=${e}`, { method: 'PATCH', body: JSON.stringify({ id, ...patch }) })
     if (!res.ok) {
       setData(before)
-      notify(res.json?.error ?? 'Update failed', 'err')
+      notify(res.json?.error ?? t('xm.update_failed'), 'err')
     } else if (res.json.dropped?.length) notify(t('warn.mig74'), 'err')
     else if ((e === 'deals' || e === 'leads') && 'status' in patch) await reload() // etapes, taches et statut du bien sont mis a jour cote serveur
   }
 
   const remove: Ctx['remove'] = async (e, id) => {
-    if (!isManager(me?.role)) return notify('Only managers can delete records', 'err')
+    if (!isManager(me?.role)) return notify(t('x38.only_managers_can_delete_records'), 'err')
     const before = data
     setData((d) => {
       let n = { ...d, [e]: (d[e] as any[]).filter((x) => x.id !== id) } as Data
@@ -262,7 +299,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
     const res = await api(`/api/immo?r=${e}&id=${id}`, { method: 'DELETE' })
     if (!res.ok) {
       setData(before)
-      notify(res.json?.error ?? 'Delete failed', 'err')
+      notify(res.json?.error ?? t('xm.delete_failed'), 'err')
     }
   }
 
@@ -283,7 +320,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       return count
     }
     const res = await api('/api/immo?r=leads/reassign', { method: 'POST', body: JSON.stringify({ from, to, scope, reason }) })
-    if (!res.ok) { notify(res.json?.error ?? 'Reassignment failed', 'err'); return null }
+    if (!res.ok) { notify(res.json?.error ?? t('xm.reassign_failed'), 'err'); return null }
     await reload()
     return res.json.count as number
   }
@@ -295,7 +332,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       return { password: 'Demo-1234', emailSent: false }
     }
     const res = await api('/api/team/invite', { method: 'POST', body: JSON.stringify({ email, nom_complet: fullName, role }) })
-    if (!res.ok) { notify(res.json?.error ?? 'Invitation failed', 'err'); return null }
+    if (!res.ok) { notify(res.json?.error ?? t('xm.invite_failed'), 'err'); return null }
     await reload()
     return { password: res.json.motDePasseTemporaire as string, emailSent: !!res.json.emailEnvoye }
   }
@@ -307,7 +344,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       return true
     }
     const res = await api('/api/team/remove', { method: 'POST', body: JSON.stringify({ client_user_id: id }) })
-    if (!res.ok) { notify(res.json?.error ?? 'Removal failed', 'err'); return false }
+    if (!res.ok) { notify(res.json?.error ?? t('xm.removal_failed'), 'err'); return false }
     await reload()
     return true
   }
@@ -321,7 +358,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
     const m = team.find((x) => x.id === id)
     const others = (m?.tabs ?? []).filter((x) => !x.startsWith('immo:'))
     const res = await api('/api/team/modifier', { method: 'PATCH', body: JSON.stringify({ id, onglets_masques: [...others, ...hidden.map((h) => `immo:${h}`)] }) })
-    if (!res.ok) return notify(res.json?.error ?? 'Update failed', 'err')
+    if (!res.ok) return notify(res.json?.error ?? t('xm.update_failed'), 'err')
     setTeam((tm) => tm.map((x) => (x.id === id ? { ...x, hidden, tabs: [...others, ...hidden.map((h) => `immo:${h}`)] } : x)))
   }
 
@@ -347,17 +384,17 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
   const seedLive = async () => {
     const demo = makeDemo()
     const res = await api('/api/immo?r=seed', { method: 'POST', body: JSON.stringify(demo) })
-    if (!res.ok) return notify(res.json?.error ?? 'Seeding failed', 'err')
+    if (!res.ok) return notify(res.json?.error ?? t('xm.seeding_failed'), 'err')
     const all = await api('/api/immo?r=all')
     if (all.ok && all.json.data) setData({ ...EMPTY_DATA, ...all.json.data })
-    notify('Sample data loaded')
+    notify(t('x38.sample_data_loaded'))
   }
 
   const resetDemo = () => {
     const d = makeDemo()
     persistDemo(d)
     setData(d)
-    notify('Demo data reset')
+    notify(t('x38.demo_data_reset'))
   }
 
   const sendWhatsapp: Ctx['sendWhatsapp'] = async (name, phone, body, opts) => {
@@ -366,21 +403,21 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       if (phone && [...data.leads, ...data.clients, ...data.owners].some((c: any) => c.do_not_contact && sameNumber(c.phone, phone))) { notify(t('dnc.blocked'), 'err'); return false }
       const m = await create('messages', { contact_name: name, contact_phone: phone ?? null, direction: 'out', body: body || (opts?.media?.length ? `[${opts.media[0].type}]` : ''), unread: false, ...(opts?.propertyId ? { property_id: opts.propertyId, property_auto: false } : {}), ...(opts?.media?.[0] ? { media_url: opts.media[0].url, media_type: opts.media[0].type, media_name: opts.media[0].name } : {}) })
       if (opts?.propertyId) { const p = data.properties.find((x) => x.id === opts.propertyId); setData((d) => persist({ ...d, sends: [{ id: uid(), property_id: opts.propertyId!, property_title: p?.title ?? '', contact_name: name, contact_phone: phone ?? null, agent: me?.name ?? '', channel: 'whatsapp', created_at: new Date().toISOString() }, ...(d.sends ?? [])] })) }
-      notify('Saved (demo mode - nothing was actually sent)')
+      notify(t('x38.saved_demo_mode_nothing_was'))
       return !!m
     }
     const res = await api('/api/immo?r=whatsapp', { method: 'POST', body: JSON.stringify({ name, phone, body, property_id: opts?.propertyId, lang: opts?.lang ?? lang, template: opts?.template, media: opts?.media }) })
-    if (!res.ok) { notify(res.json?.code === 'opted_out' ? t('dnc.blocked') : res.json?.code === 'window_closed' ? t('wa.window.closed') : res.json?.error ?? 'Could not send', 'err'); return false }
+    if (!res.ok) { notify(res.json?.code === 'opted_out' ? t('dnc.blocked') : res.json?.code === 'window_closed' ? t('wa.window.closed') : res.json?.error ?? t('xm.could_not_send'), 'err'); return false }
     setData((d) => ({ ...d, messages: [...((res.json.rows as any[]) ?? [res.json.row]).slice().reverse(), ...d.messages], sends: res.json.send ? [res.json.send, ...(d.sends ?? [])] : d.sends }))
-    if (res.json.sent) notify(res.json.warning ? t('wa.fallback') : 'Message sent on WhatsApp')
-    else notify(`Saved but not sent: ${res.json.warning ?? 'WhatsApp not configured'}`, 'err')
+    if (res.json.sent) notify(res.json.warning ? t('wa.fallback') : t('xm.msg_sent_wa'))
+    else notify(tf('xl.not_sent', { warning: res.json.warning ?? t('xl.wa_not_conf') }), 'err')
     return !!res.json.sent
   }
 
   const acceptCharter: Ctx['acceptCharter'] = async () => {
     if (mode === 'demo') { try { localStorage.setItem('imo_charter', CHARTER_VERSION) } catch {}; setCharter((c) => ({ ...c, accepted: true })); return true }
     const res = await api('/api/immo?r=charter', { method: 'POST', body: JSON.stringify({ lang }) })
-    if (!res.ok) { notify(res.json?.error ?? 'Could not save', 'err'); return false }
+    if (!res.ok) { notify(res.json?.error ?? t('xm.could_not_save'), 'err'); return false }
     setCharter((c) => ({ ...c, accepted: true }))
     return true
   }
@@ -397,14 +434,14 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       const { data: s } = await supabase.auth.getSession()
       const res = await fetch('/api/immo?r=upload&kind=chat', { method: 'POST', headers: { Authorization: `Bearer ${s.session?.access_token ?? ''}` }, body: fd })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { notify(json.error ?? 'Upload failed', 'err'); return null }
+      if (!res.ok) { notify(json.error ?? t('xm.upload_failed'), 'err'); return null }
       return { url: json.url, type: json.type === 'document' ? 'document' : 'image', name: json.name ?? file.name }
-    } catch (e) { notify(e instanceof Error ? e.message : 'Upload failed', 'err'); return null }
+    } catch (e) { notify(e instanceof Error ? e.message : t('xm.upload_failed'), 'err'); return null }
   }
 
   const uploadPhoto: Ctx['uploadPhoto'] = async (file) => {
     if (mode === 'demo') {
-      notify('Photo upload needs the live database (run migration 72). Paste an image URL instead.', 'err')
+      notify(t('x38.photo_upload_needs_the_live'), 'err')
       return null
     }
     try {
@@ -414,10 +451,10 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       const { data: s } = await supabase.auth.getSession()
       const res = await fetch('/api/immo?r=upload', { method: 'POST', headers: { Authorization: `Bearer ${s.session?.access_token ?? ''}` }, body: fd })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { notify(json.error ?? 'Upload failed', 'err'); return null }
+      if (!res.ok) { notify(json.error ?? t('xm.upload_failed'), 'err'); return null }
       return json.url as string
     } catch (e) {
-      notify(e instanceof Error ? e.message : 'Upload failed', 'err')
+      notify(e instanceof Error ? e.message : t('xm.upload_failed'), 'err')
       return null
     }
   }
@@ -434,7 +471,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ mode: m, prompt, context: opts?.context ?? '', extra: opts?.extra, language: opts?.language ?? lang }),
     })
     if (!res.ok) {
-      notify(res.json?.error ?? 'AI request failed', 'err')
+      notify(res.json?.error ?? t('xm.ai_failed'), 'err')
       return null
     }
     return (res.json.reply as string | null) ?? null
@@ -455,7 +492,7 @@ export function ImmoProvider({ children }: { children: ReactNode }) {
 
   return (
     <C.Provider
-      value={{ mode, data, agency, clientId, canDelete: isManager(me?.role), aiUsage, aiModel, logo, me, team, agents, liveEmpty, dark, toggleDark, lang, setLang, t, tf, activeAgents, charter, acceptCharter, reassignLeads, inviteMember, removeMember, setMemberMenus, loadActivity, lastActivity, loadAssignments, create, update, remove, seedLive, resetDemo, sendWhatsapp, ai, uploadPhoto, uploadChatFile, callApi: api, reload, notify, toasts }}
+      value={{ mode, data, agency, clientId, canDelete: isManager(me?.role), aiUsage, aiModel, logo, me, team, agents, liveEmpty, dark, toggleDark, lang, setLang, t, tf, activeAgents, charter, acceptCharter, reassignLeads, inviteMember, removeMember, setMemberMenus, loadActivity, lastActivity, loadAssignments, create, createPayment, refreshPayment, simulatePaid, update, remove, seedLive, resetDemo, sendWhatsapp, ai, uploadPhoto, uploadChatFile, callApi: api, reload, notify, toasts }}
     >
       {children}
     </C.Provider>

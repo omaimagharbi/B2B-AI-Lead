@@ -17,7 +17,7 @@ const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: 
 const LOC: Record<string, string> = { en: 'en-GB', fr: 'fr-FR', ar: 'ar-QA-u-nu-latn' }
 
 export default function VisitsPage() {
-  const { t, lang, data, agents, me, create, update, remove, sendWhatsapp, notify, mode, callApi, canDelete } = useImmo()
+  const { t, tf, lang, data, agents, me, create, update, remove, sendWhatsapp, notify, mode, callApi, canDelete } = useImmo()
   const today = new Date()
   const loc = LOC[lang] ?? 'en-GB'
   const dow = (i: number) => new Date(2023, 0, 1 + i).toLocaleDateString(loc, { weekday: 'short' }) // 2023-01-01 = dimanche : index 0 = Sun
@@ -47,8 +47,8 @@ export default function VisitsPage() {
     setEdit((e) => ({ ...e, lead_id: id || null, ...(l ? { contact_name: l.name, contact_phone: l.phone ?? '', property_id: l.property_id ?? e?.property_id ?? null, agent: e?.agent || l.agent || '' } : {}) }))
   }
   const save = async () => {
-    if (!edit?.contact_name?.trim()) return notify('Name is required', 'err')
-    if (!edit.local) return notify('Choose a date and time', 'err')
+    if (!edit?.contact_name?.trim()) return notify(t('x38.name_is_required'), 'err')
+    if (!edit.local) return notify(t('x38.choose_a_date_and_time'), 'err')
     const { local, ...rest } = edit
     const row = { ...rest, starts_at: fromLocalInput(local), duration_min: Number(rest.duration_min) || 45 }
     if (edit.id) await update('visits', edit.id, row)
@@ -60,13 +60,13 @@ export default function VisitsPage() {
     setEdit(null)
   }
   const toCalendar = async (v: Visit) => {
-    if (mode === 'demo') return notify('Google Calendar needs the live database (run migrations 70 and 72).', 'err')
+    if (mode === 'demo') return notify(t('x38.google_calendar_needs_the_live'), 'err')
     setBusy(v.id)
     const r = await callApi('/api/immo?r=visits/calendar', { method: 'POST', body: JSON.stringify({ visitId: v.id }) })
     setBusy(null)
-    if (!r.ok) return notify(r.json?.error ?? 'Could not add to Google Calendar', 'err')
+    if (!r.ok) return notify(r.json?.error ?? t('xm.could_not_calendar'), 'err')
     await update('visits', v.id, { calendar_event_id: 'synced' })
-    notify('Added to Google Calendar')
+    notify(t('x38.added_to_google_calendar'))
   }
   const confirmWa = async (v: Visit) => {
     const p = propOf(v.property_id)
@@ -104,18 +104,18 @@ export default function VisitsPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="text-[18px] font-bold w-[64px]">{hhmm(v.starts_at)}</div>
           <div className="min-w-0 flex-1">
-            <div className="font-semibold">{v.contact_name} <Badge color={c.color}>{catL(c.v)}</Badge> <Badge color={stat(v.status).color}>{stat(v.status).l}</Badge>{v.calendar_event_id && <span className="ml-1"><Badge color="#16A34A">In Google Calendar</Badge></span>}</div>
-            <div className="text-[12.5px] t-muted">{p ? `${p.title} · ${p.area}` : 'No property selected'} · {v.duration_min} min{v.agent ? ` · ${v.agent}` : ''}{v.notes ? ` · ${v.notes}` : ''}</div>
+            <div className="font-semibold">{v.contact_name} <Badge color={c.color}>{catL(c.v)}</Badge> <Badge color={stat(v.status).color}>{stat(v.status).l}</Badge>{v.calendar_event_id && <span className="ml-1"><Badge color="#16A34A">{t('x38.in_google_calendar')}</Badge></span>}</div>
+            <div className="text-[12.5px] t-muted">{p ? `${p.title} · ${p.area}` : t('xm.no_property_selected')} · {v.duration_min} min{v.agent ? ` · ${v.agent}` : ''}{v.notes ? ` · ${v.notes}` : ''}</div>
           </div>
           <div className="flex gap-1.5 flex-wrap">
             {v.status === 'scheduled' && <>
-              {v.contact_phone && <Btn style={{ padding: '5px 9px' }} onClick={() => confirmWa(v)} title="Send WhatsApp confirmation"><MessageCircle size={13} /> Confirm</Btn>}
-              {!v.calendar_event_id && <Btn style={{ padding: '5px 9px' }} disabled={busy === v.id} onClick={() => toCalendar(v)}><CalendarPlus size={13} /> {busy === v.id ? 'Adding…' : 'Google Calendar'}</Btn>}
-              <Btn style={{ padding: '5px 9px' }} onClick={() => update('visits', v.id, { status: 'done' })} title="Mark as done"><Check size={13} /></Btn>
-              <Btn style={{ padding: '5px 9px' }} onClick={() => update('visits', v.id, { status: 'no_show' })} title="No-show"><X size={13} /></Btn>
+              {v.contact_phone && <Btn style={{ padding: '5px 9px' }} onClick={() => confirmWa(v)} title={t('x38.send_whatsapp_confirmation')}><MessageCircle size={13} /> {t('x38.confirm')}</Btn>}
+              {!v.calendar_event_id && <Btn style={{ padding: '5px 9px' }} disabled={busy === v.id} onClick={() => toCalendar(v)}><CalendarPlus size={13} /> {busy === v.id ? t('xm.adding') : 'Google Calendar'}</Btn>}
+              <Btn style={{ padding: '5px 9px' }} onClick={() => update('visits', v.id, { status: 'done' })} title={t('x38.mark_as_done')}><Check size={13} /></Btn>
+              <Btn style={{ padding: '5px 9px' }} onClick={() => update('visits', v.id, { status: 'no_show' })} title={t('x38.no_show')}><X size={13} /></Btn>
             </>}
-            <Btn style={{ padding: '5px 9px' }} onClick={() => { setDayOpen(null); setEdit({ ...v, local: toLocalInput(v.starts_at) }) }} aria-label="Edit"><Pencil size={13} /></Btn>
-            {v.status === 'scheduled' && <Btn style={{ padding: '5px 9px' }} onClick={() => update('visits', v.id, { status: 'cancelled' })}>Cancel</Btn>}
+            <Btn style={{ padding: '5px 9px' }} onClick={() => { setDayOpen(null); setEdit({ ...v, local: toLocalInput(v.starts_at) }) }} aria-label={t('x38.edit')}><Pencil size={13} /></Btn>
+            {v.status === 'scheduled' && <Btn style={{ padding: '5px 9px' }} onClick={() => update('visits', v.id, { status: 'cancelled' })}>{t('f.cancel')}</Btn>}
           </div>
         </div>
       </Card>
@@ -124,7 +124,7 @@ export default function VisitsPage() {
 
   return (
     <div>
-      <PageHead icon={<CalendarDays size={28} />} title="Calendar" sub="Viewings, meetings, signings and calls - colour-coded by category"
+      <PageHead icon={<CalendarDays size={28} />} title={t('nav.calendar')} sub={t('xm.visits_sub')}
         right={<>
           <div className="flex gap-1">{(['month', 'week', 'list'] as View[]).map((v) => <Btn key={v} onClick={() => setView(v)} style={view === v ? { borderColor: 'var(--gold)', fontWeight: 700 } : undefined}>{t('cal.' + v)}</Btn>)}</div>
           <Btn kind="primary" onClick={() => setEdit(blank())}><Plus size={15} /> {t('cal.new')}</Btn>
@@ -152,7 +152,7 @@ export default function VisitsPage() {
             })}
           </div>
           <div className="basis-full text-[11.5px] t-muted">{t('cal.legend')}</div>
-          {isManager && <select aria-label="Filter by agent" className="imo-select" style={{ width: 180 }} value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)}><option value="">{t('cal.allagents')}</option>{agents.map((a) => <option key={a}>{a}</option>)}</select>}
+          {isManager && <select aria-label={t('x38.filter_by_agent')} className="imo-select" style={{ width: 180 }} value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)}><option value="">{t('cal.allagents')}</option>{agents.map((a) => <option key={a}>{a}</option>)}</select>}
         </div>
       </Card>
 
@@ -219,7 +219,7 @@ export default function VisitsPage() {
       {dayOpen && (
         <Modal title={dayOpen.toLocaleDateString(loc, { weekday: 'long', day: 'numeric', month: 'long' })} onClose={() => setDayOpen(null)} wide>
           <div className="flex flex-col gap-2">{(byDay[dayKey(dayOpen)] ?? []).map((v) => row(v))}</div>
-          <div className="mt-4"><Btn kind="primary" onClick={() => { const d = dayOpen; setDayOpen(null); setEdit(blank(d)) }}><Plus size={14} /> Add event this day</Btn></div>
+          <div className="mt-4"><Btn kind="primary" onClick={() => { const d = dayOpen; setDayOpen(null); setEdit(blank(d)) }}><Plus size={14} /> {t('x38.add_event_this_day')}</Btn></div>
         </Modal>
       )}
 
@@ -227,27 +227,27 @@ export default function VisitsPage() {
         <Modal title={edit.id ? t('cal.edit') : t('cal.new')} onClose={() => setEdit(null)} wide>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="imo-label">Category</label>
+              <label className="imo-label">{t('x38.category')}</label>
               <div className="flex flex-wrap gap-1.5">
                 {VISIT_CATEGORIES.map((c) => { const on = (edit.category ?? 'viewing') === c.v; return (
                   <button key={c.v} type="button" aria-pressed={on} onClick={() => setEdit({ ...edit, category: c.v })} className="rounded-full px-3 py-1 text-[12.5px] font-semibold"
                     style={{ background: on ? c.bg : 'transparent', color: on ? c.color : 'var(--muted)', border: `1.5px solid ${on ? c.color : 'var(--border)'}` }}>{catL(c.v)}</button>) })}
               </div>
             </div>
-            <div className="sm:col-span-2"><Field label="From a lead (fills name, phone and property)"><select className="imo-select" value={edit.lead_id ?? ''} onChange={(e) => pickLead(e.target.value)}><option value="">- none -</option>{data.leads.filter((l) => !['won', 'lost'].includes(l.status)).map((l) => <option key={l.id} value={l.id}>{l.name}{l.interest ? ` · ${l.interest}` : ''}</option>)}</select></Field></div>
-            <Field label="Client name *"><input className="imo-input" value={edit.contact_name ?? ''} onChange={(e) => setEdit({ ...edit, contact_name: e.target.value })} /></Field>
-            <Field label="Phone (for the WhatsApp confirmation)"><input className="imo-input" value={edit.contact_phone ?? ''} onChange={(e) => setEdit({ ...edit, contact_phone: e.target.value })} placeholder="+974…" /></Field>
-            <div className="sm:col-span-2"><Field label="Property"><select className="imo-select" value={edit.property_id ?? ''} onChange={(e) => setEdit({ ...edit, property_id: e.target.value || null })}><option value="">- none -</option>{data.properties.filter((p) => p.status === 'available' || p.id === edit.property_id).map((p) => <option key={p.id} value={p.id}>{p.title} · {p.area}</option>)}</select></Field></div>
-            <Field label="Date & time *"><input type="datetime-local" className="imo-input" value={edit.local ?? ''} onChange={(e) => setEdit({ ...edit, local: e.target.value })} /></Field>
-            <Field label="Duration (minutes)"><input type="number" min={10} max={480} step={5} className="imo-input" value={edit.duration_min ?? 45} onChange={(e) => setEdit({ ...edit, duration_min: Number(e.target.value) })} /></Field>
-            <Field label="Agent"><select className="imo-select" value={edit.agent ?? ''} disabled={!isManager} onChange={(e) => setEdit({ ...edit, agent: e.target.value })}><option value="">- unassigned -</option>{agents.map((a) => <option key={a}>{a}</option>)}</select></Field>
-            <Field label="Status"><select className="imo-select" value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value as Visit['status'] })}>{VISIT_STATUSES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select></Field>
-            <div className="sm:col-span-2"><Field label="Notes"><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} /></Field></div>
+            <div className="sm:col-span-2"><Field label={t('x38.from_a_lead_fills_name')}><select className="imo-select" value={edit.lead_id ?? ''} onChange={(e) => pickLead(e.target.value)}><option value="">{t('loc.none')}</option>{data.leads.filter((l) => !['won', 'lost'].includes(l.status)).map((l) => <option key={l.id} value={l.id}>{l.name}{l.interest ? ` · ${l.interest}` : ''}</option>)}</select></Field></div>
+            <Field label={t('x38.client_name')}><input className="imo-input" value={edit.contact_name ?? ''} onChange={(e) => setEdit({ ...edit, contact_name: e.target.value })} /></Field>
+            <Field label={t('x38.phone_for_the_whatsapp_confirmation')}><input className="imo-input" value={edit.contact_phone ?? ''} onChange={(e) => setEdit({ ...edit, contact_phone: e.target.value })} placeholder="+974…" /></Field>
+            <div className="sm:col-span-2"><Field label={t('sp.choose')}><select className="imo-select" value={edit.property_id ?? ''} onChange={(e) => setEdit({ ...edit, property_id: e.target.value || null })}><option value="">{t('loc.none')}</option>{data.properties.filter((p) => p.status === 'available' || p.id === edit.property_id).map((p) => <option key={p.id} value={p.id}>{p.title} · {p.area}</option>)}</select></Field></div>
+            <Field label={t('x38.date_and_time')}><input type="datetime-local" className="imo-input" value={edit.local ?? ''} onChange={(e) => setEdit({ ...edit, local: e.target.value })} /></Field>
+            <Field label={t('x38.duration_minutes')}><input type="number" min={10} max={480} step={5} className="imo-input" value={edit.duration_min ?? 45} onChange={(e) => setEdit({ ...edit, duration_min: Number(e.target.value) })} /></Field>
+            <Field label={t('h.agent')}><select className="imo-select" value={edit.agent ?? ''} disabled={!isManager} onChange={(e) => setEdit({ ...edit, agent: e.target.value })}><option value="">{t('x38.unassigned')}</option>{agents.map((a) => <option key={a}>{a}</option>)}</select></Field>
+            <Field label={t('h.status')}><select className="imo-select" value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value as Visit['status'] })}>{VISIT_STATUSES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}</select></Field>
+            <div className="sm:col-span-2"><Field label={t('pf.notes')}><textarea className="imo-textarea" value={edit.notes ?? ''} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} /></Field></div>
           </div>
-          {conflict && <div className="mt-3 rounded-lg px-3 py-2 text-[13px]" style={{ background: '#FEF3C7', color: '#92400E' }}>Heads up: {conflict.agent} already has an event at {hhmm(conflict.starts_at)} with {conflict.contact_name} that overlaps this slot. You can still save.</div>}
+          {conflict && <div className="mt-3 rounded-lg px-3 py-2 text-[13px]" style={{ background: '#FEF3C7', color: '#92400E' }}>{tf('xl.conflict', { agent: conflict.agent ?? '', time: hhmm(conflict.starts_at), who: conflict.contact_name })}</div>}
           <div className="flex justify-between gap-2 mt-5">
-            <div>{edit.id && canDelete && <Btn kind="danger" onClick={() => { if (confirmDelete('this event')) { remove('visits', edit.id!); setEdit(null) } }}><Trash2 size={14} /> Delete</Btn>}</div>
-            <div className="flex gap-2"><Btn onClick={() => setEdit(null)}>Cancel</Btn><Btn kind="primary" onClick={save}>Save</Btn></div>
+            <div>{edit.id && canDelete && <Btn kind="danger" onClick={() => { if (confirmDelete(t('cf.event'))) { remove('visits', edit.id!); setEdit(null) } }}><Trash2 size={14} /> {t('f.delete')}</Btn>}</div>
+            <div className="flex gap-2"><Btn onClick={() => setEdit(null)}>{t('f.cancel')}</Btn><Btn kind="primary" onClick={save}>{t('f.save')}</Btn></div>
           </div>
         </Modal>
       )}
